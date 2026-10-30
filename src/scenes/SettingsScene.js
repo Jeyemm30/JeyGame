@@ -40,7 +40,16 @@ export default class SettingsScene extends Phaser.Scene {
     toggle(370, 'Screen Shake', 'shake');
     toggle(440, 'Show FPS', 'fps');
 
-    button(this, 640, 540, 'BACK', () => this.back(), { w: 240, h: 50 });
+    row(510, 'Touch Controls', () => {
+      const modes = ['auto', 'on', 'off'];
+      const b = button(this, 840, 510, '', () => {
+        settings.touch = modes[(modes.indexOf(settings.touch) + 1) % modes.length];
+        b.setText(settings.touch.toUpperCase());
+        saveSettings();
+      }, { w: 130, h: 40, size: 22 });
+      b.setText((settings.touch || 'auto').toUpperCase());
+    });
+    button(this, 640, 575, 'BACK', () => this.back(), { w: 240, h: 50 });
     this.input.keyboard.once('keydown-ESC', () => this.back());
   }
 

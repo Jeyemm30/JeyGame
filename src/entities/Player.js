@@ -1,14 +1,24 @@
 import Phaser from 'phaser';
 import { WEAPONS, WEAPON_ORDER, AMMO_TYPES } from '../config.js';
 import { sfx } from '../systems/Audio.js';
+import { BULLET_HEIGHT } from '../systems/Combat.js';
+
+export const CHEST = BULLET_HEIGHT; // gun/bullet height above the feet
+
+// Picks 'd' (south), 'u' (north), 'r' (east) or 'l' (west, flipped east) from an angle
+export function dirFromAngle(a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  if (Math.abs(c) >= Math.abs(s) * 0.85) return c >= 0 ? 'r' : 'l';
+  return s > 0 ? 'd' : 'u';
+}
 
 export default class Player extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, x, y) {
-    super(scene, x, y, 'player', 'f0');
+    super(scene, x, y, 'char_player', 'd0');
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setDepth(10);
-    this.body.setCircle(9, 7, 7);
+    this.setOrigin(0.5, 0.9);
+    this.body.setCircle(9, 7, 34);
     this.setCollideWorldBounds(true);
 
     this.hp = 100;
@@ -18,6 +28,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.stamina = 100;
     this.winded = false;
     this.sprinting = false;
+    this.crouching = false;
     this.moving = false;
 
     this.weapons = { pistol: { mag: WEAPONS.pistol.mag } };
@@ -34,10 +45,16 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.kick = 0;
     this.flashUntil = 0;
     this.aim = 0;
+    this.dir = 'd';
+    this.animT = 0;
+    this.stepT = 0;
+    this.swapT = 0;
     this.dead = false;
+    this.lastDepth = -1;
 
-    this.gun = scene.add.sprite(x, y, 'gun_pistol').setOrigin(0.15, 0.5).setDepth(11);
-    this.flash = scene.add.sprite(x, y, 'flash').setDepth(12).setVisible(false);
+    this.shadow = scene.add.sprite(x, y, 'shadow').setDepth(3.5);
+    this.gun = scene.add.sprite(x, y, 'gun_pistol').setOrigin(0.15, 0.5);
+    this.flash = scene.add.sprite(x, y, 'flash').setDepth(5001).setVisible(false);
   }
 
   ammoCap(type) { return Math.floor(AMMO_TYPES[type].cap * (1 + 0.5 * this.backpack)); }
@@ -46,9 +63,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   get weapon() { return WEAPONS[this.current]; }
   get ws() { return this.weapons[this.current]; }
 
+  // muzzle on the ground plane (where bullets are simulated)
   muzzle() {
-    const w = this.weapon;
-    const len = 10 + this.gun.width * 0.85 - this.kick;
+    const len = 8 + this.gun.width * 0.85 - this.kick;
     return { x: this.x + Math.cos(this.aim) * len, y: this.y + Math.sin(this.aim) * len };
   }
 
@@ -57,7 +74,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.reloading = false;
     this.current = id;
     this.gun.setTexture(WEAPONS[id].gun);
-    this.nextShot = this.scene.gt + 250;
+    this.nextShot = this.scene.gt + 300;
+    this.swapT = 250;
     sfx.click();
   }
 
@@ -93,14 +111,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.nextShot = time + w.rate;
     let spread = w.spread;
     if (this.sprinting) spread *= 2.4;
-    else if (this.moving) spread *= 1.4;
+    else if (this.moving && !this.crouching) spread *= 1.4;
+    else if (this.crouching) spread *= 0.7;
     const m = this.muzzle();
     combat.fire('player', m.x, m.y, this.aim, w, { spread });
-    this.kick = w.id === 'sniper' || w.id === 'shotgun' ? 7 : 4;
-    this.flash.setVisible(true).setPosition(m.x, m.y).setRotation(Math.random() * 6).setScale(w.id === 'shotgun' ? 1.5 : 1);
+    this.kick = w.id === 'sniper' || w.id === 'shotgun' ? 8 : 5;
+    this.flash.setVisible(true).setPosition(m.x, m.y - CHEST).setRotation(Math.random() * 6).setScale(w.id === 'shotgun' ? 1.5 : 1);
     this.flashUntil = time + 45;
     sfx.shoot(w.id);
-    this.scene.alertNoise(this.x, this.y, w.noise);
+    this.scene.alertNoise(this.x, this.y, w.noise, 'shot');
     if (st.mag === 0 && this.ammo[w.ammo] > 0) this.scene.time.delayedCall(250, () => { if (!this.dead) this.startReload(this.scene.gt); });
     return true;
   }
@@ -135,11 +154,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
   updatePlayer(time, dt, ctrl) {
     if (this.dead) { this.setVelocity(0, 0); return; }
-    const dx = (ctrl.right ? 1 : 0) - (ctrl.left ? 1 : 0);
-    const dy = (ctrl.down ? 1 : 0) - (ctrl.up ? 1 : 0);
+    const analog = ctrl.mx !== undefined; // touch joystick gives a vector, keyboard gives -1/0/1
+    const dx = analog ? ctrl.mx : (ctrl.right ? 1 : 0) - (ctrl.left ? 1 : 0);
+    const dy = analog ? ctrl.my : (ctrl.down ? 1 : 0) - (ctrl.up ? 1 : 0);
     const len = Math.hypot(dx, dy) || 1;
-    this.moving = dx !== 0 || dy !== 0;
-    this.sprinting = this.moving && ctrl.sprint && !this.winded && this.stamina > 0;
+    const mag = analog ? Math.min(1, len) : 1;
+    this.moving = analog ? len > 0.15 : (dx !== 0 || dy !== 0);
+    if (ctrl.sprint && this.moving) this.crouching = false;
+    this.sprinting = this.moving && ctrl.sprint && !this.winded && this.stamina > 0 && !this.crouching;
     if (this.sprinting) {
       this.stamina = Math.max(0, this.stamina - 26 * dt / 1000);
       if (this.stamina <= 0) this.winded = true;
@@ -148,19 +170,31 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.winded && this.stamina > 25) this.winded = false;
 
-    const speed = this.sprinting ? 215 : this.reloading ? 105 : 135;
-    this.setVelocity((dx / len) * speed, (dy / len) * speed);
+    const speed = this.sprinting ? 215 : this.crouching ? 72 : this.reloading ? 105 : 135;
+    const k = this.moving ? (analog ? Math.max(0.55, mag) : 1) : 0;
+    this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
 
-    const walkKey = this.sprinting ? 'player-run' : 'player-walk';
-    if (this.moving) {
-      if (this.anims.currentAnim?.key !== walkKey) this.play(walkKey);
-    } else {
-      this.anims.stop();
-      this.setFrame('f0');
-    }
-
+    // facing + walk cycle
     this.aim = Math.atan2(ctrl.aimY - this.y, ctrl.aimX - this.x);
-    this.rotation = this.aim;
+    this.dir = dirFromAngle(this.aim);
+    const key = this.dir === 'l' ? 'r' : this.dir;
+    this.setFlipX(this.dir === 'l');
+    if (this.moving) {
+      this.animT += dt * (this.sprinting ? 1.5 : this.crouching ? 0.6 : 1);
+      const f = 1 + (Math.floor(this.animT / 120) % 4);
+      this.setFrame(key + f);
+      this.stepT += dt;
+      const interval = this.sprinting ? 260 : 380;
+      if (!this.crouching && this.stepT > interval) {
+        this.stepT = 0;
+        sfx.step(this.sprinting ? 1 : 0.6);
+        this.scene.alertNoise(this.x, this.y, this.sprinting ? 150 : 55, 'step');
+      }
+    } else {
+      this.animT = 0;
+      this.setFrame(key + '0');
+    }
+    this.setScale(1, this.crouching ? 0.86 : 1);
 
     if (this.reloading && time >= this.reloadEnd) {
       const w = this.weapon, st = this.ws;
@@ -171,15 +205,34 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       sfx.reloadDone();
     }
 
+    // depth sorting + shadow
+    const depth = 100 + this.y;
+    if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
+    this.shadow.setPosition(this.x, this.y + 2).setScale(this.crouching ? 0.85 : 1);
+
+    // weapon pose (follows the cursor; dips while reloading / swapping)
     this.kick = Math.max(0, this.kick - dt * 0.03);
-    const off = 10 - this.kick;
-    this.gun.setPosition(this.x + Math.cos(this.aim) * off, this.y + Math.sin(this.aim) * off);
-    this.gun.setRotation(this.aim);
+    this.swapT = Math.max(0, this.swapT - dt);
+    let lift = this.crouching ? CHEST - 5 : CHEST;
+    let wob = 0;
+    if (this.reloading) {
+      const p = Phaser.Math.Clamp((time - this.reloadStart) / (this.reloadEnd - this.reloadStart), 0, 1);
+      lift -= Math.sin(p * Math.PI) * 6;
+      wob = Math.sin(p * Math.PI * 4) * 0.18 + Math.sin(p * Math.PI) * 0.5 * (Math.cos(this.aim) < 0 ? -1 : 1);
+    }
+    if (this.swapT > 0) lift -= (this.swapT / 250) * 8;
+    const bobY = this.moving ? Math.sin(this.animT / 60) * 1.2 : 0;
+    const off = 7 - this.kick;
+    this.gun.setPosition(this.x + Math.cos(this.aim) * off, this.y - lift + Math.sin(this.aim) * off * 0.8 + bobY);
+    this.gun.setRotation(this.aim + wob);
+    this.gun.setFlipY(Math.cos(this.aim) < 0);
+    this.gun.setDepth(this.dir === 'u' ? depth - 0.5 : depth + 0.5);
     if (this.flash.visible && time > this.flashUntil) this.flash.setVisible(false);
   }
 
   destroyParts() {
     this.gun.destroy();
     this.flash.destroy();
+    this.shadow.destroy();
   }
 }

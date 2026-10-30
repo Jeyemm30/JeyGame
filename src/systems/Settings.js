@@ -1,6 +1,6 @@
 const KEY = 'ghostline-settings-v1';
 
-export const settings = { volume: 0.6, minimap: true, shake: true, fps: false };
+export const settings = { volume: 0.6, minimap: true, shake: true, fps: false, touch: 'auto' };
 
 try {
   const saved = JSON.parse(localStorage.getItem(KEY) || '{}');

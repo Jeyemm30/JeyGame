@@ -74,6 +74,10 @@ export const sfx = {
   door() { noise(0.18, { freq: 500, endFreq: 100, vol: 0.4 }); },
   crate() { noise(0.15, { freq: 900, endFreq: 150, vol: 0.4 }); },
   heal() { tone(440, 0.12, { type: 'sine', vol: 0.2 }); tone(660, 0.12, { type: 'sine', vol: 0.2, delay: 0.1 }); tone(880, 0.16, { type: 'sine', vol: 0.2, delay: 0.2 }); },
+  step(v = 1) { if (throttle('step', 90)) noise(0.05, { freq: 600, endFreq: 200, vol: 0.12 * v, type: 'lowpass' }); },
+  suspicious() { if (throttle('susp', 400)) { tone(330, 0.12, { type: 'triangle', vol: 0.12 }); tone(392, 0.14, { type: 'triangle', vol: 0.12, delay: 0.1 }); } },
+  alertEnemy() { if (throttle('alertE', 400)) { tone(520, 0.1, { type: 'square', vol: 0.14 }); tone(780, 0.16, { type: 'square', vol: 0.14, delay: 0.09 }); } },
+  stab() { noise(0.12, { freq: 1200, endFreq: 300, vol: 0.3, type: 'bandpass' }); },
   click() { tone(800, 0.03, { type: 'square', vol: 0.1 }); },
   die() { tone(200, 0.8, { type: 'sawtooth', vol: 0.3, slideTo: 30 }); noise(0.6, { freq: 1000, endFreq: 60, vol: 0.5 }); }
 };

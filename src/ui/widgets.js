@@ -27,14 +27,19 @@ export const CONTROLS_TEXT = [
   'Mouse ....... Aim',
   'Left Click .. Shoot',
   'R ........... Reload',
-  'Shift ....... Sprint',
-  'E ........... Loot / open doors & crates',
+  'Shift ....... Sprint (noisy)',
+  'C ........... Crouch / sneak',
+  'E ........... Loot / search / open doors',
+  '              (behind unaware enemy: takedown)',
   '1-4 / Q ..... Switch weapon',
   'H ........... Use medkit',
   'F ........... Use armor plate',
   'Tab .......... Inventory',
   'Mouse Wheel . Zoom',
-  'ESC .......... Pause'
+  'ESC .......... Pause',
+  '',
+  'Touch: left side = move, right side = aim',
+  '(push far to fire); buttons on the right'
 ].join('\n');
 
 // A modal panel listing controls. Returns the container so callers can destroy it.
@@ -43,7 +48,7 @@ export function controlsPanel(scene, onClose) {
   const block = scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0.75).setInteractive();
   const panel = scene.add.rectangle(640, 360, 700, 520, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
   const title = label(scene, 640, 130, 'CONTROLS', 34, '#f2e08a', 0.5, 0);
-  const body = scene.add.text(640, 200, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '22px', color: '#e8f2e0', lineSpacing: 8 }).setOrigin(0.5, 0);
+  const body = scene.add.text(640, 200, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '19px', color: '#e8f2e0', lineSpacing: 6 }).setOrigin(0.5, 0);
   const close = button(scene, 640, 590, 'CLOSE', () => { c.destroy(); if (onClose) onClose(); }, { w: 200, h: 44, size: 20 });
   c.add([block, panel, title, body, close]);
   return c;

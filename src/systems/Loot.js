@@ -21,7 +21,11 @@ const TABLES = {
   hidden: [['ammo_rifle', 14], ['ammo_sniper', 14], ['ammo_shell', 10], ['medkit', 16], ['armor', 16], ['w_sniper', 10], ['w_rifle', 8], ['w_shotgun', 6], ['backpack', 12]],
   hq: [['ammo_rifle', 14], ['ammo_sniper', 10], ['ammo_shell', 10], ['ammo_pistol', 6], ['medkit', 18], ['armor', 18], ['w_sniper', 8], ['w_rifle', 6], ['w_shotgun', 6], ['backpack', 8]]
 };
-const COUNTS = { crate: [2, 3], supply: [3, 4], hidden: [4, 5], hq: [4, 6] };
+TABLES.home = [['ammo_pistol', 20], ['ammo_shell', 10], ['ammo_rifle', 8], ['medkit', 14], ['armor', 6], ['w_pistol', 7], ['w_shotgun', 5], ['w_rifle', 3], ['backpack', 2]];
+TABLES.medic = [['medkit', 60], ['armor', 8], ['ammo_pistol', 10]];
+TABLES.trash = [['ammo_pistol', 20], ['medkit', 8], ['ammo_shell', 8], ['armor', 3]];
+const COUNTS = {
+  home: [1, 2], medic: [1, 2], trash: [0, 1], crate: [2, 3], supply: [3, 4], hidden: [4, 5], hq: [4, 6] };
 
 export function rollTier(tier) {
   const table = TABLES[tier] || TABLES.crate;

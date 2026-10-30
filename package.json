@@ -6,6 +6,7 @@
   "description": "Top-down pixel-art survival shooter built with Phaser 3 and Vite",
   "scripts": {
     "dev": "vite",
+    "dev:phone": "vite --host",
     "build": "vite build",
     "preview": "vite preview --port 5173 --strictPort"
   },

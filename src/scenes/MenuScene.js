@@ -23,11 +23,12 @@ export default class MenuScene extends Phaser.Scene {
     label(this, 640, 190, 'TOP-DOWN SURVIVAL SHOOTER', 22, '#f2e08a', 0.5, 0.5);
 
     // animated soldier
-    const sol = this.add.sprite(640, 290, 'player', 'f0').setScale(3);
-    sol.play('player-walk');
-    this.tweens.add({ targets: sol, rotation: Math.PI * 2, duration: 6000, repeat: -1 });
+    const sol = this.add.sprite(640, 330, 'char_player', 'd0').setOrigin(0.5, 0.9).setScale(4);
+    const dirs = ['d', 'r', 'u', 'r'];
+    let step = 0;
+    this.time.addEvent({ delay: 140, loop: true, callback: () => { step++; const d = dirs[Math.floor(step / 24) % 4]; sol.setFlipX(false); sol.setFrame(d + (1 + (step % 4))); } });
 
-    button(this, 640, 400, 'PLAY', () => this.scene.start('Game'), { w: 320, h: 56, size: 28 });
+    button(this, 640, 400, 'PLAY', () => this.scene.start('Character'), { w: 320, h: 56, size: 28 });
     button(this, 640, 470, 'SETTINGS', () => {
       this.scene.pause();
       this.scene.launch('Settings', { from: 'Menu' });
@@ -38,6 +39,6 @@ export default class MenuScene extends Phaser.Scene {
     }, { w: 320, h: 50 });
     label(this, 640, 690, 'Eliminate the enemy. Loot everything. Stay alive.', 16, '#9db890', 0.5, 0.5);
 
-    this.input.keyboard.once('keydown-ENTER', () => { sfx.unlock(); this.scene.start('Game'); });
+    this.input.keyboard.once('keydown-ENTER', () => { sfx.unlock(); this.scene.start('Character'); });
   }
 }
