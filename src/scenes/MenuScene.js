@@ -16,9 +16,9 @@ export default class MenuScene extends Phaser.Scene {
     }
     g.fillStyle(0x000000, 0.35).fillRect(0, 0, 1280, 720);
 
-    const shadow = label(this, 646, 126, 'GHOSTLINE', 96, '#000000', 0.5, 0.5);
+    const shadow = label(this, 646, 126, 'JeyGame', 96, '#000000', 0.5, 0.5);
     shadow.setStroke('#000', 0);
-    const title = label(this, 640, 120, 'GHOSTLINE', 96, '#c9e6a0', 0.5, 0.5);
+    const title = label(this, 640, 120, 'JeyGame', 96, '#c9e6a0', 0.5, 0.5);
     title.setStroke('#1d3a14', 10);
     label(this, 640, 190, 'TOP-DOWN SURVIVAL SHOOTER', 22, '#f2e08a', 0.5, 0.5);
 

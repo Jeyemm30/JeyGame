@@ -1,4 +1,4 @@
-# GHOSTLINE – Top-Down Pixel Survival Shooter
+# JeyGame – Top-Down Pixel Survival Shooter
 
 Phaser 3 + Vite. All art is generated in code at start-up (no external assets, no online services), so the game runs fully offline once `npm install` has finished.
 
