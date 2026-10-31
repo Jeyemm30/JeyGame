@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import Atmosphere from '../systems/Atmosphere.js';
 import { TILE, MAP_W as W, MAP_H as H, MELEE } from '../config.js';
 import { T, SOLID, LOS_BLOCK, BULLET_PASS, defaultAppearance, generateCharacter } from '../assets/textures.js';
 import { generateWorld } from '../systems/WorldGen.js';
@@ -21,6 +22,7 @@ import { STORY_NPCS } from '../story/npcs.js';
 import { buildPlaces } from '../story/places.js';
 import { OUTFITS } from './ShopScene.js';
 
+const CHUNK = 512;
 const PROP_TEX = { lamp: 'lamp', sign: 'sign', stop: 'stop', bin: 'bin', fountain: 'fountain', dumpster: 'dumpster' };
 const wrapA = Phaser.Math.Angle.Wrap;
 const SHOP_KIND = { Hardware: 'hardware', Pharmacy: 'pharmacy', Clothing: 'clothing' };
@@ -115,6 +117,8 @@ export default class GameScene extends Phaser.Scene {
     this.fxSmoke = this.add.particles(0, 0, 'smoke', { speedY: { min: -40, max: -20 }, speedX: { min: -8, max: 8 }, lifespan: 900, scale: { start: 0.6, end: 1.6 }, alpha: { start: 0.7, end: 0 }, emitting: false }).setDepth(5002);
     this.fxFire = this.add.particles(0, 0, 'fire', { speedY: { min: -50, max: -25 }, lifespan: 450, scale: { start: 1, end: 0 }, emitting: false }).setDepth(5002);
     this.gfx = this.add.graphics().setDepth(5003);
+    this.lampGfx = this.add.graphics().setDepth(4997); // vehicle lamps / glow
+    this.night = 0;
 
     // ---- entities
     this.combat = new Combat(this);
@@ -195,14 +199,17 @@ export default class GameScene extends Phaser.Scene {
     cam.startFollow(this.player, true, 0.12, 0.12);
     cam.setZoom(this.zoomTarget);
     cam.setBackgroundColor('#0b0f0b');
+    this.atmo = new Atmosphere(this, this.startHour ?? 9.5);
     cam.fadeIn(500);
 
     // ---- input
     this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,Q,C,Z,M,L,J,SPACE,ONE,TWO,THREE,FOUR');
     this.input.mouse.disableContextMenu();
+    this.input.keyboard.on('keydown-O', () => this.atmo && this.atmo.cycleWeather());
+    this.input.keyboard.on('keydown-Y', () => { if (this.atmo) { this.atmo.skipHours(3); this.events.emit('toast', 'Time ' + this.atmo.timeText); } });
     this.input.setDefaultCursor('crosshair');
     this.input.on('wheel', (p, objs, dx, dy) => {
-      this.zoomTarget = Phaser.Math.Clamp(this.zoomTarget - Math.sign(dy) * 0.15, 0.8, 3);
+      this.zoomTarget = Phaser.Math.Clamp(this.zoomTarget - Math.sign(dy) * 0.15, 0.7, 3);
     });
     this.onBlur = () => { if (!this.over && this.scene.isActive('Game')) this.events.emit('request-pause'); };
     this.game.events.on(Phaser.Core.Events.BLUR, this.onBlur);
@@ -237,17 +244,49 @@ export default class GameScene extends Phaser.Scene {
   /* ---------------------------------------------------------------- scenery */
   buildScenery() {
     const wd = this.wd;
-    wd.trees.forEach((t) => this.add.image(t.x, t.y, 'tree' + t.kind).setOrigin(0.5, 0.875).setDepth(100 + t.y));
-    wd.decor.forEach((d) => this.add.image(d.x, d.y, d.kind).setOrigin(0.5, 1).setDepth(100 + d.y));
+    // static scenery lives in chunks: sprites are only created/recycled for chunks near the camera (pooled)
+    this.chunks = new Map(); this.chunkPool = []; this.activeChunks = new Set(); this.chunkTick = 0;
+    const addScenery = (x, y, key, oy) => {
+      const k = Math.floor(x / CHUNK) + ',' + Math.floor(y / CHUNK);
+      let c = this.chunks.get(k);
+      if (!c) { c = { cx: Math.floor(x / CHUNK), cy: Math.floor(y / CHUNK), items: [], live: [] }; this.chunks.set(k, c); }
+      c.items.push({ x, y, key, oy, sc: key.startsWith('tree') ? 0.82 + (((x * 73 + y * 31) | 0) % 37) / 100 : 1 });
+    };
+    wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
+    wd.decor.forEach((d) => addScenery(d.x, d.y, d.kind, 1));
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
-      if (key) this.add.image(p.x, p.y, key).setOrigin(0.5, 1).setDepth(100 + p.y);
+      if (key) addScenery(p.x, p.y, key, 1);
+    });
+    // porches over house doors, striped awnings over shop doors
+    wd.houseDoors.forEach((d, i) => {
+      this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2);
+      if (!d.abandoned) this.add.image(d.x, d.y - 38, 'awning' + (i % 5)).setOrigin(0.5, 0).setScale(0.8, 0.8).setDepth(100 + d.y + 24);
+    });
+    wd.publicDoors.forEach((d, i) => {
+      this.add.image(d.x, d.y - 40, 'awning' + ((i * 3 + 1) % 5)).setOrigin(0.5, 0).setDepth(100 + d.y + 24);
+    });
+    // window flower boxes + shutters on house fronts, balconies on apartment blocks
+    wd.buildings.forEach((b) => {
+      if (b.kind !== 'house' || b.broken) return;
+      const ty = b.y + b.h - 1;
+      const apt = b.style === 'metal' && b.w >= 14;
+      for (let x = b.x; x < b.x + b.w; x++) {
+        const hsh = (x * 31 + b.id * 17) % 10;
+        if (wd.obj[ty][x] === T.window && !apt) {
+          if (hsh < 4) this.add.image(x * TILE + 16, ty * TILE + 30, 'flowerbox').setOrigin(0.5, 0.5).setDepth(100 + ty * TILE + 31);
+          if (hsh < 7) { this.add.image(x * TILE + 3, ty * TILE + 10, 'shutterL').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 30); this.add.image(x * TILE + 29, ty * TILE + 10, 'shutterR').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 30); }
+        }
+      }
+      if (apt) for (let x = b.x + 2; x < b.x + b.w - 3; x += 4) {
+        if (wd.obj[ty][x] === T.window || wd.obj[ty][x + 1] === T.window) this.add.image(x * TILE + 32, ty * TILE + 14, 'balcony').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 34);
+      }
     });
     const sh = this.add.graphics().setDepth(1);
     sh.fillStyle(0x000000, 0.22);
     wd.buildings.forEach((b) => {
-      sh.fillRect((b.x + b.w) * TILE, b.y * TILE + 6, 14 + b.lift * 0.5, b.h * TILE);
-      sh.fillRect(b.x * TILE + 8, (b.y + b.h) * TILE, b.w * TILE + 6, 8);
+      sh.fillRect((b.x + b.w) * TILE, b.y * TILE + 6, 22 + b.lift * 0.6, b.h * TILE);
+      sh.fillRect(b.x * TILE + 8, (b.y + b.h) * TILE, b.w * TILE + 14, 12 + Math.min(14, b.lift * 0.3));
     });
     this.roofs = wd.buildings.map((b) => {
       const key = b.style === 'shingle' ? 'roofpat_shingle' + (b.colorIdx % 6) : 'roofpat_' + b.style;
@@ -258,14 +297,71 @@ export default class GameScene extends Phaser.Scene {
       parts.push(this.add.rectangle(x + w - 2, y, 2, h, 0x000000, 0.3).setOrigin(0, 0));
       if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
+      this.decorateRoof(parts, b, x, y, w, h);
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
       if (b.lift > 0) {
         parts.push(this.add.tileSprite(x, y + h, w, b.lift, 'facade_glass').setOrigin(0, 0));
         parts.push(this.add.rectangle(x, y + h, w, 4, 0x000000, 0.25).setOrigin(0, 0));
       }
       const cont = this.add.container(0, 0, parts).setDepth(100 + (b.y + b.h) * TILE - 4);
-      return { id: b.id, cont, alpha: 1 };
+      return { id: b.id, cont, alpha: 1, bx0: x - 40, by0: y - 40, bx1: x + w + 40, by1: y + h + b.lift + 120 };
     });
+  }
+
+  updateChunks(force = false) {
+    const v = this.cameras.main.worldView;
+    const x0 = Math.floor((v.x - CHUNK * 0.6) / CHUNK), x1 = Math.floor((v.right + CHUNK * 0.6) / CHUNK);
+    const y0 = Math.floor((v.y - CHUNK * 0.6) / CHUNK), y1 = Math.floor((v.bottom + CHUNK * 0.9) / CHUNK);
+    const want = new Set();
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      const k = cx + ',' + cy, c = this.chunks.get(k);
+      if (!c) continue;
+      want.add(k);
+      if (this.activeChunks.has(k)) continue;
+      this.activeChunks.add(k);
+      for (const it of c.items) {
+        const im = this.chunkPool.pop() || this.add.image(0, 0, 'tree0');
+        im.setTexture(it.key).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc).setDepth(100 + it.y).setVisible(true).setActive(true);
+        c.live.push(im);
+      }
+    }
+    for (const k of Array.from(this.activeChunks)) {
+      if (want.has(k)) continue;
+      const c = this.chunks.get(k);
+      this.activeChunks.delete(k);
+      for (const im of c.live) { im.setVisible(false).setActive(false); this.chunkPool.push(im); }
+      c.live.length = 0;
+    }
+  }
+
+  // eaves, gutters, chimneys, AC units and vents (deterministic per building)
+  decorateRoof(parts, b, x, y, w, h) {
+    const R = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+    const hash = (n) => ((b.id * 2654435761 + n * 40503) >>> 0) % 1000 / 1000;
+    const pitched = b.style === 'shingle' || b.style === 'tent';
+    // overhanging eave + gutter along the front edge
+    R(x - 3, y + h - 1, w + 6, 4, 0x2a1d16);
+    R(x - 3, y + h - 1, w + 6, 1, 0x8a7a68);
+    R(x - 3, y + h + 3, w + 6, 3, 0x000000, 0.18);
+    if (pitched) {
+      R(x + w / 2 - 1, y, 2, h - 3, 0xffffff, 0.12); // ridge highlight
+      if (w >= 96 && hash(1) < 0.8) {
+        const cx = x + 14 + Math.floor(hash(2) * (w - 40)), cy = y + 8 + Math.floor(hash(3) * Math.max(4, h * 0.3));
+        R(cx + 3, cy + 3, 16, 18, 0x000000, 0.28);
+        R(cx, cy, 14, 16, 0x4a4442); R(cx, cy, 14, 3, 0x8c8782); R(cx + 11, cy, 3, 16, 0x2e2a28); R(cx + 2, cy + 5, 4, 2, 0x6a625e);
+        R(cx - 2, cy - 2, 18, 5, 0xb8b2aa); R(cx + 2, cy, 10, 2, 0x100c0a);
+      }
+    } else if (b.style !== 'glass') {
+      const n = 1 + Math.floor(hash(4) * 3);
+      for (let i = 0; i < n; i++) {
+        const ax = x + 16 + Math.floor(hash(10 + i) * Math.max(8, w - 60)), ay = y + 10 + Math.floor(hash(20 + i) * Math.max(6, h - 44));
+        R(ax + 3, ay + 3, 26, 20, 0x000000, 0.25);
+        R(ax, ay, 26, 18, 0xb7bcc0); R(ax, ay, 26, 3, 0xe4e8ea); R(ax, ay + 15, 26, 3, 0x7e868c);
+        R(ax + 6, ay + 5, 12, 9, 0x4c5358); R(ax + 8, ay + 7, 8, 5, 0x2c3236); R(ax + 11, ay + 8, 2, 3, 0x6c767c);
+      }
+      if (hash(30) < 0.6) { const vx = x + w - 20, vy = y + 12; R(vx, vy, 5, 5, 0x555b60); R(vx - 1, vy - 2, 7, 2, 0x8d949a); }
+      if (b.w >= 8 && hash(31) < 0.5) { const px = x + 10, py = y + 8; R(px, py, 2, 12, 0x30363a); R(px - 4, py, 10, 1, 0x30363a); R(px - 3, py + 4, 8, 1, 0x30363a); }
+    }
   }
 
   currentBuilding() {
@@ -991,9 +1087,19 @@ export default class GameScene extends Phaser.Scene {
     this.enterVehicle(v);
   }
 
+  // a car door swings open (and fades) on the camera-facing side
+  doorSwing(v) {
+    if (!v || !v.active) return;
+    const side = v.view === 's' ? (v.flipX ? -1 : 1) : 0;
+    const hx = v.x + (side ? side * 8 : -v.cfg.wid * 0.5 - 1), hy = v.y - 8 + (side ? v.cfg.wid * 0.38 : 4);
+    const d = this.add.rectangle(hx, hy, 15, 3, 0xe8e8e8).setOrigin(0, 0.5).setDepth(v.depth + 2).setRotation(side < 0 ? Math.PI : 0);
+    this.tweens.add({ targets: d, rotation: d.rotation + (side < 0 ? -1.15 : 1.15), alpha: 0, duration: 380, ease: 'Sine.easeOut', onComplete: () => d.destroy() });
+  }
+
   enterVehicle(v) {
     const p = this.player;
     if (p.vehicle || v.wrecked || p.dead) return;
+    this.doorSwing(v); p.pickupUntil = this.gt + 260;
     const wasAi = v.driver === 'ai';
     if (!v.ownedId && !v.questTag) {
       if (v.vtype === 'police') this.reportCrime(v.x, v.y, 25, 'stole a police car');
@@ -1001,8 +1107,10 @@ export default class GameScene extends Phaser.Scene {
     }
     if (v.mode === 'chase') v.sirenOn = false;
     // short "climb in" animation: a ghost of the player slides into the car
-    const ghost = this.add.sprite(p.x, p.y, p.texture.key, p.frame.name).setOrigin(0.5, 0.9).setFlipX(p.flipX).setDepth(6000);
-    this.tweens.add({ targets: ghost, x: v.x, y: v.y, alpha: 0, scaleX: 0.5, scaleY: 0.7, duration: 220, onComplete: () => ghost.destroy() });
+const pk = p.dir === 'l' ? 'r' : p.dir;
+    const ghost = this.add.sprite(p.x, p.y, p.texture.key, pk + '12').setOrigin(0.5, 0.9).setFlipX(p.flipX).setDepth(6000);
+    this.time.delayedCall(90, () => ghost.active && ghost.setFrame(pk + '10'));
+    this.tweens.add({ targets: ghost, x: v.x, y: v.y + 4, alpha: 0, scaleX: 0.55, scaleY: 0.7, duration: 260, ease: 'Sine.easeIn', onComplete: () => ghost.destroy() });
     v.occupy('player');
     p.vehicle = v;
     p.setHidden(true);
@@ -1037,6 +1145,7 @@ export default class GameScene extends Phaser.Scene {
     const p = this.player;
     const v = p.vehicle;
     if (!v) return;
+    this.doorSwing(v);
     if (!forced && Math.abs(v.speed) > 140) { this.events.emit('toast', 'Slow down before getting out!'); return; }
     let spot = this.findExitSpot(v);
     if (!spot) {
@@ -1048,8 +1157,11 @@ export default class GameScene extends Phaser.Scene {
     p.setPosition(spot.x, spot.y);
     p.body.reset(spot.x, spot.y);
     p.knockUntil = 0;
-    const ghost = this.add.sprite(v.x, v.y, p.texture.key, p.frame.name).setOrigin(0.5, 0.9).setDepth(6000).setAlpha(0.2).setScale(0.6);
-    this.tweens.add({ targets: ghost, x: spot.x, y: spot.y, alpha: 0.9, scaleX: 1, scaleY: 1, duration: 200, onComplete: () => ghost.destroy() });
+const pk = p.dir === 'l' ? 'r' : p.dir;
+    const ghost = this.add.sprite(v.x, v.y, p.texture.key, pk + '10').setOrigin(0.5, 0.9).setFlipX(p.flipX).setDepth(6000).setAlpha(0.2).setScale(0.6);
+    this.time.delayedCall(110, () => ghost.active && ghost.setFrame(pk + '12'));
+    this.tweens.add({ targets: ghost, x: spot.x, y: spot.y, alpha: 0.9, scaleX: 1, scaleY: 1, duration: 230, ease: 'Sine.easeOut', onComplete: () => ghost.destroy() });
+    p.pickupUntil = this.gt + 240;
     v.release();
     this.cameras.main.startFollow(p, true, 0.12, 0.12);
     engine.stop();
@@ -1235,6 +1347,7 @@ export default class GameScene extends Phaser.Scene {
 
   searchContainer(c) {
     c.searched = true;
+    this.player.pickupUntil = this.gt + 600;
     if (c.idx !== undefined && !profile.searched.includes(c.idx)) profile.searched.push(c.idx);
     sfx.crate();
     const ids = rollTier(c.tier);
@@ -1311,6 +1424,7 @@ export default class GameScene extends Phaser.Scene {
       const def = ITEMS[id];
       const msg = giveItem(p, id);
       if (msg) {
+        p.pickupUntil = this.gt + 380;
         sfx.pickup();
         if (t.ref.worldIdx !== undefined && !profile.takenItems.includes(t.ref.worldIdx)) profile.takenItems.push(t.ref.worldIdx);
         this.removeItem(t.ref);
@@ -1348,6 +1462,7 @@ export default class GameScene extends Phaser.Scene {
       t.ref.die(true);
       this.events.emit('toast', 'Silent takedown');
     } else if (t.kind === 'door') {
+      p.pickupUntil = this.gt + 320;
       const { x, y } = t.ref;
       const key = y * W + x;
       if (this.lockedDoors.has(key)) {
@@ -1434,6 +1549,9 @@ export default class GameScene extends Phaser.Scene {
     const tm = touchEnabled();
     this.touchOn = tm;
     this.gfx.clear();
+    this.lampGfx.clear();
+    this.atmo.update(dt);
+    if ((this.chunkTick -= dt) <= 0) { this.chunkTick = 120; this.updateChunks(); }
 
     if (p.vehicle) this.updateDriving(now, dt, tm);
     else this.updateOnFoot(now, dt, tm, ptr);
@@ -1464,7 +1582,9 @@ export default class GameScene extends Phaser.Scene {
       const target = r.id === cb ? 0 : 1;
       r.alpha += (target - r.alpha) * Math.min(1, dt / 140);
       if (Math.abs(r.alpha - target) < 0.02) r.alpha = target;
-      r.cont.setAlpha(r.alpha).setVisible(r.alpha > 0.01);
+      const wv = cam.worldView;
+      const onScreen = r.bx1 > wv.x && r.bx0 < wv.right && r.by1 > wv.y && r.by0 < wv.bottom;
+      r.cont.setAlpha(r.alpha).setVisible(onScreen && r.alpha > 0.01);
     }
     this.insideBuilding = cb >= 0;
 
@@ -1479,7 +1599,7 @@ export default class GameScene extends Phaser.Scene {
     const lead = v ? { x: Math.cos(v.heading) * v.speed * 0.32, y: Math.sin(v.heading) * v.speed * 0.32 } : { x: 0, y: 0 };
     const k = Math.min(1, dt / (v ? 220 : 160));
     this.camOff.x += (-ox - lead.x - this.camOff.x) * k;
-    this.camOff.y += (-oy - lead.y + (v ? 0 : 22) - this.camOff.y) * k;
+    this.camOff.y += (-oy - lead.y + (v ? 26 : 50) - this.camOff.y) * k;
     cam.setFollowOffset(this.camOff.x, this.camOff.y);
 
     this.enemies.children.iterate((e) => {

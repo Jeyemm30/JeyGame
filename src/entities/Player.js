@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
 import { sfx } from '../systems/Audio.js';
 import { BULLET_HEIGHT } from '../systems/Combat.js';
+import { poseFrame } from '../systems/Anim.js';
 
 export const CHEST = BULLET_HEIGHT; // gun/bullet height above the feet
 
@@ -184,6 +185,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.hp -= n - absorbed;
     if (!silent) sfx.hurt();
     this.setTintFill(0xffffff);
+    this.hurtUntil = this.scene.gt + 220;
     this.scene.time.delayedCall(60, () => this.clearTint());
     this.scene.events.emit('player-hit', n);
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
@@ -205,7 +207,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   updatePlayer(time, dt, ctrl) {
-    if (this.dead) { this.setVelocity(0, 0); return; }
+    if (this.dead) { this.setVelocity(0, 0); if (!this.deadPosed) { this.deadPosed = true; this.setFrame((this.dir === 'l' ? 'r' : this.dir) + '17'); } return; }
     const analog = ctrl.mx !== undefined; // touch joystick gives a vector, keyboard gives -1/0/1
     const dx = analog ? ctrl.mx : (ctrl.right ? 1 : 0) - (ctrl.left ? 1 : 0);
     const dy = analog ? ctrl.my : (ctrl.down ? 1 : 0) - (ctrl.up ? 1 : 0);
@@ -233,9 +235,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     const key = this.dir === 'l' ? 'r' : this.dir;
     this.setFlipX(this.dir === 'l');
     if (this.moving) {
-      this.animT += dt * (this.sprinting ? 1.5 : this.crouching ? 0.6 : 1);
-      const f = 1 + (Math.floor(this.animT / 120) % 4);
-      this.setFrame(key + f);
+      this.animT += dt;
       this.stepT += dt;
       const interval = this.sprinting ? 260 : 380;
       if (!this.crouching && this.stepT > interval) {
@@ -243,11 +243,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         sfx.step(this.sprinting ? 1 : 0.6);
         this.scene.alertNoise(this.x, this.y, this.sprinting ? 150 : 55, 'step');
       }
-    } else {
-      this.animT = 0;
-      this.setFrame(key + '0');
-    }
-    this.setScale(1, this.crouching ? 0.86 : 1);
+    } else this.animT = 0;
+    this.setFrame(key + poseFrame({
+      moving: this.moving, sprint: this.sprinting, crouch: this.crouching, t: this.animT, now: time,
+      hurt: this.scene.gt < (this.hurtUntil || 0), pickup: this.scene.gt < (this.pickupUntil || 0) || (this.swing && this.swing.t < this.swing.dur * 0.45) || (this.reloading && !this.moving)
+    }));
+    this.setScale(1, 1);
 
     if (this.reloading && time >= this.reloadEnd) {
       const w = this.weapon, st = this.ws;

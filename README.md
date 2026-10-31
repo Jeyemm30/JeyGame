@@ -65,3 +65,17 @@ src/systems/     WorldGen, Combat, Loot, Wanted, Missions (engine), Dialogue, Ev
 src/story/       missions.js (15 story missions), side.js (job templates), dialogues.js, npcs.js, places.js
 src/autotest.js  dev end-to-end test: open http://localhost:5173/?autotest and read the console
 ```
+
+## Atmosphere (day/night + weather)
+A full day lasts 16 minutes. Dawn, dusk and night tint the world, streetlights and vehicle headlights glow after dark, and interiors are lit when you walk inside. Weather drifts between clear, cloudy, rain and fog. Dev shortcuts: **O** cycles the weather, **Y** skips 3 hours. Characters have idle/walk/run/crouch/hurt/sit/panic/fall poses; vehicles show brake and reverse lights; roofs have eaves, chimneys, AC units and vents.
+
+## Visuals
+- **Characters** have 18 pose frames per direction (idle, breathing idle, walk, run, crouch, hurt, pickup/search, sit, panic, three-stage death fall) with pixel outlines. Police and enemies crouch in cover and lean in to investigate; civilians gesture while talking, panic when fleeing, carry crates (workers) and lean in to open doors.
+- **Buildings** have eaves + gutters, chimneys, rooftop AC units / vents, porches with steps, striped shop awnings, window flower boxes and shutters, apartment balconies, fenced backyards with gate posts. Roofs fade out when you walk inside.
+- **Vehicles** show brake / reverse lights, headlights and tail glow at night, a swinging door when you get in or out, and outlined sprites. The fire stations have red fire engines.
+- **Atmosphere**: a 16-minute day/night cycle (clock + weather on the HUD), streetlight glow, interior lighting, clear / cloudy / rain / fog, puddles and rain ripples. Dev keys: **O** weather, **Y** +3 hours.
+- **Camera**: the player sits low on screen so you see more of the street ahead; look-ahead eases toward your movement / aim; wheel and +/- buttons zoom.
+- **Environment**: bushes, flowers, rocks, leaves, bicycles, hydrants, bins, benches, trees of several sizes.
+
+## World size
+The city is 380 x 272 tiles (about 3x the original) and still one connected road network: 9 avenues x 7 streets, 21 named districts, an inner river with bridges, suburbs with driveways, a school and sports field, two shopping centres, apartment blocks, two fire stations, a second park, abandoned neighbourhoods and extra industrial / dock zones, plus the original hospital, police station and Fort Merrow. Trees, bushes and props are loaded in 512 px chunks around the camera and recycled from a pool, and roofs outside the view are hidden, so the bigger map costs about the same to draw. The world map and minimap are generated from the real world data, so they always match.

@@ -6,16 +6,19 @@ import { T, SOLID, WALL_FAMILY } from '../assets/textures.js';
 import { MAP_W as W, MAP_H as H, TILE } from '../config.js';
 import { mulberry32 } from './Rng.js';
 
-const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 199]];
-const ROWS = [[0, 19], [23, 55], [59, 91], [95, 127], [131, 159]];
-const HR = [20, 56, 92, 128]; // horizontal roads (3 tiles tall)
-const VR = [20, 60, 100, 140, 180]; // vertical roads (3 tiles wide)
+const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 219], [223, 259], [263, 299], [303, 339], [343, 379]];
+const ROWS = [[0, 19], [23, 55], [59, 91], [95, 127], [131, 163], [167, 199], [203, 235], [239, 271]];
+const HR = [20, 56, 92, 128, 164, 200, 236]; // horizontal roads (3 tiles tall)
+const VR = [20, 60, 100, 140, 180, 220, 260, 300, 340]; // vertical roads (3 tiles wide)
 const KINDS = [
-  ['forest', 'res', 'res', 'ind', 'ind', 'forest'],
-  ['res', 'res', 'park', 'hospital', 'ind', 'forest'],
-  ['res', 'res_gas', 'downtown', 'downtown', 'ind', 'forest'],
-  ['res', 'com', 'com', 'police', 'ind_gas', 'forest'],
-  ['res', 'res', 'res_ab', 'checkpoint', 'military', 'forest']
+  ['forest', 'res', 'res', 'ind', 'ind', 'forest', 'suburb', 'suburb', 'school', 'forest'],
+  ['res', 'res', 'park', 'hospital', 'ind', 'forest', 'suburb', 'park2', 'apartments', 'suburb'],
+  ['res', 'res_gas', 'downtown', 'downtown', 'ind', 'forest', 'mall', 'com', 'downtown', 'apartments'],
+  ['res', 'com', 'com', 'police', 'ind_gas', 'forest', 'com', 'fire', 'com', 'suburb'],
+  ['res', 'res', 'res_ab', 'checkpoint', 'military', 'forest', 'res_ab', 'res_ab', 'ind', 'ind_gas'],
+  ['suburb', 'suburb', 'com', 'apartments', 'ind', 'forest', 'res', 'res', 'suburb', 'forest'],
+  ['res', 'res_ab', 'suburb', 'mall', 'ind', 'forest', 'ind', 'ind', 'res_ab', 'suburb'],
+  ['forest', 'suburb', 'res', 'fire', 'ind_gas', 'forest', 'res', 'park2', 'suburb', 'forest']
 ];
 const DISTRICTS = [
   { name: 'Northgate', c0: 1, c1: 2, r0: 0, r1: 0, color: '#6aa86a' },
@@ -27,7 +30,18 @@ const DISTRICTS = [
   { name: 'Civic Center', c0: 3, c1: 3, r0: 3, r1: 3, color: '#5a7ad0' },
   { name: 'Eastside Industrial', c0: 3, c1: 4, r0: 0, r1: 3, color: '#a07ad0' },
   { name: 'Southside', c0: 0, c1: 2, r0: 4, r1: 4, color: '#6aa86a' },
-  { name: 'Fort Merrow (Restricted)', c0: 3, c1: 4, r0: 4, r1: 4, color: '#6a8a3a' }
+  { name: 'Fort Merrow (Restricted)', c0: 3, c1: 4, r0: 4, r1: 4, color: '#6a8a3a' },
+  { name: 'Riverside Park', c0: 7, c1: 7, r0: 1, r1: 1, color: '#3f9a4a' },
+  { name: 'Lincoln School District', c0: 8, c1: 8, r0: 0, r1: 0, color: '#e0b040' },
+  { name: 'Maple Heights', c0: 6, c1: 7, r0: 0, r1: 1, color: '#78b878' },
+  { name: 'Oak Apartments', c0: 8, c1: 9, r0: 1, r1: 1, color: '#8aa0c0' },
+  { name: 'Midtown', c0: 6, c1: 9, r0: 2, r1: 2, color: '#5aa8c8' },
+  { name: 'Eastgate (Fire & Rescue)', c0: 6, c1: 9, r0: 3, r1: 3, color: '#d4784a' },
+  { name: 'Ashfall (Abandoned)', c0: 6, c1: 7, r0: 4, r1: 4, color: '#8a7a6a' },
+  { name: 'East Docks', c0: 8, c1: 9, r0: 4, r1: 4, color: '#a07ad0' },
+  { name: 'Southgate', c0: 0, c1: 4, r0: 5, r1: 7, color: '#6aa86a' },
+  { name: 'New Harbor Industrial', c0: 6, c1: 9, r0: 5, r1: 7, color: '#a07ad0' },
+  { name: 'River Woods', c0: 5, c1: 5, r0: 0, r1: 7, color: '#4a8a4a' }
 ];
 
 export function generateWorld(seed = 20240) {
@@ -691,7 +705,7 @@ export function generateWorld(seed = 20240) {
     if (withGas) gasStation(ix0 + 1, iy1 - 12);
   }
 
-  function park(b) {
+  function park(b, parkName = 'Greenfield Park') {
     for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) { if (obj[y][x] === -1 && isGrass(ground[y][x])) { ground[y][x] = rng() < 0.5 ? T.grass1 : T.grass2; occ[y][x] = true; } }
     const cx = Math.floor((b.x0 + b.x1) / 2), cy = Math.floor((b.y0 + b.y1) / 2);
     // dirt paths: cross + ring
@@ -718,7 +732,7 @@ export function generateWorld(seed = 20240) {
       const tx = ri(b.x0 + 4, cx - 4), ty = ri(cy + 4, b.y1 - 4);
       if (obj[ty][tx] === -1 && obj[ty][tx + 1] === -1) { obj[ty][tx] = T.table; obj[ty][tx + 1] = T.table; }
     }
-    addPoi('park', 'Greenfield Park', b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1);
+    addPoi('park', parkName, b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1);
     for (let i = 0; i < 8; i++) civ(ri(cx - 12, cx + 12), ri(cy + 2, cy + 10), 'stand');
   }
 
@@ -818,6 +832,100 @@ export function generateWorld(seed = 20240) {
     }
   }
 
+  /* ---- expansion districts ---- */
+  function suburb(b) {
+    const n0 = out.buildings.length;
+    residential(b, 0.02);
+    for (let i = n0; i < out.buildings.length; i++) {
+      const bd = out.buildings[i];
+      if (bd.kind !== 'house' || bd.broken) continue;
+      // driveway + parked car in front of the house
+      for (let yy = bd.y + bd.h; yy < bd.y + bd.h + 3; yy++) for (let xx = bd.x + 1; xx <= bd.x + 2; xx++) {
+        if (inb(xx, yy) && obj[yy][xx] === -1 && isGrass(ground[yy][xx]) && !out.doors.some((d) => Math.abs(d.x - xx) <= 1 && Math.abs(d.y - yy) <= 1)) ground[yy][xx] = T.concrete;
+      }
+      if (rng() < 0.4) vehicle('sedan', ri(0, 5), (bd.x + 2) * TILE, (bd.y + bd.h + 1) * TILE + 20, Math.PI / 2, 'parked');
+      // fenced backyard: a fence row two tiles behind the house with a gate in the middle
+      const fy = bd.y - 3, gx = bd.x + Math.floor(bd.w / 2);
+      if (fy > b.y0 + 2 && rng() < 0.75) {
+        for (let xx = bd.x - 1; xx <= bd.x + bd.w; xx++) {
+          if (xx === gx || xx === gx + 1) continue;
+          if (inb(xx, fy) && obj[fy][xx] === -1 && isGrass(ground[fy][xx])) obj[fy][xx] = T.fence;
+        }
+        out.decor.push({ kind: 'gatepost', x: px(gx) - 4, y: fy * TILE + 30 }, { kind: 'gatepost', x: px(gx + 1) + 4, y: fy * TILE + 30 });
+      }
+    }
+    // extra garden trees
+    for (let i = 0; i < 18; i++) {
+      const tx = ri(b.x0 + 2, b.x1 - 2), ty = ri(b.y0 + 2, b.y1 - 2);
+      if (!occ[ty][tx] && obj[ty][tx] === -1 && isGrass(ground[ty][tx])) obj[ty][tx] = T.tree;
+    }
+  }
+
+  function school(b) {
+    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+    const w2 = Math.min(30, ix1 - ix0 - 3), h2 = 12, x = ix0 + 2, y = iy0 + 2;
+    const bd = block(x, y, w2, h2, { wall: T.wall, floor: T.tileFloor, crates: 0, loose: 3, roof: 'shingle', kind: 'school', windowChance: 0.85, wide: true, looseIds: ['medkit', 'm_pipe', 'ammo_pistol'] });
+    addPoi('house', 'Lincoln School', x, y, w2, h2);
+    for (let yy = y + h2; yy < y + h2 + 4; yy++) for (let xx = x - 2; xx < x + w2 + 3; xx++) if (inb(xx, yy) && obj[yy][xx] === -1 && isGrass(ground[yy][xx])) ground[yy][xx] = T.concrete;
+    // sports field with a dirt running track
+    const fx0 = ix0 + 3, fx1 = ix1 - 3, fy0 = y + h2 + 7, fy1 = iy1 - 2;
+    for (let yy = fy0; yy <= fy1; yy++) for (let xx = fx0; xx <= fx1; xx++) {
+      if (!inb(xx, yy) || obj[yy][xx] !== -1) continue;
+      const edge = xx === fx0 || xx === fx1 || yy === fy0 || yy === fy1;
+      const ring = xx <= fx0 + 1 || xx >= fx1 - 1 || yy <= fy0 + 1 || yy >= fy1 - 1;
+      ground[yy][xx] = edge || ring ? T.dirt : T.grass2;
+    }
+    for (let i = 0; i < 6; i++) { const tx = fx0 + 3 + i * 3, ty = fy0 - 1; if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); } }
+    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+    for (let i = 0; i < 5; i++) civ(ri(x, x + w2 - 1), y + h2 + ri(1, 3), 'stand');
+    if (bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, 'guard', 'pistol', 'guard', 40); }
+  }
+
+  function mall(b) {
+    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+    const w2 = Math.min(ix1 - ix0 - 1, 38), h2 = 14, x = ix0 + Math.floor((ix1 - ix0 + 1 - w2) / 2), y = iy0 + 1;
+    shop(x, y, w2, h2, { kind: 'Shopping Center', tier: 'shop', floor: T.tileFloor, shelves: true }, { wall: T.wall2 });
+    const ly0 = y + h2 + 3, ly1 = iy1 - 1;
+    for (let yy = ly0; yy <= ly1; yy++) for (let xx = ix0; xx <= ix1; xx++) if (inb(xx, yy) && obj[yy][xx] === -1 && !occ[yy][xx]) ground[yy][xx] = T.parking;
+    mark(ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1, 0);
+    out.lots.push({ x0: ix0, y0: ly0, x1: ix1, y1: ly1 });
+    addPoi('parking', 'Mall Parking', ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1);
+    enemy(ri(ix0 + 3, ix1 - 3), ly0 + 1, 'guard', 'pistol', 'guard', 80);
+    for (let i = 0; i < 4; i++) civ(ri(ix0 + 4, ix1 - 4), ly0 - 1, 'stand');
+  }
+
+  function apartments(b) {
+    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+    [iy0 + 13, iy1 - 2].forEach((bottom) => {
+      let x = ix0;
+      while (x + 14 <= ix1) {
+        const w2 = Math.min(ri(14, 18), ix1 - x + 1);
+        if (w2 < 14) break;
+        const h2 = ri(11, 13);
+        const t = house(x, bottom - h2 + 1, w2, h2, { roof: 'metal', wall: T.wall2 });
+        addPoi('house', 'Apartments', t.x, t.y, t.w, t.h);
+        if (rng() < 0.6) civ(t.doorX, t.doorY + 2, 'stand');
+        x += w2 + 3;
+      }
+    });
+    for (let i = 0; i < 20; i++) {
+      const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
+      if (!occ[ty][tx] && obj[ty][tx] === -1 && isGrass(ground[ty][tx])) { if (rng() < 0.6) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 }); }
+    }
+  }
+
+  function fireStation(b) {
+    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+    const w2 = Math.min(26, ix1 - ix0 - 3), h2 = 11, x = ix0 + 3, y = iy0 + 6;
+    const bd = block(x, y, w2, h2, { wall: T.wall2, floor: T.concrete, wide: true, noPartition: true, crates: 3, tier: 'storage', loose: 2, roof: 'metal', kind: 'warehouse', windowChance: 0.5, pallets: 0 });
+    addPoi('industrial', 'Fire Station', x, y, w2, h2);
+    for (let yy = y + h2; yy < y + h2 + 7; yy++) for (let xx = x - 2; xx < x + w2 + 3; xx++) if (inb(xx, yy) && obj[yy][xx] === -1) { ground[yy][xx] = T.concrete; occ[yy][xx] = true; }
+    vehicle('truck', 2, px(x + 4), (y + h2 + 3) * TILE, Math.PI / 2, 'parked');
+    vehicle('truck', 2, px(x + 10), (y + h2 + 3) * TILE, Math.PI / 2, 'parked');
+    civ(x + 3, y + h2 + 1, 'stand'); civ(x + 14, y + h2 + 1, 'stand');
+    if (bd.free.length) { const t = bd.free.pop(); civ(t.x, t.y, 'stand'); }
+  }
+
   /* ------------------------------------------------------- fill the blocks */
   blocks.forEach((b) => {
     switch (b.kind) {
@@ -829,6 +937,12 @@ export function generateWorld(seed = 20240) {
       case 'ind': industrial(b, false); break;
       case 'ind_gas': industrial(b, true); break;
       case 'park': park(b); break;
+      case 'park2': park(b, 'Riverside Park'); break;
+      case 'suburb': suburb(b); break;
+      case 'school': school(b); break;
+      case 'mall': mall(b); break;
+      case 'apartments': apartments(b); break;
+      case 'fire': fireStation(b); break;
       case 'hospital': hospitalBlock(b); break;
       case 'police': policeBlock(b); break;
       case 'checkpoint':
@@ -871,13 +985,13 @@ export function generateWorld(seed = 20240) {
   }));
   // hydrants / cones (decor) and bins
   let bins = 0;
-  for (let tries = 0; tries < 1200 && bins < 60; tries++) {
+  for (let tries = 0; tries < 3600 && bins < 170; tries++) {
     const x = ri(1, W - 2), y = ri(1, H - 2);
     if (ground[y][x] === T.sidewalk && obj[y][x] === -1 && !corner(x, y) && !out.props.some((p) => Math.abs(p.x - px(x)) < 48 && Math.abs(p.y - (y * TILE + 30)) < 48)) {
       obj[y][x] = T.prop; out.props.push({ kind: 'bin', x: px(x), y: y * TILE + 28 }); addContainer(x, y, 'trash', 'Trash bin'); bins++;
     }
   }
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 120; i++) {
     const x = ri(1, W - 2), y = ri(1, H - 2);
     if (ground[y][x] === T.sidewalk && obj[y][x] === -1 && !corner(x, y)) out.decor.push({ kind: 'hydrant', x: px(x), y: y * TILE + 26 });
   }
@@ -888,18 +1002,20 @@ export function generateWorld(seed = 20240) {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (obj[y][x] === T.tree) out.trees.push({ x: px(x), y: y * TILE + 26, kind: ri(0, 2) });
   out.buildings.forEach((bd) => {
     if (bd.kind !== 'house') return;
+    if (!bd.broken && rng() < 0.13) out.decor.push({ kind: 'bike', x: (bd.x + bd.w - 2) * TILE + ri(-6, 6), y: (bd.y + bd.h) * TILE + 26 });
+    if (bd.broken && rng() < 0.3) out.decor.push({ kind: 'bike', x: (bd.x + 2) * TILE, y: (bd.y + bd.h) * TILE + 30 });
     for (let xx = bd.x - 1; xx <= bd.x + bd.w; xx++) {
       if (rng() < 0.35 && inb(xx, bd.y + bd.h) && obj[bd.y + bd.h][xx] === -1 && isGrass(ground[bd.y + bd.h][xx]) && !out.doors.some((d) => Math.abs(d.x - xx) <= 1 && d.y === bd.y + bd.h - 1)) {
         out.decor.push({ kind: 'bush', x: px(xx) + ri(-4, 4), y: (bd.y + bd.h) * TILE + 28 });
       }
     }
   });
-  for (let i = 0; i < 700; i++) {
+  for (let i = 0; i < 2100; i++) {
     const x = ri(1, W - 2), y = ri(1, H - 2);
-    if (obj[y][x] === -1 && isGrass(ground[y][x]) && !occ[y][x] && !taken.has(y * W + x)) out.decor.push({ kind: rng() < 0.2 ? 'bush' : 'tuft', x: px(x) + ri(-10, 10), y: y * TILE + ri(14, 30) });
+    if (obj[y][x] === -1 && isGrass(ground[y][x]) && !occ[y][x] && !taken.has(y * W + x)) { const r = rng(); out.decor.push({ kind: r < 0.12 ? 'bush' : r < 0.2 ? 'flower_a' : r < 0.27 ? 'flower_b' : r < 0.3 ? 'rock' : r < 0.33 ? 'leaves' : 'tuft', x: px(x) + ri(-10, 10), y: y * TILE + ri(14, 30) }); }
   }
   // hidden stashes in forests
-  for (let k = 0; k < 6; k++) {
+  for (let k = 0; k < 14; k++) {
     for (let tries = 0; tries < 60; tries++) {
       const b = pick(blocks.filter((q) => q.kind === 'forest'));
       const cx = ri(b.x0 + 2, b.x1 - 2), cy = ri(b.y0 + 2, b.y1 - 2);
@@ -916,8 +1032,8 @@ export function generateWorld(seed = 20240) {
   const roadLaneRows = [];
   HR.forEach((y) => { roadLaneRows.push(y, y + 2); });
   let parked = 0;
-  for (let tries = 0; tries < 900 && parked < 48; tries++) {
-    const lane = pick(roadLaneRows), x = ri(2, 186);
+  for (let tries = 0; tries < 3000 && parked < 140; tries++) {
+    const lane = pick(roadLaneRows), x = ri(2, W - 10);
     if (ground[lane][x] === T.bridge || ground[lane][x + 1] === T.bridge || ground[lane][x + 2] === T.bridge) continue;
     if ([x - 1, x, x + 1, x + 2, x + 3].some((xx) => inV(xx))) continue;
     if (![x, x + 1].every((xx) => obj[lane][xx] === -1 && isRoadT(ground[lane][xx]))) continue;
@@ -949,12 +1065,12 @@ export function generateWorld(seed = 20240) {
       { x: px(xl + 2), y: px(yt + 2) }, { x: px(xr), y: px(yt + 2) }, { x: px(xr), y: px(yb) }, { x: px(xl + 2), y: px(yb) }
     ];
   };
-  const patrolLoops = [[1, 0], [1, 1], [2, 1], [2, 2], [3, 1], [0, 1]];
+  const patrolLoops = [[1, 0], [1, 1], [2, 1], [2, 2], [3, 1], [0, 1], [5, 0], [5, 1], [6, 1], [6, 2], [7, 2], [6, 3], [7, 3], [1, 4], [2, 4], [3, 4], [5, 4], [6, 4], [7, 4], [1, 5], [3, 5]];
   patrolLoops.forEach(([ci, r2]) => {
     const route = loopFor(ci, r2);
     vehicle('police', 0, route[0].x + 40, route[0].y, 0, 'patrol', route);
   });
-  [[0, 0], [1, 2], [2, 0], [3, 2], [0, 2], [3, 0], [2, 2], [1, 1]].forEach(([ci, r2], i) => {
+  [[0, 0], [1, 2], [2, 0], [3, 2], [0, 2], [3, 0], [2, 2], [1, 1], [5, 1], [6, 0], [7, 0], [6, 2], [7, 3], [5, 3], [6, 4], [7, 4], [4, 4], [0, 4], [2, 4], [3, 5], [1, 5], [5, 5], [6, 5]].forEach(([ci, r2], i) => {
     const route = loopFor(ci, r2);
     vehicle(i % 3 === 0 ? 'van' : 'sedan', i % 3 === 0 ? i % 3 : ri(0, 5), route[1].x - 100, route[1].y, 0, 'traffic', route.slice(1).concat(route.slice(0, 1)));
   });
@@ -965,6 +1081,12 @@ export function generateWorld(seed = 20240) {
     const b = blocks.find((q) => q.c === c && q.r === r);
     if (!b || !b.nodes) return;
     const route = b.nodes.map((n) => ({ x: out.nodes[n].x, y: out.nodes[n].y }));
+    const start = route[ri(0, 3)];
+    out.enemies.push({ x: start.x, y: start.y, role: 'police', type: 'pistol', mode: 'patrol', radius: 0, route: shuffleRotate(route), wait: [3000, 6500] });
+  });
+  blocks.filter((q) => q.nodes && q.c >= 0 && (q.c >= 6 || q.r >= 5) && ['com', 'mall', 'downtown', 'apartments', 'school', 'suburb', 'res', 'fire'].includes(q.kind)).forEach((q) => {
+    if (rng() < 0.5) return;
+    const route = q.nodes.map((n) => ({ x: out.nodes[n].x, y: out.nodes[n].y }));
     const start = route[ri(0, 3)];
     out.enemies.push({ x: start.x, y: start.y, role: 'police', type: 'pistol', mode: 'patrol', radius: 0, route: shuffleRotate(route), wait: [3000, 6500] });
   });

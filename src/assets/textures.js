@@ -434,8 +434,8 @@ function drawChar(c, ox, oy, dir, f, a) {
   const shoeC = SHOE_COLORS[a.shoeColor];
   const hatC = CLOTH_COLORS[a.hatColor];
   const packC = CLOTH_COLORS[a.backpackColor];
-  const bob = f === 2 || f === 4 ? 1 : 0;
-  const liftL = f === 1 ? -2 : 0, liftR = f === 3 ? -2 : 0;
+  const bob = f === 2 || f === 4 || f === 5 || f === 6 || f === 8 ? 1 : 0;
+  const liftL = f === 1 ? -2 : f === 6 ? -4 : 0, liftR = f === 3 ? -2 : f === 8 ? -4 : 0;
   const P = (x, y, w, h, col) => R(c, ox + x, oy + y, w, h, col);
   const longSleeves = a.shirt !== 0;
   const camo = (x, y, w, h, base) => {
@@ -518,7 +518,7 @@ function drawChar(c, ox, oy, dir, f, a) {
     }
   } else {
     // ---------- side view, facing right ----------
-    const s = [0, 2, 0, -2, 0][f];
+    const s = [0, 2, 0, -2, 0, 0, 4, 0, -4, 0][f] || 0;
     P(13 - s, 29, 5, 11, shade(pantsC, -0.25)); P(13 - s, 40 - 0, 5, 0, pantsC);
     P(14 + s, 29, 5, 11, pantsC);
     if (a.pants === 1) P(15 + s, 33, 3, 4, shade(pantsC, -0.3));
@@ -564,14 +564,66 @@ function drawChar(c, ox, oy, dir, f, a) {
   }
 }
 
+export const CHAR_COLS = 18;
+export const CHAR_FRAMES = { idle: 0, walk: 1, breath: 5, run: 6, crouch: 10, hurt: 11, pickup: 12, sit: 13, panic: 14, fall1: 15, fall2: 16, dead: 17 };
+
+function outlineCell(c, x0, y0) {
+  const img = c.getImageData(x0, y0, 32, 48);
+  const d = img.data;
+  const solid = (x, y) => x >= 0 && y >= 0 && x < 32 && y < 48 && d[(y * 32 + x) * 4 + 3] > 40;
+  const out = [];
+  for (let y = 0; y < 48; y++) for (let x = 0; x < 32; x++) {
+    if (solid(x, y)) continue;
+    if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) out.push(x, y);
+  }
+  c.fillStyle = 'rgba(18,14,12,0.85)';
+  for (let i = 0; i < out.length; i += 2) c.fillRect(x0 + out[i], y0 + out[i + 1], 1, 1);
+}
+
+function drawPose(c, ox, oy, dir, f, a) {
+  if (f <= 9) { drawChar(c, ox, oy, dir, f, a); return; }
+  const tmp = document.createElement('canvas');
+  tmp.width = 32; tmp.height = 48;
+  const t2 = tmp.getContext('2d');
+  drawChar(t2, 0, 0, dir, f === 14 ? 0 : 0, a);
+  c.save();
+  c.imageSmoothingEnabled = false;
+  c.translate(ox, oy);
+  const put = (tx, ty, rot, sx, sy) => {
+    c.translate(tx, ty); c.rotate(rot * Math.PI / 180); c.scale(sx, sy); c.drawImage(tmp, -16, -44);
+  };
+  if (f === 10) put(16, 44, 4, 1, 0.8);
+  else if (f === 11) put(16, 44, -12, 1, 0.97);
+  else if (f === 12) put(16, 44, 16, 1, 0.88);
+  else if (f === 13) {
+    c.beginPath(); c.rect(0, 0, 32, 34); c.clip();
+    c.drawImage(tmp, 0, 8);
+    c.restore(); c.save(); c.translate(ox, oy);
+    const pc = CLOTH_COLORS[a.pantsColor], sc = SHOE_COLORS[a.shoeColor];
+    if (dir === 'r') { R(c, 14, 36, 12, 5, pc); R(c, 24, 36, 4, 6, sc); }
+    else { R(c, 11, 38, 11, 4, pc); R(c, 10, 42, 5, 3, sc); R(c, 17, 42, 5, 3, sc); }
+  } else if (f === 14) {
+    c.drawImage(tmp, 0, 0);
+    const sh = CLOTH_COLORS[a.shirtColor], sk = SKIN_TONES[a.skin];
+    if (dir === 'r') { R(c, 16, 7, 4, 9, sh); R(c, 16, 3, 4, 5, sk); }
+    else { R(c, 6, 8, 4, 8, sh); R(c, 6, 3, 4, 6, sk); R(c, 22, 8, 4, 8, sh); R(c, 22, 3, 4, 6, sk); }
+  } else if (f === 15) put(16, 44, 28, 1, 0.96);
+  else if (f === 16) put(14, 44, 64, 0.9, 0.9);
+  else if (f === 17) put(16, 46, 90, 0.7, 0.7);
+  c.restore();
+}
+
 export function generateCharacter(scene, key, app) {
-  const tex = makeCanvas(scene, key, 160, 144, (c) => {
+  const tex = makeCanvas(scene, key, CHAR_COLS * 32, 144, (c) => {
     ['d', 'u', 'r'].forEach((dir, row) => {
-      for (let f = 0; f < 5; f++) drawChar(c, f * 32, row * 48, dir, f, app);
+      for (let f = 0; f < CHAR_COLS; f++) {
+        drawPose(c, f * 32, row * 48, dir, f, app);
+        outlineCell(c, f * 32, row * 48);
+      }
     });
   });
   ['d', 'u', 'r'].forEach((dir, row) => {
-    for (let f = 0; f < 5; f++) {
+    for (let f = 0; f < CHAR_COLS; f++) {
       const name = dir + f;
       if (!tex.has(name)) tex.add(name, 0, f * 32, row * 48, 32, 48);
     }

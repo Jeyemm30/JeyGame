@@ -409,7 +409,7 @@ export default class UIScene extends Phaser.Scene {
     // top-left
     const secs = Math.floor(g.gt / 1000);
     this.killText.setText(`$${Math.round(profile.money).toLocaleString()}`);
-    this.timeText.setText(`${repTitle()} (${profile.rep >= 0 ? '+' : ''}${profile.rep})   ${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`);
+    this.timeText.setText(`${repTitle()} (${profile.rep >= 0 ? '+' : ''}${profile.rep})   ${g.atmo ? `${g.atmo.timeText}${g.atmo.weather === 'clear' ? '' : ' ' + g.atmo.weather}` : ''}`);
     this.fpsText.setText(settings.fps ? `FPS ${Math.round(this.game.loop.actualFps)}` : '');
     this.zoneText.setText(g.inRestricted(p.x, p.y) ? 'RESTRICTED MILITARY AREA' : '');
     this.stance.setText(p.vehicle ? '' : p.crouching ? 'CROUCHING (quiet)' : p.sprinting ? 'SPRINTING (noisy)' : g.insideBuilding ? 'INSIDE' : '');

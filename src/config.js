@@ -1,6 +1,6 @@
 export const TILE = 32;
-export const MAP_W = 200;
-export const MAP_H = 160;
+export const MAP_W = 380;
+export const MAP_H = 272;
 export const VIEW_W = 1280;
 export const VIEW_H = 720;
 

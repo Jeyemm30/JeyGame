@@ -7,7 +7,7 @@ export const VEHICLES = {
   police: { name: 'Police Car', variants: 1, max: 285, acc: 235, brake: 560, steer: 2.5, hp: 140, len: 54, wid: 24, reverse: 0.4, police: true, price: 0 },
   van: { name: 'Van', variants: 3, max: 210, acc: 140, brake: 470, steer: 1.8, hp: 140, len: 62, wid: 28, reverse: 0.35, price: 900 },
   ambulance: { name: 'Ambulance', variants: 1, max: 235, acc: 170, brake: 500, steer: 1.9, hp: 130, len: 62, wid: 28, reverse: 0.35, price: 0 },
-  truck: { name: 'Truck', variants: 2, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
+  truck: { name: 'Truck', variants: 3, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
   moto: { name: 'Motorcycle', variants: 2, max: 335, acc: 290, brake: 600, steer: 3.3, hp: 60, len: 34, wid: 14, reverse: 0.25, price: 450 }
 };
 
@@ -225,6 +225,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         if (this.wrecked || this.hp < this.maxHp * 0.2) sc.fxFire.emitParticleAt(this.x + Phaser.Math.Between(-5, 5), this.y - 18, 1);
       }
     }
+    this.drawLamps();
     if (this.cfg.police) {
       const on = this.sirenOn && !this.wrecked;
       this.lightR.setVisible(on); this.lightB.setVisible(on);
@@ -232,6 +233,32 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         const t = Math.floor(now / 180) % 2;
         this.lightR.setPosition(this.x - 6, this.y - 33).setAlpha(t ? 1 : 0.2).setDepth(this.depth + 1);
         this.lightB.setPosition(this.x + 6, this.y - 33).setAlpha(t ? 0.2 : 1).setDepth(this.depth + 1);
+      }
+    }
+  }
+
+  // brake / reverse lights always, headlights + tail glow in the dark (drawn into one shared graphics)
+  drawLamps() {
+    const sc = this.scene, gl = sc.lampGfx;
+    if (!gl || this.wrecked || !sc.cameras.main.worldView.contains(this.x, this.y)) return;
+    const c = Math.cos(this.heading), s = Math.sin(this.heading);
+    const L = this.cfg.len / 2 - 2, Wd = this.cfg.wid * 0.3, lift = this.view === 's' ? 12 : 14;
+    const moving = !!this.driver || this.mode === 'chase';
+    const braking = moving && ((this.cmd.throttle < 0 && this.speed > 12) || this.cmd.handbrake || (this.cmd.throttle === 0 && Math.abs(this.speed) < 3 && this.driver === 'player'));
+    const reversing = moving && this.speed < -8;
+    const dark = sc.night || 0;
+    const pt = (along, side) => ({ x: this.x + c * along - s * side, y: this.y + s * along + c * side - lift });
+    const lamp = (p, col, r, a) => { gl.fillStyle(col, a * 0.28).fillCircle(p.x, p.y, r * 2.6); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
+    for (const side of [-Wd, Wd]) {
+      const rear = pt(-L, side);
+      if (braking) lamp(rear, 0xff2a1a, 2.2, 1);
+      else if (reversing) lamp(rear, 0xffffff, 2, 0.95);
+      else if (dark > 0.25 && this.driver) lamp(rear, 0xc01810, 1.6, 0.85);
+      if (dark > 0.25 && this.driver && !this.cfg.police || (dark > 0.25 && this.driver)) {
+        const f = pt(L, side);
+        lamp(f, 0xfff2b0, 2.2, 0.95);
+        const f2 = pt(L + 26, side * 1.5);
+        gl.fillStyle(0xfff2b0, 0.07 * dark).fillCircle(f2.x, f2.y + lift * 0.6, 22);
       }
     }
   }

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { dirFromAngle } from './Player.js';
 import { CIV_VARIANTS } from '../assets/cityArt.js';
 import { touchEnabled } from '../systems/Touch.js';
+import { poseFrame, spawnCorpse } from '../systems/Anim.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -56,6 +57,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.unstickUntil = 0;
     this.unstickAngle = 0;
     this.animT = Math.random() * 600;
+    this.animOff = Math.random() * 1300; this.hurtUntil = 0;
     this.lastDepth = -1;
     this.knockUntil = 0;
     this.kvx = 0;
@@ -102,6 +104,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     if (this.dead) return;
     if (this.kind === 'story') return; // named characters cannot be hurt
     this.hp -= n;
+    this.hurtUntil = time + 200;
     this.hurtByPlayer = this.hurtByPlayer || fromPlayer;
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => { if (!this.dead) this.clearTint(); });
@@ -120,8 +123,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
   die(byPlayer = true) {
     this.dead = true;
+    { const d = dirFromAngle(this.face); spawnCorpse(this.scene, this, d === 'l' ? 'r' : d, d === 'l'); }
     this.scene.onCivilianKilled(this, byPlayer);
     this.shadow.destroy();
+    if (this.carryImg) this.carryImg.destroy();
     this.destroy();
   }
 
@@ -182,7 +187,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
     // far away: sleep (frozen, not simulated, not drawn)
     if (dist > (touchEnabled() ? 880 : 1150) && this.state !== 'inside' && this.state !== 'follow') {
-      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); }
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); }
       return;
     }
     if (this.sleeping) { this.sleeping = false; this.body.enable = true; this.setVisible(true); this.shadow.setVisible(true); }
@@ -355,10 +360,19 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     const dir = dirFromAngle(this.face);
     const key = dir === 'l' ? 'r' : dir;
     this.setFlipX(dir === 'l');
-    if (this.moveSpeed > 0) {
-      this.animT += dt * (this.moveSpeed / 60);
-      this.setFrame(key + (1 + (Math.floor(this.animT / 120) % 4)));
-    } else this.setFrame(key + '0');
+    if (this.moveSpeed > 0) this.animT += dt * (this.moveSpeed / 60);
+    this.setFrame(key + poseFrame({
+      moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
+      sit: this.state === 'sit', panic: this.state === 'flee', hurt: time < this.hurtUntil,
+      talk: this.scene.gt < (this.stareUntil || 0),
+      lean: this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44
+    }));
+    if (this.kind === 'worker' && this.state !== 'sit') {
+      if (!this.carryImg) this.carryImg = this.scene.add.image(0, 0, 'carrybox');
+      const sideF = dir === 'r' || dir === 'l';
+      this.carryImg.setVisible(this.visible).setPosition(this.x + (sideF ? (dir === 'r' ? 9 : -9) : 0), this.y - 20 + (Math.floor(this.animT / 120) % 2));
+      this.carryImg.setDepth(100 + this.y + (dir === 'u' ? -1 : 1));
+    }
     const depth = 100 + this.y + (this.state === 'sit' ? 14 : 0);
     if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
     this.shadow.setPosition(this.x, this.y + 2);

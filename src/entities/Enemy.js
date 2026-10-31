@@ -3,6 +3,7 @@ import { WEAPONS, ENEMY_DAMAGE_MUL } from '../config.js';
 import { sfx } from '../systems/Audio.js';
 import { dirFromAngle, CHEST } from './Player.js';
 import { touchEnabled } from '../systems/Touch.js';
+import { poseFrame, spawnCorpse } from '../systems/Anim.js';
 
 // Balanced to be beatable: slow, short-sighted, inaccurate and with long gaps between shots.
 export const ENEMY_TYPES = {
@@ -98,6 +99,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.moveSpeed = 0;
     this.moveAngle = this.face;
     this.animT = Math.random() * 500;
+    this.animOff = Math.random() * 1300; this.hurtUntil = 0;
     this.lastDepth = -1;
 
     this.shadow = scene.add.sprite(spec.x, spec.y, 'shadow').setDepth(3.5);
@@ -187,6 +189,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.angryUntil = time + 90000;
     this.hp -= n * (1 - this.cfg.reduce);
     this.hpShowUntil = time + 2500;
+    this.hurtUntil = time + 200;
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => { if (!this.dead) this.clearTint(); });
     const p = this.scene.player;
@@ -202,6 +205,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   die(silent = false) {
     this.dead = true;
+    { const d = dirFromAngle(this.face); spawnCorpse(this.scene, this, d === 'l' ? 'r' : d, d === 'l'); }
     this.scene.onEnemyKilled(this, silent);
     this.gun.destroy();
     this.flash.destroy();
@@ -229,7 +233,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       const clear = (ang) => {
         const px = this.x + Math.cos(ang) * 24, py = this.y + Math.sin(ang) * 24;
         const sx = Math.cos(ang + Math.PI / 2) * 8, sy = Math.sin(ang + Math.PI / 2) * 8;
-        if (sc.openDoorAt(px, py)) return true;
+        if (sc.openDoorAt(px, py)) { this.doorPoseUntil = time + 300; return true; }
         return !sc.solidAt(px, py) && !sc.solidAt(px + sx, py + sy) && !sc.solidAt(px - sx, py - sy);
       };
       if (!clear(a)) {
@@ -273,10 +277,14 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dir = dirFromAngle(this.face);
     const key = dir === 'l' ? 'r' : dir;
     this.setFlipX(dir === 'l');
-    if (this.moveSpeed > 0) {
-      this.animT += dt * (this.moveSpeed / 60);
-      this.setFrame(key + (1 + (Math.floor(this.animT / 120) % 4)));
-    } else this.setFrame(key + '0');
+    if (this.moveSpeed > 0) this.animT += dt * (this.moveSpeed / 60);
+    this.setFrame(key + poseFrame({
+      moving: this.moveSpeed > 0, sprint: this.moveSpeed > 150, t: this.animT, now: time + this.animOff,
+      hurt: time < this.hurtUntil,
+      pickup: time < (this.doorPoseUntil || 0),
+      crouch: this.ai === 'cover' && this.moveSpeed === 0,
+      lean: (this.ai === 'suspicious' || this.ai === 'search') && Math.floor(time / 1100) % 2 === 1
+    }));
 
     const depth = 100 + this.y;
     if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
