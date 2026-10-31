@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { label, button } from '../ui/widgets.js';
+import { label, button, uiK } from '../ui/widgets.js';
 import { STORY, CHAPTERS } from '../story/missions.js';
 import { SIDE_TEMPLATES, SIDE_ORDER } from '../story/side.js';
 import { STORY_NPCS } from '../story/npcs.js';
@@ -70,11 +70,12 @@ export default class MissionsScene extends Phaser.Scene {
       this.listObjs.push(label(this, 60, 150, msg, 17, '#9db890'));
     }
     this.list.forEach((it, i) => {
-      const y = 140 + i * 36;
+      const rowH = Math.round(36 * Math.min(1.3, uiK()));
+      const y = 140 + i * rowH;
       const chapter = it.def.chapter ? `C${it.def.chapter} ` : '';
       const tag = it.def.id && it.status === 'completed' ? '✓ ' : '';
-      const bg = this.add.rectangle(60, y, 440, 32, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
-      const t = label(this, 70, y + 16, `${tag}${chapter}${it.def.title}`, 16, '#ffffff', 0, 0.5);
+      const bg = this.add.rectangle(60, y, 440, rowH - 4, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
+      const t = label(this, 70, y + (rowH - 4) / 2, `${tag}${chapter}${it.def.title}`, 16, '#ffffff', 0, 0.5);
       bg.on('pointerup', () => this.select(i));
       this.listObjs.push(bg, t);
     });

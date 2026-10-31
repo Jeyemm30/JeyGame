@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { dirFromAngle } from './Player.js';
 import { CIV_VARIANTS } from '../assets/cityArt.js';
+import { touchEnabled } from '../systems/Touch.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pickOne = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -180,7 +181,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     const dist = Math.hypot(p.x - this.x, p.y - this.y);
 
     // far away: sleep (frozen, not simulated, not drawn)
-    if (dist > 1150 && this.state !== 'inside' && this.state !== 'follow') {
+    if (dist > (touchEnabled() ? 880 : 1150) && this.state !== 'inside' && this.state !== 'follow') {
       if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); }
       return;
     }

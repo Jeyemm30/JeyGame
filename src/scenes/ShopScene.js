@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { label, button } from '../ui/widgets.js';
+import { label, button, uiK } from '../ui/widgets.js';
 import { ITEMS } from '../systems/Loot.js';
 import { VEHICLES } from '../entities/Vehicle.js';
 import { profile, discount, repTitle } from '../systems/Profile.js';
@@ -51,16 +51,18 @@ export default class ShopScene extends Phaser.Scene {
     const disc = discount();
     this.moneyText.setText(`$${Math.round(profile.money)}${disc < 1 ? '  (10% reputation discount)' : ''}`);
     list.forEach((e, i) => {
-      const y = 150 + i * 44;
+      const rowH = Math.round(44 * Math.min(1.35, uiK()));
+      const y = 146 + i * rowH;
+      const hh = (rowH - 6) / 2;
       const price = Math.round(e.price * disc);
       const locked = e.rep && profile.rep < e.rep;
       const owned = e.kind === 'outfit' && profile.outfits.includes(e.id);
-      const bg = this.add.rectangle(200, y, 880, 38, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c);
-      const name = label(this, 214, y + 19, e.label, 18, locked ? '#777' : '#ffffff', 0, 0.5);
+      const bg = this.add.rectangle(200, y, 880, rowH - 6, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c);
+      const name = label(this, 214, y + hh, e.label, 18, locked ? '#777' : '#ffffff', 0, 0.5);
       const extra = e.kind === 'vehicle' ? `${e.label}: top ${Math.round(VEHICLES[e.id].max * 0.4)} km/h` : locked ? `Requires reputation ${e.rep}` : '';
-      const sub = label(this, 560, y + 19, extra, 13, '#9db890', 0, 0.5);
-      const priceT = label(this, 880, y + 19, owned ? 'OWNED' : `$${price}`, 18, owned ? '#7aff9a' : '#ffd070', 1, 0.5);
-      const btn = button(this, 990, y + 19, owned ? 'WEAR' : locked ? 'LOCKED' : 'BUY', () => { if (!locked) this.buy(e, price, owned); }, { w: 100, h: 32, size: 15 });
+      const sub = label(this, 560, y + hh, extra, 13, '#9db890', 0, 0.5);
+      const priceT = label(this, 880, y + hh, owned ? 'OWNED' : `$${price}`, 18, owned ? '#7aff9a' : '#ffd070', 1, 0.5);
+      const btn = button(this, 990, y + hh, owned ? 'WEAR' : locked ? 'LOCKED' : 'BUY', () => { if (!locked) this.buy(e, price, owned); }, { w: 100, h: 32, size: 15 });
       this.rows.push(bg, name, sub, priceT, btn);
     });
   }

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
-import { label, button } from '../ui/widgets.js';
+import { label, button, fs, uiK } from '../ui/widgets.js';
 import { settings } from '../systems/Settings.js';
 import { sfx } from '../systems/Audio.js';
 import { touch, touchEnabled, resetTouch } from '../systems/Touch.js';
@@ -33,7 +33,7 @@ export default class UIScene extends Phaser.Scene {
     this.touchMode = touchEnabled();
     const bo = this.touchMode ? -470 : 0;
     const wx = this.touchMode ? 1085 : 1260;
-    const wy = this.touchMode ? -520 : 0;
+    const wy = this.touchMode ? -470 : 0; // weapon block sits under the top button row on touch
     this.bo = bo; this.wx = wx; this.wy = wy;
     resetTouch();
 
@@ -76,7 +76,7 @@ export default class UIScene extends Phaser.Scene {
     this.trackerY = ty;
     this.trackG = this.add.graphics().setDepth(2);
     this.mTitle = label(this, 30, ty + 8, '', 17, '#f2e08a').setDepth(3);
-    this.mObjs = this.add.text(30, ty + 34, '', { fontFamily: '"Courier New", monospace', fontSize: '14px', color: '#e8f2e0', lineSpacing: 4, stroke: '#000', strokeThickness: 3, wordWrap: { width: 400 } }).setDepth(3);
+    this.mObjs = this.add.text(30, ty + 34, '', { fontFamily: '"Courier New", monospace', fontSize: fs(14) + 'px', color: '#e8f2e0', lineSpacing: 4, stroke: '#000', strokeThickness: 3, wordWrap: { width: this.touchMode ? 330 : 410 } }).setDepth(3);
     this.mInfo = label(this, 30, ty + 8, '', 13, '#9fe8a0').setDepth(3);
     this.wpG = this.add.graphics().setDepth(4);
     this.wpTexts = [0, 1, 2, 3].map(() => label(this, 0, 0, '', 13, '#ffffff', 0.5, 0.5).setDepth(5).setVisible(false));
@@ -242,14 +242,14 @@ export default class UIScene extends Phaser.Scene {
       return { k, t };
     });
     this.medText = label(this, 840, 332, '', 16, '#e8f2e0');
-    this.plateText = label(this, 840, 378, '', 16, '#e8f2e0');
-    this.packText = label(this, 840, 424, '', 16, '#e8f2e0');
-    this.statText = label(this, 100, 612, '', 17, '#ffffff');
-    this.questText = label(this, 840, 470, '', 14, '#7aff9a');
-    const useMed = button(this, 1130, 342, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
-    const usePlate = button(this, 1130, 388, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
+    this.plateText = label(this, 840, 392, '', 16, '#e8f2e0');
+    this.packText = label(this, 840, 450, '', 16, '#e8f2e0');
+    this.statText = label(this, 100, 598, '', 17, '#ffffff');
+    this.questText = label(this, 840, 500, '', 14, '#7aff9a');
+    const useMed = button(this, 1160, 340, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
+    const usePlate = button(this, 1160, 402, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
     c.add([this.medText, this.plateText, this.packText, this.statText, this.questText, useMed, usePlate]);
-    c.add(label(this, 640, 636, this.touchMode ? 'Tap X to close - tap a weapon to equip it' : 'TAB / ESC to close - click a weapon to equip it (Z cycles melee, Q cycles all)', 14, '#7f9a72', 0.5, 0.5));
+    c.add(label(this, 640, 642, this.touchMode ? 'Tap X to close - tap a weapon to equip it' : 'TAB / ESC to close - click a weapon to equip it (Z cycles melee, Q cycles all)', 14, '#7f9a72', 0.5, 0.5));
     c.add(button(this, 1150, 98, 'X', () => this.toggleInventory(), { w: 50, h: 44, size: 22 }));
   }
 
@@ -259,21 +259,22 @@ export default class UIScene extends Phaser.Scene {
       const own = p.weapons[r.id];
       r.icon.setAlpha(own ? 1 : 0.25);
       r.name.setAlpha(own ? 1 : 0.4);
+      r.name.setText((r.isMelee ? MELEE[r.id].name : WEAPONS[r.id].name) + (p.current === r.id ? '  *' : ''));
       if (r.isMelee) {
         const w = MELEE[r.id];
-        r.info.setText(own ? `Dmg ${w.dmg}  Speed ${(1000 / w.cd).toFixed(1)}/s  ${p.current === r.id ? '[EQUIPPED]' : ''}` : 'Not found yet');
+        r.info.setText(own ? `Dmg ${w.dmg}   ${(1000 / w.cd).toFixed(1)}/s` : 'Not found yet');
       } else {
         const w = WEAPONS[r.id];
-        r.info.setText(own ? `Mag ${own.mag}/${w.mag}  Reserve ${p.ammo[w.ammo]}  ${p.current === r.id ? '[EQUIPPED]' : ''}` : 'Not found yet');
+        r.info.setText(own ? `Mag ${own.mag}/${w.mag}  Res ${p.ammo[w.ammo]}` : 'Not found yet');
       }
       r.bg.setStrokeStyle(2, own ? (p.current === r.id ? 0xf2e08a : 0x44603c) : 0x2c3a28);
     });
     this.invAmmo.forEach((a) => {
       a.t.setText(`${AMMO_TYPES[a.k].name.padEnd(12)} ${String(p.ammo[a.k]).padStart(3)} / ${p.ammoCap(a.k)}`);
     });
-    this.medText.setText(`Medkits (H)      ${p.medkits} / ${p.medCap()}`);
-    this.plateText.setText(`Armor plates (F) ${p.plates} / ${p.plateCap()}`);
-    this.packText.setText(`Backpack  Lv ${p.backpack}/2`);
+    this.medText.setText(`Medkits  ${p.medkits}/${p.medCap()}`);
+    this.plateText.setText(`Plates   ${p.plates}/${p.plateCap()}`);
+    this.packText.setText(`Backpack Lv ${p.backpack}/2`);
     const qi = (profile.flags.qitems || []);
     this.questText.setText(qi.length ? 'QUEST ITEMS: ' + qi.join(', ').replace(/q_/g, '') : '');
     this.statText.setText(`HP ${Math.ceil(p.hp)}/${p.maxHp}    Armor ${Math.ceil(p.armor)}/${p.maxArmor}    Wanted ${'*'.repeat(this.game_.wanted.level) || 'none'}`);
@@ -285,7 +286,7 @@ export default class UIScene extends Phaser.Scene {
     this.sticks = { move: { id: -1, ox: 0, oy: 0, x: 0, y: 0 }, aim: { id: -1, ox: 0, oy: 0, x: 0, y: 0 } };
     const mk = (x, y, txt, r, onDown, onUp) => {
       const c = this.add.circle(x, y, r, 0x1b2a17, 0.6).setStrokeStyle(3, 0x8fb27a, 0.95).setDepth(41).setInteractive();
-      label(this, x, y, txt, r > 32 ? 15 : 12, '#ffffff', 0.5, 0.5).setDepth(42);
+      label(this, x, y, txt, r > 32 ? 11 : 9, '#ffffff', 0.5, 0.5).setDepth(42);
       const up = () => { c.setFillStyle(0x1b2a17, 0.6); if (onUp) onUp(); };
       c.on('pointerdown', () => { c.setFillStyle(0x4a6e3c, 0.85); if (onDown) onDown(); });
       c.on('pointerup', up);
@@ -305,14 +306,14 @@ export default class UIScene extends Phaser.Scene {
     mk(1140, 510, 'MELEE', 30, act('melee-swap'));
     mk(1060, 590, 'FUEL', 30, () => { touch.refuel = true; }, () => { touch.refuel = false; });
     mk(1060, 510, 'FIX', 30, act('repair'));
-    mk(480, 36, 'II', 26, () => this.openPause());
-    mk(548, 36, 'BAG', 26, () => this.toggleInventory());
-    mk(616, 36, 'MAP', 26, () => this.openMap());
-    mk(888, 36, 'JOBS', 26, () => this.openMissions());
-    mk(684, 36, '+', 26, () => { this.game_.zoomTarget = Math.min(3, this.game_.zoomTarget + 0.2); });
-    mk(752, 36, '-', 26, () => { this.game_.zoomTarget = Math.max(0.8, this.game_.zoomTarget - 0.2); });
+    mk(452, 38, 'II', 31, () => this.openPause());
+    mk(526, 38, 'BAG', 31, () => this.toggleInventory());
+    mk(600, 38, 'MAP', 31, () => this.openMap());
+    mk(896, 38, 'JOBS', 31, () => this.openMissions());
+    mk(674, 38, '+', 31, () => { this.game_.zoomTarget = Math.min(3, this.game_.zoomTarget + 0.2); });
+    mk(748, 38, '-', 31, () => { this.game_.zoomTarget = Math.max(0.8, this.game_.zoomTarget - 0.2); });
     if (this.scale.fullscreen && this.scale.fullscreen.available) {
-      mk(820, 36, 'FS', 26, () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); });
+      mk(822, 38, 'FS', 31, () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); });
     }
     this.input.on('pointerdown', (ptr, over) => {
       if (over.length || this.invOpen || this.modalActive()) return;
@@ -456,9 +457,9 @@ export default class UIScene extends Phaser.Scene {
       const objs = m.def.objectives;
       for (let i = 0; i < objs.length; i++) {
         const o = objs[i];
-        if (i < m.step) { if (i >= m.step - 1) lines.push('[x] ' + o.text); continue; }
+        if (i < m.step) { if (!this.touchMode && i >= m.step - 1) lines.push('[x] ' + o.text); continue; }
         if (o.if && i !== m.step && !o.if(m.state())) continue;
-        if (lines.length >= 6) break;
+        if (lines.length >= (this.touchMode ? 2 : 6)) break;
         lines.push(i === m.step ? '> ' + m.objectiveText() : '  ' + o.text);
       }
       const t = m.target();
@@ -466,7 +467,7 @@ export default class UIScene extends Phaser.Scene {
       if (t) info = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
       const left = m.timeLeft();
       if (left) info += `   TIME ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
-      this.mInfo.setText(info).setY(ty + 8 + 24 + lines.length * 22 + 12).setVisible(true);
+      this.mInfo.setText(info).setY(ty + 36 + this.mObjs.height + 2).setVisible(true);
     } else {
       const n = m.nextStory();
       if (n && !g.dialogueActive) { title = 'NEXT MISSION'; lines = [n.title + (n.giver ? `  -  see ${g.npcName(n.giver)}` : '')]; }
@@ -476,9 +477,10 @@ export default class UIScene extends Phaser.Scene {
     this.mObjs.setText(lines.join('\n'));
     this.mTitle.setVisible(!!title); this.mObjs.setVisible(!!title);
     if (title) {
-      const h = 34 + lines.length * 22 + (m.def ? 24 : 6);
-      tg.fillStyle(0x000000, 0.45).fillRect(22, ty, 430, h);
-      tg.lineStyle(2, 0x6b8f5a, 0.8).strokeRect(22, ty, 430, h);
+      const pw = this.touchMode ? 360 : 430;
+      const h = 40 + this.mObjs.height + (m.def ? 24 : 4);
+      tg.fillStyle(0x000000, 0.5).fillRect(22, ty, pw, h);
+      tg.lineStyle(2, 0x6b8f5a, 0.8).strokeRect(22, ty, pw, h);
     }
     // waypoint markers (on screen: a pin with distance; off screen: an arrow at the screen edge)
     const wg = this.wpG;

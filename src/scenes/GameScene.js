@@ -1442,7 +1442,8 @@ export default class GameScene extends Phaser.Scene {
     // NPC / vehicle simulation
     this.enemies.children.iterate((e) => { if (e && e.active) e.updateEnemy(now, dt); });
     this.civilians.children.iterate((c) => { if (c && c.active) c.updateCivilian(now, dt); });
-    const near = (v) => Math.abs(v.x - p.x) < 1500 && Math.abs(v.y - p.y) < 1100;
+    const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
+    const near = (v) => Math.abs(v.x - p.x) < rx && Math.abs(v.y - p.y) < ry;
     this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver || v.mode === 'chase' || near(v))) v.updateVehicle(now, dt); });
     this.combat.update();
     this.wanted.update(dt, now);

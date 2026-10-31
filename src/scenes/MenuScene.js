@@ -3,6 +3,7 @@ import { button, label, controlsPanel } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
 import { latestSlot, loadGameInto } from '../systems/Save.js';
 import { resetProfile } from '../systems/Profile.js';
+import { goImmersive } from '../systems/Touch.js';
 
 export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
@@ -31,6 +32,7 @@ export default class MenuScene extends Phaser.Scene {
     let step = 0;
     this.time.addEvent({ delay: 140, loop: true, callback: () => { step++; const d = dirs[Math.floor(step / 24) % 4]; sol.setFlipX(false); sol.setFrame(d + (1 + (step % 4))); } });
 
+    this.input.once('pointerup', () => goImmersive(this.game));
     const save = latestSlot();
     const W = { w: 330, h: 54, size: 22 };
     const cont = button(this, 400, 250, 'CONTINUE', () => { if (save) { sfx.unlock(); loadGameInto(this, save.data); } }, { ...W, size: 24 });

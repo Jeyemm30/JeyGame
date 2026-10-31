@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { WEAPONS, ENEMY_DAMAGE_MUL } from '../config.js';
 import { sfx } from '../systems/Audio.js';
 import { dirFromAngle, CHEST } from './Player.js';
+import { touchEnabled } from '../systems/Touch.js';
 
 // Balanced to be beatable: slow, short-sighted, inaccurate and with long gaps between shots.
 export const ENEMY_TYPES = {
@@ -320,7 +321,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy);
 
-    if (dist > 1200) {
+    if (dist > (touchEnabled() ? 900 : 1200)) {
       this.dormant = true;
       this.stop();
       this.setVisible(false);

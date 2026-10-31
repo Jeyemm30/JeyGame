@@ -1,17 +1,27 @@
 import { sfx } from '../systems/Audio.js';
+import { touchEnabled } from '../systems/Touch.js';
 
 export const FONT = '"Courier New", monospace';
 
+// On a phone the 1280x720 canvas is scaled down to roughly half size, so small text and buttons are enlarged.
+export const uiK = () => (touchEnabled() ? 1.34 : 1);
+export const fs = (size) => (size <= 26 ? Math.round(size * uiK()) : size);
+
 export function label(scene, x, y, str, size = 18, color = '#e8f2e0', originX = 0, originY = 0) {
+  size = fs(size);
   return scene.add.text(x, y, str, {
     fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', stroke: '#000000', strokeThickness: Math.max(2, size / 8)
   }).setOrigin(originX, originY);
 }
 
 export function button(scene, x, y, str, onClick, { w = 300, h = 50, size = 22 } = {}) {
+  const touch = touchEnabled();
+  size = fs(size);
   const c = scene.add.container(x, y);
+  const t = scene.add.text(0, 0, str, { fontFamily: FONT, fontSize: size + 'px', color: '#e8f2e0', fontStyle: 'bold', align: 'center', wordWrap: { width: w - 20 } }).setOrigin(0.5);
+  // tap targets are at least ~48px tall on touch devices, and grow to fit wrapped text
+  h = Math.max(touch ? Math.max(h, 50) : h, t.height + 14);
   const bg = scene.add.rectangle(0, 0, w, h, 0x24331f).setStrokeStyle(3, 0x6b8f5a);
-  const t = scene.add.text(0, 0, str, { fontFamily: FONT, fontSize: size + 'px', color: '#e8f2e0', fontStyle: 'bold' }).setOrigin(0.5);
   c.add([bg, t]);
   c.setSize(w, h);
   bg.setInteractive({ useHandCursor: true });

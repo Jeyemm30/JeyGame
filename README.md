@@ -31,7 +31,7 @@ Main menu: **Continue** (loads your newest save, including the autosave), **New 
 | M or minimap click | World map (drag, zoom, markers, waypoints) |
 | Tab / I · Esc | Inventory · pause (save / load / missions) |
 
-Touch controls appear automatically (left = move, right = aim; buttons for USE, HIT, RUN, CROUCH, RELOAD, SWAP, MED, ARMOR, FUEL, FIX, HORN, and a top bar for pause / bag / map / jobs / zoom).
+Touch controls appear automatically (left = move, right = aim; buttons for USE, HIT, RUN, CROUCH, RELOAD, SWAP, MED, ARMOR, FUEL, FIX, HORN, and a top bar for pause / bag / map / jobs / zoom). On phones the HUD moves out of the way of your thumbs, text and tap targets are enlarged (menus, inventory, shop, mission log, dialogue replies), the first tap requests fullscreen + landscape (Android), physics runs at 60 Hz and far-away NPCs/vehicles stop simulating sooner. Portrait shows a "rotate your device" screen. Settings → Touch Controls (AUTO / ON / OFF) overrides detection; `?touch=1` forces it on for testing in a desktop browser.
 
 ## Story mode (15 missions, 3 chapters)
 

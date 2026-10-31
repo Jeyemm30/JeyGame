@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { label, button } from '../ui/widgets.js';
+import { label, button, fs } from '../ui/widgets.js';
 import { getDialogue, dialogueState, applyEffects } from '../systems/Dialogue.js';
 import { STORY_NPCS } from '../story/npcs.js';
 import { sfx } from '../systems/Audio.js';
@@ -18,13 +18,13 @@ export default class DialogueScene extends Phaser.Scene {
     this.replay = this.gs.missions && this.gs.missions.replay;
 
     this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.35).setInteractive();
-    this.add.rectangle(640, 560, 1120, 220, 0x10170f, 0.96).setStrokeStyle(4, 0x6b8f5a);
-    this.add.rectangle(200, 560, 150, 180, 0x1b2a17).setStrokeStyle(3, 0x8fb27a);
-    this.portrait = this.add.image(200, 478, 'char_player', 'd0').setOrigin(0.5, 0).setScale(4.4);
-    this.nameText = label(this, 310, 468, '', 24, '#f2e08a');
-    this.roleText = label(this, 310, 497, '', 14, '#9db890');
-    this.body = this.add.text(310, 526, '', { fontFamily: '"Courier New", monospace', fontSize: '21px', color: '#ffffff', wordWrap: { width: 840 }, lineSpacing: 5 });
-    this.hint = label(this, 1150, 656, 'SPACE / click to continue', 13, '#7f9a72', 1, 1);
+    this.add.rectangle(640, 548, 1180, 272, 0x10170f, 1).setStrokeStyle(4, 0x6b8f5a);
+    this.add.rectangle(160, 520, 150, 180, 0x1b2a17).setStrokeStyle(3, 0x8fb27a);
+    this.portrait = this.add.image(160, 438, 'char_player', 'd0').setOrigin(0.5, 0).setScale(4.4);
+    this.nameText = label(this, 260, 428, '', 24, '#f2e08a');
+    this.roleText = label(this, 260, 458, '', 14, '#9db890');
+    this.body = this.add.text(260, 486, '', { fontFamily: '"Courier New", monospace', fontSize: fs(21) + 'px', color: '#ffffff', wordWrap: { width: 920 }, lineSpacing: 5 });
+    this.hint = label(this, 1200, 678, 'SPACE / tap to continue', 13, '#7f9a72', 1, 1);
     this.choiceBtns = [];
 
     this.input.keyboard.on('keydown-SPACE', () => this.advance());
@@ -74,13 +74,14 @@ export default class DialogueScene extends Phaser.Scene {
       const state = dialogueState(this.gs);
       this.visible = node.choices.filter((c) => !c.if || c.if(state));
       this.hint.setText('Choose a reply: click or press 1-4');
+      let y = this.body.y + Math.min(this.body.height, 56) + 8;
       this.visible.forEach((c, i) => {
-        const b = button(this, 760, 556 + i * 44 - (this.visible.length - 1) * 10, `${i + 1}. ${c.text}`, () => this.choose(i), { w: 760, h: 38, size: 15 });
+        const b = button(this, 720, 0, `${i + 1}. ${c.text}`, () => this.choose(i), { w: 880, h: 40, size: 15 });
+        b.y = y + b.height / 2;
+        y += b.height + 6;
         b.setDepth(10);
         this.choiceBtns.push(b);
       });
-      this.body.setY(500);
-      this.body.setStyle({ fontSize: '17px' });
     } else {
       this.hint.setText(node.next ? 'SPACE / click to continue' : 'SPACE / click to close');
     }
@@ -89,8 +90,7 @@ export default class DialogueScene extends Phaser.Scene {
   clearChoices() {
     this.choiceBtns.forEach((b) => b.destroy());
     this.choiceBtns = [];
-    this.body.setY(526);
-    this.body.setStyle({ fontSize: '21px' });
+    this.body.setY(486);
   }
 
   advance() {

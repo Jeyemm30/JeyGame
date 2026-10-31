@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { TILE, MAP_W as W, MAP_H as H } from '../config.js';
 import { button, label } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
+import { touchEnabled } from '../systems/Touch.js';
 
 const MS = 4; // world-map texture pixels per tile (matches GameScene.buildMapTextures)
 const WORLD_TO_MAP = MS / TILE;
@@ -112,11 +113,11 @@ export default class MapScene extends Phaser.Scene {
     button(this, 560, 28, '+', () => this.setZoom(this.zoom * 1.35, 640, 360), { w: 44, h: 38, size: 22 }).setDepth(D + 1);
     button(this, 612, 28, '-', () => this.setZoom(this.zoom / 1.35, 640, 360), { w: 44, h: 38, size: 22 }).setDepth(D + 1);
     button(this, 730, 28, 'FIND ME', () => this.centerOnPlayer(), { w: 130, h: 38, size: 16 }).setDepth(D + 1);
-    this.markBtn = button(this, 900, 28, 'ADD MARKER: OFF', () => { this.placing = !this.placing; this.markBtn.setText('ADD MARKER: ' + (this.placing ? 'ON' : 'OFF')); this.hint.setText(this.placing ? 'Tap / click the map to drop a marker. Tap a marker to remove it.' : DEFAULT_HINT); }, { w: 200, h: 38, size: 15 }).setDepth(D + 1);
+    this.markBtn = button(this, 900, 28, 'MARKER: OFF', () => { this.placing = !this.placing; this.markBtn.setText('MARKER: ' + (this.placing ? 'ON' : 'OFF')); this.hint.setText(this.placing ? 'Tap / click the map to drop a marker. Tap a marker to remove it.' : DEFAULT_HINT); }, { w: 190, h: 38, size: 14 }).setDepth(D + 1);
     button(this, 1040, 28, 'CLEAR', () => { this.markers.length = 0; this.saveMarkers(); }, { w: 80, h: 38, size: 15 }).setDepth(D + 1);
-    button(this, 1170, 28, 'CLOSE (M)', () => this.close(), { w: 140, h: 38, size: 16 }).setDepth(D + 1);
+    button(this, 1170, 28, 'CLOSE', () => this.close(), { w: 140, h: 38, size: 16 }).setDepth(D + 1);
 
-    const DEFAULT_HINT = 'Drag to move  -  wheel / pinch to zoom  -  right-click also drops a marker';
+    const DEFAULT_HINT = touchEnabled() ? 'Drag to move - pinch to zoom - press MARKER, then tap the map' : 'Drag to move  -  wheel / pinch to zoom  -  right-click also drops a marker';
     this.hint = label(this, 640, 700, DEFAULT_HINT, 15, '#cfe0c0', 0.5, 0.5).setDepth(D + 1);
     this.coords = label(this, 20, 700, '', 15, '#9fd0ff', 0, 0.5).setDepth(D + 1);
     this.tip = label(this, 0, 0, '', 16, '#ffffff', 0, 1).setDepth(D + 5).setVisible(false);

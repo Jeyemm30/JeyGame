@@ -199,3 +199,23 @@ export function runAutotest(game) {
     }
   })();
 }
+
+// ?autostart[&show=map|missions|dialogue|inventory|shop|menu] boots straight into the game for screenshots
+export function autostart(game, show) {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  (async () => {
+    if (show === 'menu') return;
+    await wait(1200);
+    game.scene.getScene('Menu').scene.start('Character', { mode: 'new' });
+    await wait(900);
+    if (show === 'character') return;
+    game.scene.getScene('Character').start();
+    await wait(3500);
+    const gs = game.scene.getScene('Game'), ui = game.scene.getScene('UI');
+    if (show === 'map') ui.openMap();
+    else if (show === 'missions') ui.openMissions();
+    else if (show === 'inventory') ui.toggleInventory();
+    else if (show === 'shop') gs.openShop('general', 'Grocery');
+    else if (show === 'dialogue') { gs.missions.start('m1'); gs.talkTo('marla'); }
+  })();
+}

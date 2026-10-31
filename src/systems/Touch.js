@@ -33,3 +33,14 @@ export function resetTouch() {
   touch.aiming = touch.firing = touch.sprint = touch.interactHeld = touch.refuel = false;
   touch.actions.clear();
 }
+
+// Ask for fullscreen + landscape on the first real tap (Android Chrome); iOS Safari ignores this safely.
+export function goImmersive(game) {
+  if (!touchEnabled() || touch.immersive) return;
+  touch.immersive = true;
+  try {
+    const sc = game.scale;
+    if (sc.fullscreen && sc.fullscreen.available && !sc.isFullscreen) sc.startFullscreen();
+    if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+  } catch (e) { /* not allowed */ }
+}
