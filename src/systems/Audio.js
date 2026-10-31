@@ -81,3 +81,51 @@ export const sfx = {
   click() { tone(800, 0.03, { type: 'square', vol: 0.1 }); },
   die() { tone(200, 0.8, { type: 'sawtooth', vol: 0.3, slideTo: 30 }); noise(0.6, { freq: 1000, endFreq: 60, vol: 0.5 }); }
 };
+
+// ---- city additions: melee, vehicles, sirens --------------------------------
+sfx.swing = () => { if (throttle('swing', 60)) noise(0.09, { freq: 2200, endFreq: 500, vol: 0.18, type: 'bandpass' }); };
+sfx.thud = () => { if (throttle('thud', 60)) { noise(0.1, { freq: 500, endFreq: 120, vol: 0.45 }); tone(110, 0.1, { type: 'sine', vol: 0.25, slideTo: 60 }); } };
+sfx.horn = () => { if (throttle('horn', 250)) { tone(392, 0.35, { type: 'square', vol: 0.12 }); tone(494, 0.35, { type: 'square', vol: 0.1 }); } };
+sfx.crash = (v = 1) => { if (throttle('crash', 120)) { noise(0.35, { freq: 1500, endFreq: 90, vol: Math.min(1, 0.4 + v * 0.5) }); tone(80, 0.25, { type: 'sawtooth', vol: 0.25 * v, slideTo: 40 }); } };
+sfx.doorSlam = () => { if (throttle('slam', 150)) noise(0.12, { freq: 700, endFreq: 150, vol: 0.35 }); };
+sfx.phone = () => { if (throttle('phone', 800)) { tone(880, 0.06, { type: 'square', vol: 0.1 }); tone(880, 0.06, { type: 'square', vol: 0.1, delay: 0.1 }); } };
+
+// Looping engine drone driven by speed (0..1) and a looping two-tone siren
+export const engine = (() => {
+  let osc = null, osc2 = null, gain = null, sirenOsc = null, sirenGain = null, sirenT = 0;
+  return {
+    start() {
+      const c = ac(); if (!c || osc) return;
+      osc = c.createOscillator(); osc2 = c.createOscillator(); gain = c.createGain();
+      osc.type = 'sawtooth'; osc2.type = 'square';
+      osc.frequency.value = 55; osc2.frequency.value = 27;
+      gain.gain.value = 0;
+      osc.connect(gain); osc2.connect(gain); gain.connect(c.destination);
+      osc.start(); osc2.start();
+    },
+    set(speed01, throttle) {
+      const c = ac(); if (!c || !osc) return;
+      const f = 48 + speed01 * 120 + throttle * 12;
+      osc.frequency.setTargetAtTime(f, c.currentTime, 0.05);
+      osc2.frequency.setTargetAtTime(f * 0.5, c.currentTime, 0.05);
+      gain.gain.setTargetAtTime((0.05 + speed01 * 0.07 + throttle * 0.03) * settings.volume, c.currentTime, 0.08);
+    },
+    stop() {
+      if (!osc) return;
+      try { osc.stop(); osc2.stop(); } catch (e) { /* ignore */ }
+      osc = osc2 = gain = null;
+    },
+    siren(vol) {
+      const c = ac(); if (!c) return;
+      if (vol <= 0.01) { if (sirenOsc) { try { sirenOsc.stop(); } catch (e) { /* ignore */ } sirenOsc = sirenGain = null; } return; }
+      if (!sirenOsc) {
+        sirenOsc = c.createOscillator(); sirenGain = c.createGain();
+        sirenOsc.type = 'triangle'; sirenGain.gain.value = 0;
+        sirenOsc.connect(sirenGain); sirenGain.connect(c.destination); sirenOsc.start();
+      }
+      sirenT += 0.045;
+      sirenOsc.frequency.setTargetAtTime(Math.sin(sirenT) > 0 ? 960 : 700, c.currentTime, 0.02);
+      sirenGain.gain.setTargetAtTime(0.06 * vol * settings.volume, c.currentTime, 0.1);
+    }
+  };
+})();

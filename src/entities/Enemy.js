@@ -12,15 +12,44 @@ export const ENEMY_TYPES = {
   heavy: { weapon: 'rifle', hp: 150, walk: 44, run: 85, sight: 320, half: 0.8, range: 280, fireRate: 210, burst: 4, pause: 2100, spread: 0.17, reduce: 0.35 }
 };
 
+// Armed NPC roles: look + how they decide whether the player is a target.
+//  wanted    -> police: ignore you at 0 stars, investigate at 1, fight at 2+
+//  provoked  -> guards: only fight back once attacked
+//  territory -> gang: hostile near their turf
+//  zone      -> military: hostile when you enter a restricted area
+//  always    -> criminals: attack whoever they notice
+export const ROLES = {
+  police: { tex: 'npc_police', hostility: 'wanted', preset: 'pistol' },
+  swat: { tex: 'npc_swat', hostility: 'wanted', preset: 'heavy' },
+  guard: { tex: 'npc_guard', hostility: 'provoked', preset: 'pistol' },
+  gang: { tex: 'npc_gang', hostility: 'territory', preset: 'pistol' },
+  criminal: { tex: 'npc_criminal', hostility: 'always', preset: 'pistol' },
+  military: { tex: 'npc_military', hostility: 'zone', preset: 'rifle' },
+  mheavy: { tex: 'npc_mheavy', hostility: 'zone', preset: 'heavy' },
+  msniper: { tex: 'npc_msniper', hostility: 'zone', preset: 'sniper' }
+};
+
 const rand = (a, b) => a + Math.random() * (b - a);
 const wrap = Phaser.Math.Angle.Wrap;
 
 export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
-    const cfg = ENEMY_TYPES[spec.type];
-    super(scene, spec.x, spec.y, 'enemy_' + spec.type, 'd0');
+    const roleCfg = ROLES[spec.role] || ROLES.criminal;
+    const preset = spec.type || roleCfg.preset;
+    const cfg = ENEMY_TYPES[preset];
+    super(scene, spec.x, spec.y, roleCfg.tex, 'd0');
     this.cfg = cfg;
-    this.kind = spec.type;
+    this.kind = preset;
+    this.role = spec.role || 'criminal';
+    this.hostility = roleCfg.hostility;
+    this.isPolice = this.role === 'police' || this.role === 'swat';
+    this.angry = false;
+    this.angryUntil = 0;
+    this.response = !!spec.response;
+    this.waitRange = spec.wait || [800, 2200];
+    this.knockUntil = 0;
+    this.kvx = 0;
+    this.kvy = 0;
     this.weaponCfg = WEAPONS[cfg.weapon];
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -131,8 +160,30 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.idleUntil = time + rand(1500, 3500);
   }
 
+  // Is the player a valid target for this NPC right now?
+  isHostile(time) {
+    const sc = this.scene;
+    const p = sc.player;
+    if (this.angry && time < this.angryUntil) return true;
+    switch (this.hostility) {
+      case 'always': return true;
+      case 'wanted': return sc.wanted.level >= 2;
+      case 'zone': return sc.inRestricted(p.x, p.y);
+      case 'territory': return Math.hypot(p.x - this.home.x, p.y - this.home.y) < 230;
+      default: return false;
+    }
+  }
+
+  knock(angle, power, ms = 200) {
+    this.kvx = Math.cos(angle) * power;
+    this.kvy = Math.sin(angle) * power;
+    this.knockUntil = this.scene.gt + ms;
+  }
+
   takeDamage(n, time) {
     if (this.dead) return;
+    this.angry = true;
+    this.angryUntil = time + 90000;
     this.hp -= n * (1 - this.cfg.reduce);
     this.hpShowUntil = time + 2500;
     this.setTintFill(0xffffff);
@@ -287,19 +338,24 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (p.dead) { this.stop(); this.syncParts(time, dt); return; }
 
     const cfg = this.cfg;
-    const aware = this.ai === 'alert' || this.ai === 'attack' || this.ai === 'cover';
+    const hostile = this.isHostile(time);
+    const lvl = sc.wanted.level;
+    const interested = hostile || (this.isPolice && lvl >= 1);
+    let aware = this.ai === 'alert' || this.ai === 'attack' || this.ai === 'cover';
+    if (aware && !interested) { this.enterSearch(time); this.awareness = 0.3; aware = false; }
     const toP = Math.atan2(dy, dx);
     const diff = Math.abs(wrap(toP - this.face));
     const half = aware ? 1.7 : this.ai === 'search' ? Math.max(cfg.half, 1.1) : cfg.half;
     const range = cfg.sight * (p.crouching ? 0.5 : p.sprinting ? 1.25 : p.moving ? 1 : 0.75) * (aware ? 1.3 : 1);
     const inView = this.los && dist < range && diff < half;
     const bump = this.los && dist < 22;
-    const seen = inView || bump;
+    const seen = (inView || bump) && interested;
     const secs = dt / 1000;
 
     if (seen) {
       this.lastKnown = { x: p.x, y: p.y };
       this.lastSeen = time;
+      if (this.isPolice) sc.wanted.policeSees(time, p);
       if (!aware) {
         const closeness = Math.max(0, 1 - dist / range);
         this.awareness = Math.min(1, this.awareness + (0.45 + closeness * 1.5) * secs);
@@ -308,12 +364,23 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.awareness = Math.max(0, this.awareness - (this.ai === 'search' ? 0.05 : 0.14) * secs);
     }
 
-    // promote to alert when the meter fills
     if (!aware && this.awareness >= 1) {
-      this.enterAlert(time, this.ai === 'search');
-      sc.alertAllies(this, 200, p);
-    } else if ((this.ai === 'patrol' || this.ai === 'idle') && this.awareness >= 0.35) {
+      if (hostile) {
+        this.enterAlert(time, this.ai === 'search');
+        sc.alertAllies(this, 200, p);
+      } else {
+        // one-star heat: they have eyes on you, but only investigate
+        this.awareness = 0.7;
+        if (this.ai !== 'suspicious' && this.ai !== 'search') this.enterSuspicious(time);
+      }
+    } else if ((this.ai === 'patrol' || this.ai === 'idle') && this.awareness >= 0.35 && interested) {
       this.enterSuspicious(time);
+    }
+
+    if (time < this.knockUntil) {
+      this.setVelocity(this.kvx, this.kvy);
+      this.syncParts(time, dt);
+      return;
     }
 
     switch (this.ai) {
@@ -348,7 +415,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       const t = this.route[this.routeIdx];
       if (Math.hypot(t.x - this.x, t.y - this.y) < 16) {
         this.routeIdx = (this.routeIdx + 1) % this.route.length;
-        this.waitUntil = time + rand(800, 2200);
+        this.waitUntil = time + rand(this.waitRange[0], this.waitRange[1]);
       }
       if (time < this.waitUntil) { this.stop(); this.turn(this.face + 0.01, 1, dt); return; }
       this.moveToward(t.x, t.y, this.cfg.walk, time);

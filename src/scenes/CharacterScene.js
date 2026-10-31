@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { button, label } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
+import { patchLatestAppearance } from '../systems/Save.js';
 import {
   OPTIONS, SKIN_TONES, HAIR_COLORS, CLOTH_COLORS, SHOE_COLORS,
   defaultAppearance, randomAppearance, generateCharacter
@@ -20,6 +21,8 @@ const DIR_NAMES = { d: 'Front', r: 'Right', u: 'Back', l: 'Left' };
 
 export default class CharacterScene extends Phaser.Scene {
   constructor() { super('Character'); }
+
+  init(data) { this.mode = (data && data.mode) || 'new'; }
 
   create() {
     this.input.setDefaultCursor('default');
@@ -69,7 +72,7 @@ export default class CharacterScene extends Phaser.Scene {
     });
 
     button(this, 640, 640, 'RANDOMIZE', () => { this.app = randomAppearance(); this.refresh(); }, { w: 240, h: 52, size: 22 });
-    button(this, 940, 640, 'CONFIRM & START', () => this.start(), { w: 300, h: 56, size: 24 });
+    button(this, 940, 640, this.mode === 'edit' ? 'SAVE LOOK' : 'CONFIRM & START', () => this.start(), { w: 300, h: 56, size: 24 });
     button(this, 1170, 40, 'BACK', () => this.scene.start('Menu'), { w: 120, h: 40, size: 18 });
     this.input.keyboard.once('keydown-ENTER', () => this.start());
     this.input.keyboard.on('keydown-LEFT', () => this.rotate(-1));
@@ -110,7 +113,7 @@ export default class CharacterScene extends Phaser.Scene {
   start() {
     this.registry.set('appearance', { ...this.app });
     try { sessionStorage.setItem('jeygame-appearance', JSON.stringify(this.app)); } catch (e) { /* ignore */ }
-    this.scene.start('Game');
+    if (this.mode === 'edit') { patchLatestAppearance({ ...this.app }); this.scene.start('Menu'); } else this.scene.start('Game', { newGame: true });
   }
 
   update(time, delta) {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { WEAPONS, WEAPON_ORDER, AMMO_TYPES } from '../config.js';
+import { WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
 import { sfx } from '../systems/Audio.js';
 import { BULLET_HEIGHT } from '../systems/Combat.js';
 
@@ -31,37 +31,47 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.crouching = false;
     this.moving = false;
 
-    this.weapons = { pistol: { mag: WEAPONS.pistol.mag } };
-    this.ammo = { pistol: 36, rifle: 0, shell: 0, sniper: 0 };
+    // Start unarmed-ish: fists and a wooden stick. Firearms are optional finds.
+    this.weapons = { fists: {}, stick: {} };
+    this.ammo = { pistol: 0, rifle: 0, shell: 0, sniper: 0 };
     this.medkits = 1;
     this.plates = 0;
     this.backpack = 0;
-    this.current = 'pistol';
+    this.current = 'stick';
 
     this.reloading = false;
     this.reloadStart = 0;
     this.reloadEnd = 0;
     this.nextShot = 0;
+    this.meleeReady = 0;
+    this.swing = null;
     this.kick = 0;
     this.flashUntil = 0;
+    this.knockUntil = 0;
+    this.kvx = 0;
+    this.kvy = 0;
     this.aim = 0;
     this.dir = 'd';
     this.animT = 0;
     this.stepT = 0;
     this.swapT = 0;
     this.dead = false;
+    this.vehicle = null;
     this.lastDepth = -1;
 
     this.shadow = scene.add.sprite(x, y, 'shadow').setDepth(3.5);
-    this.gun = scene.add.sprite(x, y, 'gun_pistol').setOrigin(0.15, 0.5);
+    this.gun = scene.add.sprite(x, y, 'm_stick').setOrigin(0.15, 0.5);
     this.flash = scene.add.sprite(x, y, 'flash').setDepth(5001).setVisible(false);
   }
 
   ammoCap(type) { return Math.floor(AMMO_TYPES[type].cap * (1 + 0.5 * this.backpack)); }
   medCap() { return 3 + 3 * this.backpack; }
   plateCap() { return 2 + 2 * this.backpack; }
-  get weapon() { return WEAPONS[this.current]; }
+  get isMelee() { return !!MELEE[this.current]; }
+  get weapon() { return MELEE[this.current] || WEAPONS[this.current]; }
   get ws() { return this.weapons[this.current]; }
+  get weaponDrawn() { return !this.isMelee && !this.vehicle; } // firearm out
+  get weaponTex() { return this.isMelee ? MELEE[this.current].tex : WEAPONS[this.current].gun; }
 
   // muzzle on the ground plane (where bullets are simulated)
   muzzle() {
@@ -72,21 +82,33 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   equip(id) {
     if (!this.weapons[id] || id === this.current) return;
     this.reloading = false;
+    this.swing = null;
     this.current = id;
-    this.gun.setTexture(WEAPONS[id].gun);
+    this.gun.setTexture(this.weaponTex);
     this.nextShot = this.scene.gt + 300;
     this.swapT = 250;
     sfx.click();
   }
 
+  ownedList(list) { return list.filter((id) => this.weapons[id]); }
+
   cycleWeapon(dir = 1) {
-    const owned = WEAPON_ORDER.filter((id) => this.weapons[id]);
+    const owned = this.ownedList([...MELEE_ORDER, ...WEAPON_ORDER]);
     if (owned.length < 2) return;
     const i = owned.indexOf(this.current);
     this.equip(owned[(i + dir + owned.length) % owned.length]);
   }
 
+  // jump to the next melee weapon (or fists), used by the Z key / MELEE button
+  cycleMelee() {
+    const owned = this.ownedList(MELEE_ORDER);
+    if (!this.isMelee) { this.equip(owned[owned.length - 1] || 'fists'); return; }
+    const i = owned.indexOf(this.current);
+    this.equip(owned[(i + 1) % owned.length]);
+  }
+
   startReload(time) {
+    if (this.isMelee) return false;
     const w = this.weapon;
     if (this.reloading || this.ws.mag >= w.mag || this.ammo[w.ammo] <= 0) return false;
     this.reloading = true;
@@ -97,6 +119,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   tryShoot(time, combat, pressed) {
+    if (this.isMelee || this.vehicle) return false;
     const w = this.weapon;
     if (this.reloading || time < this.nextShot) return false;
     if (!w.auto && !pressed) return false;
@@ -120,7 +143,21 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.flashUntil = time + 45;
     sfx.shoot(w.id);
     this.scene.alertNoise(this.x, this.y, w.noise, 'shot');
+    this.scene.onPlayerFiredGun();
     if (st.mag === 0 && this.ammo[w.ammo] > 0) this.scene.time.delayedCall(250, () => { if (!this.dead) this.startReload(this.scene.gt); });
+    return true;
+  }
+
+  // Start a melee swing with the equipped melee weapon (fists if a firearm is equipped).
+  meleeAttack(time) {
+    if (this.vehicle || this.dead) return false;
+    const w = this.isMelee ? MELEE[this.current] : MELEE.fists;
+    if (time < this.meleeReady || this.swing) return false;
+    this.meleeReady = time + w.cd;
+    this.swing = { t: 0, dur: w.swing, w, hit: false, aim: this.aim };
+    this.reloading = false;
+    this.stamina = Math.max(0, this.stamina - 4);
+    sfx.swing();
     return true;
   }
 
@@ -140,16 +177,31 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     return true;
   }
 
-  takeDamage(n) {
+  takeDamage(n, silent = false) {
     if (this.dead) return;
     const absorbed = Math.min(this.armor, n * 0.7);
     this.armor -= absorbed;
     this.hp -= n - absorbed;
-    sfx.hurt();
+    if (!silent) sfx.hurt();
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(60, () => this.clearTint());
     this.scene.events.emit('player-hit', n);
     if (this.hp <= 0) { this.hp = 0; this.dead = true; }
+  }
+
+  knockback(angle, power, ms = 180) {
+    this.kvx = Math.cos(angle) * power;
+    this.kvy = Math.sin(angle) * power;
+    this.knockUntil = this.scene.gt + ms;
+  }
+
+  // used while driving
+  setHidden(hidden) {
+    this.setVisible(!hidden);
+    this.gun.setVisible(!hidden);
+    this.shadow.setVisible(!hidden);
+    if (hidden) this.flash.setVisible(false);
+    this.body.enable = !hidden;
   }
 
   updatePlayer(time, dt, ctrl) {
@@ -170,9 +222,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.winded && this.stamina > 25) this.winded = false;
 
-    const speed = this.sprinting ? 215 : this.crouching ? 72 : this.reloading ? 105 : 135;
+    const speed = this.sprinting ? 215 : this.crouching ? 72 : this.reloading ? 105 : this.swing ? 95 : 135;
     const k = this.moving ? (analog ? Math.max(0.55, mag) : 1) : 0;
-    this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
+    if (time < this.knockUntil) this.setVelocity(this.kvx, this.kvy);
+    else this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
 
     // facing + walk cycle
     this.aim = Math.atan2(ctrl.aimY - this.y, ctrl.aimX - this.x);
@@ -210,24 +263,77 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
     this.shadow.setPosition(this.x, this.y + 2).setScale(this.crouching ? 0.85 : 1);
 
-    // weapon pose (follows the cursor; dips while reloading / swapping)
     this.kick = Math.max(0, this.kick - dt * 0.03);
     this.swapT = Math.max(0, this.swapT - dt);
-    let lift = this.crouching ? CHEST - 5 : CHEST;
-    let wob = 0;
-    if (this.reloading) {
-      const p = Phaser.Math.Clamp((time - this.reloadStart) / (this.reloadEnd - this.reloadStart), 0, 1);
-      lift -= Math.sin(p * Math.PI) * 6;
-      wob = Math.sin(p * Math.PI * 4) * 0.18 + Math.sin(p * Math.PI) * 0.5 * (Math.cos(this.aim) < 0 ? -1 : 1);
+    const baseLift = this.crouching ? CHEST - 5 : CHEST;
+
+    if (this.swing) {
+      this.updateSwing(dt, depth, baseLift);
+    } else if (this.isMelee) {
+      // melee weapon held at the ready
+      const w = MELEE[this.current];
+      const idle = this.current === 'fists';
+      this.gun.setVisible(!idle && !this.vehicle);
+      this.gun.setTexture(w.tex);
+      const bob = this.moving ? Math.sin(this.animT / 60) * 1.2 : 0;
+      const cx = Math.cos(this.aim), left = cx < 0;
+      this.gun.setPosition(this.x + Math.cos(this.aim) * 6, this.y - baseLift + Math.sin(this.aim) * 5 + bob);
+      this.gun.setRotation(this.aim + (left ? 0.7 : -0.7)).setFlipY(left);
+      this.gun.setDepth(this.dir === 'u' ? depth - 0.5 : depth + 0.5);
+    } else {
+      // firearm pose (follows the cursor; dips while reloading / swapping)
+      this.gun.setVisible(!this.vehicle);
+      this.gun.setTexture(this.weaponTex);
+      let lift = baseLift, wob = 0;
+      if (this.reloading) {
+        const p = Phaser.Math.Clamp((time - this.reloadStart) / (this.reloadEnd - this.reloadStart), 0, 1);
+        lift -= Math.sin(p * Math.PI) * 6;
+        wob = Math.sin(p * Math.PI * 4) * 0.18 + Math.sin(p * Math.PI) * 0.5 * (Math.cos(this.aim) < 0 ? -1 : 1);
+      }
+      if (this.swapT > 0) lift -= (this.swapT / 250) * 8;
+      const bobY = this.moving ? Math.sin(this.animT / 60) * 1.2 : 0;
+      const off = 7 - this.kick;
+      this.gun.setPosition(this.x + Math.cos(this.aim) * off, this.y - lift + Math.sin(this.aim) * off * 0.8 + bobY);
+      this.gun.setRotation(this.aim + wob);
+      this.gun.setFlipY(Math.cos(this.aim) < 0);
+      this.gun.setDepth(this.dir === 'u' ? depth - 0.5 : depth + 0.5);
     }
-    if (this.swapT > 0) lift -= (this.swapT / 250) * 8;
-    const bobY = this.moving ? Math.sin(this.animT / 60) * 1.2 : 0;
-    const off = 7 - this.kick;
-    this.gun.setPosition(this.x + Math.cos(this.aim) * off, this.y - lift + Math.sin(this.aim) * off * 0.8 + bobY);
-    this.gun.setRotation(this.aim + wob);
-    this.gun.setFlipY(Math.cos(this.aim) < 0);
-    this.gun.setDepth(this.dir === 'u' ? depth - 0.5 : depth + 0.5);
     if (this.flash.visible && time > this.flashUntil) this.flash.setVisible(false);
+  }
+
+  // Sweep (bat, pipe...) or thrust (fists, knife) animation; fires the hit test mid-swing.
+  updateSwing(dt, depth, baseLift) {
+    const s = this.swing;
+    s.t += dt;
+    const p = Math.min(1, s.t / s.dur);
+    const w = s.w;
+    const left = Math.cos(s.aim) < 0;
+    const thrust = w.id === 'fists' || w.id === 'knife';
+    this.gun.setVisible(true).setTexture(w.tex).setFlipY(left);
+    let ang = s.aim, reach = 8;
+    if (thrust) {
+      reach = 6 + Math.sin(p * Math.PI) * (w.range * 0.7);
+    } else {
+      const sweep = (left ? -1 : 1) * (-w.arc / 2 + p * w.arc);
+      ang = s.aim + sweep;
+      reach = 8;
+    }
+    this.gun.setPosition(this.x + Math.cos(s.aim) * reach, this.y - baseLift + Math.sin(s.aim) * reach * 0.8);
+    this.gun.setRotation(ang);
+    this.gun.setDepth(this.dir === 'u' ? depth - 0.5 : depth + 0.5);
+    if (!s.hit && p >= 0.4) {
+      s.hit = true;
+      this.scene.meleeHit(this, w, s.aim);
+    }
+    // slash trail
+    if (!thrust) {
+      const g = this.scene.gfx;
+      g.lineStyle(3, 0xffffff, 0.55 * (1 - p));
+      g.beginPath();
+      g.arc(this.x, this.y - baseLift, w.range * 0.85, s.aim - w.arc / 2, s.aim + w.arc / 2, false);
+      g.strokePath();
+    }
+    if (p >= 1) this.swing = null;
   }
 
   destroyParts() {

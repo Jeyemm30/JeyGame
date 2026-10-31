@@ -25,16 +25,20 @@ export function button(scene, x, y, str, onClick, { w = 300, h = 50, size = 22 }
 export const CONTROLS_TEXT = [
   'W A S D ..... Move',
   'Mouse ....... Aim',
-  'Left Click .. Shoot',
+  'Left Click .. Attack / shoot',
+  'Space ....... Melee swing (fists with a gun)',
+  'Z ........... Cycle melee weapons',
   'R ........... Reload',
   'Shift ....... Sprint (noisy)',
   'C ........... Crouch / sneak',
-  'E ........... Loot / search / open doors',
+  'E ........... Loot / search / doors / enter car',
   '              (behind unaware enemy: takedown)',
   '1-4 / Q ..... Switch weapon',
   'H ........... Use medkit',
   'F ........... Use armor plate',
   'Tab .......... Inventory',
+  'M ........... World map (or click minimap)',
+  'Driving: W/S gas+brake, A/D steer, Space brake, H horn',
   'Mouse Wheel . Zoom',
   'ESC .......... Pause',
   '',
@@ -46,10 +50,10 @@ export const CONTROLS_TEXT = [
 export function controlsPanel(scene, onClose) {
   const c = scene.add.container(0, 0).setDepth(100);
   const block = scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0.75).setInteractive();
-  const panel = scene.add.rectangle(640, 360, 700, 520, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
-  const title = label(scene, 640, 130, 'CONTROLS', 34, '#f2e08a', 0.5, 0);
-  const body = scene.add.text(640, 200, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '19px', color: '#e8f2e0', lineSpacing: 6 }).setOrigin(0.5, 0);
-  const close = button(scene, 640, 590, 'CLOSE', () => { c.destroy(); if (onClose) onClose(); }, { w: 200, h: 44, size: 20 });
+  const panel = scene.add.rectangle(640, 360, 760, 680, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
+  const title = label(scene, 640, 40, 'CONTROLS', 30, '#f2e08a', 0.5, 0);
+  const body = scene.add.text(640, 84, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '17px', color: '#e8f2e0', lineSpacing: 4 }).setOrigin(0.5, 0);
+  const close = button(scene, 640, 668, 'CLOSE', () => { c.destroy(); if (onClose) onClose(); }, { w: 200, h: 44, size: 20 });
   c.add([block, panel, title, body, close]);
   return c;
 }

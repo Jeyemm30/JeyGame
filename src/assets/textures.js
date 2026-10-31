@@ -2,6 +2,7 @@
 // Everything is drawn into canvases at boot time, so the game needs no external
 // image files and works fully offline.
 import { mulberry32 } from '../systems/Rng.js';
+import { generateCityArt } from './cityArt.js';
 
 export const T = {
   // ground
@@ -13,29 +14,34 @@ export const T = {
   wallCap: 29, wall2Cap: 30, tentCap: 31,
   // furniture
   bedHead: 32, bedFoot: 33, table: 34, chair: 35, cabinet: 36, fridge: 37, shelf: 38, sofa: 39,
-  toilet: 40, sink: 41, dresser: 42, locker: 43, stove: 44, rubble: 45
+  toilet: 40, sink: 41, dresser: 42, locker: 43, stove: 44, rubble: 45,
+  // city additions
+  counter: 46, hospBed: 47, bars: 48, desk: 49, pump: 50, bench: 51,
+  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, glass: 58, glassCap: 59, shopShelf: 60
 };
 
 // Anything in this set stops movement.
 export const SOLID = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.fence, T.barricade, T.water, T.sandbag,
   T.doorClosed, T.window, T.windowBroken, T.prop, T.tree,
-  T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove
+  T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
+  T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.tree, T.barricade, T.sandbag, T.doorClosed,
-  T.fridge, T.shelf, T.locker, T.cabinet
+  T.fridge, T.shelf, T.locker, T.cabinet, T.glass, T.glassCap
 ]);
 // Solid for walking but bullets (and sight) go through.
 export const BULLET_PASS = new Set([
-  T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser
+  T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser,
+  T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf
 ]);
-export const WALL_FAMILY = new Set([T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen]);
+export const WALL_FAMILY = new Set([T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap]);
 
-const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+export const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
 
-function shade(hex, f) {
+export function shade(hex, f) {
   if (!hex || hex[0] !== '#') return hex;
   const n = parseInt(hex.slice(1), 16);
   let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
@@ -44,7 +50,7 @@ function shade(hex, f) {
   return `rgb(${r},${g},${b})`;
 }
 
-function disc(c, cx, cy, r, col, step = 2) {
+export function disc(c, cx, cy, r, col, step = 2) {
   c.fillStyle = col;
   for (let y = -r; y <= r; y += step) {
     for (let x = -r; x <= r; x += step) {
@@ -53,7 +59,7 @@ function disc(c, cx, cy, r, col, step = 2) {
   }
 }
 
-function ellipse(c, cx, cy, rx, ry, col) {
+export function ellipse(c, cx, cy, rx, ry, col) {
   c.fillStyle = col;
   c.beginPath();
   c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -68,7 +74,7 @@ function speckle(c, rng, ox, colors, count, size = 2, oy = 0, h = 32) {
   }
 }
 
-function makeCanvas(scene, key, w, h, draw) {
+export function makeCanvas(scene, key, w, h, draw) {
   let tex;
   if (scene.textures.exists(key)) {
     tex = scene.textures.get(key);
@@ -788,4 +794,5 @@ export function generateTextures(scene) {
   drawObjects(scene);
   generateCharacter(scene, 'char_player', defaultAppearance());
   ['pistol', 'rifle', 'shotgun', 'sniper', 'heavy'].forEach((k) => generateCharacter(scene, 'enemy_' + k, ENEMY_LOOKS[k]));
+  generateCityArt(scene);
 }
