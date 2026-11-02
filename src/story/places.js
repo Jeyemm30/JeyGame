@@ -51,6 +51,9 @@ export function buildPlaces(gs) {
   set('safeInside', safe.x, safe.y - 56, 'Inside the safehouse');
   const lot = wd.lots.find((l) => !l.police && !l.ambulances && l.x1 - l.x0 > 8) || wd.lots[0];
   set('dealer', ((lot.x0 + lot.x1) / 2) * TILE, ((lot.y0 + lot.y1) / 2 + 1) * TILE, 'Gordy’s Used Cars');
+  if (wd.hideout) { P.kenny = { x: wd.hideout.kenny.x, y: wd.hideout.kenny.y, name: "Kenny's hideout" }; }
+  if (wd.wise) { P.wise = { x: wd.wise.owner.x, y: wd.wise.owner.y, name: 'WISE SOLE' }; }
+  if (wd.casino) { P.sean = { x: wd.casino.sean.x, y: wd.casino.sean.y, name: 'Casino reception' }; P.jiro = { x: wd.casino.jiro.x, y: wd.casino.jiro.y, name: 'Casino card room' }; P.casino = { x: wd.casino.door.x, y: wd.casino.door.y, name: 'Casino' }; }
   P.houses = homes.map((h) => ({ x: h.x, y: h.y + 14 }));
   P.shops = doors.filter((d) => d.kind === 'shop' || d.kind === 'restaurant');
   P.tutorial = null;

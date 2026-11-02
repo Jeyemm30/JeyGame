@@ -14,10 +14,10 @@ const KINDS = [
   ['forest', 'res', 'res', 'ind', 'ind', 'forest', 'suburb', 'suburb', 'school', 'forest'],
   ['res', 'res', 'park', 'hospital', 'ind', 'forest', 'suburb', 'park2', 'apartments', 'suburb'],
   ['res', 'res_gas', 'downtown', 'downtown', 'ind', 'forest', 'mall', 'com', 'downtown', 'apartments'],
-  ['res', 'com', 'com', 'police', 'ind_gas', 'forest', 'com', 'fire', 'com', 'suburb'],
+  ['res', 'com', 'com', 'police', 'ind_gas', 'casino', 'com', 'fire', 'com', 'suburb'],
   ['res', 'res', 'res_ab', 'checkpoint', 'military', 'forest', 'res_ab', 'res_ab', 'ind', 'ind_gas'],
   ['suburb', 'suburb', 'com', 'apartments', 'ind', 'forest', 'res', 'res', 'suburb', 'forest'],
-  ['res', 'res_ab', 'suburb', 'mall', 'ind', 'forest', 'ind', 'ind', 'res_ab', 'suburb'],
+  ['res', 'hideout', 'suburb', 'mall', 'ind', 'forest', 'ind', 'ind', 'res_ab', 'suburb'],
   ['forest', 'suburb', 'res', 'fire', 'ind_gas', 'forest', 'res', 'park2', 'suburb', 'forest']
 ];
 const DISTRICTS = [
@@ -610,11 +610,178 @@ export function generateWorld(seed = 20240) {
     }
   }
 
+  /* ---- WISE SOLE streetwear boutique (Ezekiel Blackwell): glass front, sneaker wall, racks, mannequins, fitting corner, counter ---- */
+  function wiseSole(x, y, w, h) {
+    fillBuildingShell(x, y, w, h, T.wall2, T.tileFloor);
+    const dx = x + Math.floor(w / 2) - 1, fy = y + h - 1;
+    addDoorTile(dx, fy); addDoorTile(dx + 1, fy);
+    placeWindows(x, y, w, h, { windowChance: 1 });
+    for (let yy = y + 2; yy < fy; yy++) for (let xx = x + 1; xx <= x + 4; xx++) ground[yy][xx] = T.carpet;          // fitting corner
+    const put = (tx, ty, idx) => { if (obj[ty][tx] === -1) { obj[ty][tx] = idx; return true; } return false; };
+    for (let xx = x + 1; xx <= x + w - 2; xx++) put(xx, y + 1, T.shopShelf);                                            // sneaker wall
+    const deco = (tx, ty, kind, oy = 30) => { if (put(tx, ty, T.prop)) out.decor.push({ kind, x: px(tx), y: ty * TILE + oy }); };
+    deco(x + 2, y + 2, 'mirror', 34); deco(x + 4, y + 2, 'mirror', 34); deco(x + 4, y + 7, 'curtain', 36);              // mirrors + changing curtain
+    put(x + 2, y + 6, T.bench); put(x + 3, y + 6, T.bench);                                                              // try-on benches
+    deco(x + 7, y + 3, 'clothes_rack', 36); deco(x + 9, y + 3, 'clothes_rack', 36); deco(x + 11, y + 3, 'clothes_rack', 36);
+    deco(x + 6, y + 5, 'mannequin0', 36); deco(x + 8, y + 5, 'mannequin1', 36); deco(x + 5, y + 7, 'mannequin2', 36); deco(x + 11, y + 6, 'mannequin3', 36);
+    deco(x + w - 2, y + 4, 'sneaker_case', 36);                                                                          // premium display
+    deco(x + 1, y + 4, 'poster_board1', 34); deco(x + w - 2, y + 7, 'poster_board2', 34); deco(x + 1, y + 8, 'poster_board0', 34);
+    const cx = x + w - 4;                                                                                                // cashier counter with a gap for the owner
+    put(cx - 2, y + 6, T.counter); put(cx - 1, y + 6, T.counter); put(cx + 1, y + 6, T.counter);
+    registerBuilding(x, y, w, h, 'shingle', { kind: 'shop' });
+    addPoi('wise', 'WISE SOLE', x, y, w, h);
+    publicDoor(dx, fy, 'shop', 'WISE SOLE');
+    // street dressing: planters, poster boards, a bench
+    [[dx - 3, y + h + 1, 'poster_board0'], [dx + 4, y + h + 1, 'poster_board1'], [x + 1, y + h + 1, 'planter'], [x + w - 2, y + h + 1, 'planter'], [dx + 6, y + h + 1, 'poster_board2']].forEach(([tx, ty, k]) => { if (inb(tx, ty) && obj[ty][tx] === -1) out.decor.push({ kind: k, x: px(tx), y: ty * TILE + 30 }); });
+    out.wise = {
+      door: { x: (dx + 1) * TILE, y: (fy + 1) * TILE },
+      owner: { x: px(cx), y: px(y + 5) },
+      lights: [{ x: px(x + 4), y: px(y + 3), steady: true, col: 0xffd0f0 }, { x: px(x + 9), y: px(y + 3), steady: true, col: 0xffe8c0 }, { x: px(x + 6), y: px(y + 8), steady: true, col: 0xc8e8ff }, { x: px(x + w - 2), y: px(y + 4), steady: true, col: 0xffd870 }, { x: px(dx), y: (fy + 1) * TILE + 6, steady: true, col: 0xff5aa0, neon: true }]
+    };
+  }
+
+
+  /* ---- THE CASINO: a landmark east of the river. Glass front + neon sign, valet plaza with luxury cars, and a full interior:
+          reception, gambling floor (slots, blackjack, poker dice), lounge, bar, cashier, VIP room, security office, restrooms ---- */
+  function casino(b) {
+    const X = 200, Y = 103, W = 18, H = 18, fy = Y + H - 1;
+    const L = (lx) => X + lx, M = (ly) => Y + ly;                 // interior tile helpers (lx / ly are tiles inside the building)
+    const cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    // clear the lot of forest
+    for (let y = 97; y <= 126; y++) for (let x = 199; x <= 218; x++) {
+      obj[y][x] = -1; ground[y][x] = y > fy ? T.plaza : T.grass1;
+    }
+    mark(199, 97, 20, 30, 0);
+    fillBuildingShell(X, Y, W, H, T.wall2, T.carpet);
+    // glass front with two stone pillars and an automatic double door
+    for (let lx = 1; lx <= 16; lx++) obj[fy][L(lx)] = (lx === 4 || lx === 13) ? T.wall2 : T.glass;
+    obj[fy][L(8)] = T.doorOpen; obj[fy][L(9)] = T.doorOpen;
+    for (let ly = 14; ly <= 16; ly++) for (let lx = 7; lx <= 10; lx++) ground[M(ly)][L(lx)] = T.tileFloor;       // marble lobby
+    const prop = (lx, ly) => { obj[M(ly)][L(lx)] = T.prop; };
+    const decor = (kind, x, y) => out.decor.push({ kind, x, y });
+    const solid = (lx, ly, idx) => { if (obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = idx; };
+
+    // ---- security office (top-left) + restrooms (top-middle) + VIP room (top-right)
+    for (let ly = 1; ly <= 5; ly++) obj[M(ly)][L(5)] = T.wall2;
+    for (let lx = 1; lx <= 5; lx++) obj[M(5)][L(lx)] = T.wall2;
+    obj[M(5)][L(3)] = T.doorOpen;
+    for (let ly = 1; ly <= 4; ly++) for (let lx = 1; lx <= 4; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
+    solid(2, 1, T.desk); solid(3, 1, T.desk); solid(1, 4, T.locker); solid(4, 4, T.cabinet);
+    for (let ly = 1; ly <= 7; ly++) obj[M(ly)][L(10)] = T.wall2;
+    for (let lx = 6; lx <= 10; lx++) obj[M(5)][L(lx)] = T.wall2;
+    obj[M(5)][L(8)] = T.doorOpen;
+    for (let ly = 1; ly <= 4; ly++) for (let lx = 6; lx <= 9; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
+    solid(6, 1, T.sink); solid(7, 1, T.toilet); solid(8, 1, T.sink); solid(9, 1, T.toilet);
+    for (let lx = 10; lx <= 16; lx++) obj[M(7)][L(lx)] = T.wall2;
+    obj[M(7)][L(13)] = T.doorClosed; out.doors.push({ x: L(13), y: M(7) });
+    // VIP room dressing
+    solid(13, 3, T.prop); solid(14, 3, T.prop); decor('poker_table', (L(14)) * TILE, M(3) * TILE + 36);
+    solid(12, 1, T.prop); solid(13, 1, T.prop); decor('lounge_sofa', L(13) * TILE, M(1) * TILE + 34);
+    solid(16, 3, T.prop); decor('armchair', cx(16), M(3) * TILE + 30);
+    solid(11, 2, T.prop); decor('palm_pot', cx(11), M(2) * TILE + 34);
+    for (let lx = 12; lx <= 15; lx++) decor('bar_stool', cx(lx), M(4) * TILE + 28);
+
+    // ---- gambling floor
+    const slotCells1 = [1, 2, 4, 5, 6, 7, 9];
+    const slotCells2 = [1, 2, 3, 4, 5];
+    const stations = [];
+    slotCells1.forEach((lx, i) => { prop(lx, 6); decor('slot_machine' + (i % 3), cx(lx), M(6) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(7), name: 'Slot machine' }); });
+    slotCells2.forEach((lx, i) => { prop(lx, 10); decor('slot_machine' + ((i + 1) % 3), cx(lx), M(10) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(11), name: 'Slot machine' }); });
+    const tbl = (kind, lxA, ly, game, name) => { prop(lxA, ly); prop(lxA + 1, ly); decor(kind, L(lxA + 1) * TILE, M(ly) * TILE + 40); stations.push({ game, x: L(lxA + 1) * TILE, y: cy(ly + 1), name }); };
+    tbl('bj_table', 8, 9, 'blackjack', 'Blackjack table'); tbl('bj_table', 12, 9, 'blackjack', 'Blackjack table');
+    tbl('dice_table', 8, 12, 'dice', 'Poker dice table'); tbl('dice_table', 12, 12, 'dice', 'Poker dice table');
+    [[8, 10], [9, 10], [12, 10], [13, 10], [8, 13], [9, 13], [12, 13], [13, 13]].forEach(([lx, ly]) => decor('bar_stool', cx(lx), M(ly) * TILE + 30));
+
+    // ---- reception, cashier, bar, lounge
+    stations.push({ game: 'hub', x: cx(14), y: cy(10), name: 'Cashier' });
+    for (let lx = 3; lx <= 5; lx++) solid(lx, 15, T.counter);
+    for (let ly = 9; ly <= 11; ly++) solid(15, ly, T.counter);
+    for (let lx = 12; lx <= 16; lx++) solid(lx, 15, T.counter);
+    for (let lx = 12; lx <= 16; lx++) decor('bar_stool', cx(lx), M(14) * TILE + 28);
+    prop(15, 16); prop(16, 16); decor('bottle_shelf', L(16) * TILE, M(16) * TILE + 36);
+    prop(2, 13); prop(3, 13); decor('lounge_sofa', L(3) * TILE, M(13) * TILE + 34);
+    prop(5, 13); prop(6, 13); decor('lounge_sofa', L(6) * TILE, M(13) * TILE + 34);
+    solid(4, 14, T.table); decor('palm_pot', cx(1), M(15) * TILE + 34); prop(1, 15);
+    decor('palm_pot', cx(16), M(12) * TILE + 34); prop(16, 12);
+    decor('casino_poster0', cx(11), M(16) * TILE + 30); prop(11, 16);
+
+    // ---- storefront dressing + valet plaza
+    for (let ly = 121; ly <= 126; ly++) { ground[ly][L(8)] = T.carpet; ground[ly][L(9)] = T.carpet; }
+    [[2, 'palm_pot'], [5, 'palm_pot'], [12, 'palm_pot'], [15, 'palm_pot']].forEach(([lx, k]) => { prop(lx, 18); decor(k, cx(lx), (fy + 1) * TILE + 34); });
+    [[7, 122], [10, 122], [7, 125], [10, 125]].forEach(([lx, y]) => decor('stanchion', cx(lx), y * TILE + 28));
+    prop(4, 19); decor('valet_stand', cx(4), (fy + 3) * TILE + 36);
+    decor('casino_poster1', cx(13) + 8, (fy + 1) * TILE + 30); decor('casino_poster2', cx(14) + 24, (fy + 1) * TILE + 30);
+    [[2, 24], [15, 24]].forEach(([lx, dy]) => { prop(lx, 21); decor('outdoor_table', cx(lx), (fy + 4) * TILE + 38); obj[fy + 4][L(lx) - 1] = T.chair; obj[fy + 4][L(lx) + 1] = T.chair; });
+    for (let x = 199; x <= 218; x += 3) if (obj[97][x] === -1) decor('bush', px(x), 98 * TILE + 28);       // hedge row behind the casino
+    vehicle('luxury', 0, px(L(5)), 126 * TILE - 2, 0, 'parked');
+    vehicle('luxury', 1, px(L(12)), 126 * TILE - 2, 0, 'parked');
+    vehicle('luxury', 2, px(L(13)), (fy + 2) * TILE + 12, Math.PI, 'parked');
+    registerBuilding(X, Y, W, H, 'tower', { kind: 'casino', lift: 36, colorIdx: 3 });
+    addPoi('casino', 'Casino', X, Y, W, H);
+
+    // ---- people
+    const guard = (lx, ly, role, extra = {}) => out.enemies.push({ x: cx(lx), y: cy(ly), role, type: 'pistol', mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 20, route: extra.route || null, hostility: 'provoked', hideout: true, crew: 'casino', ...extra });
+    const pt = (lx, ly) => ({ x: cx(lx), y: cy(ly) });
+    guard(7, fy + 1 - Y, 'casino_guard', { fixedFace: Math.PI / 2 }); guard(10, fy + 1 - Y, 'casino_guard', { fixedFace: Math.PI / 2 });
+    guard(14, 8, 'casino_guard2', { fixedFace: Math.PI / 2 });
+    guard(10, 8, 'casino_guard2', { route: [pt(10, 8), pt(11, 12), pt(10, 15), pt(7, 14), pt(7, 11), pt(7, 8)] });
+    guard(11, 16, 'casino_guard', { route: [pt(11, 16), pt(14, 12), pt(14, 8), pt(11, 9)] });
+    guard(2, 3, 'casino_guard2', { sit: true, fixedFace: -Math.PI / 2 });
+    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, ...extra });
+    const UP = -Math.PI / 2, DOWN = Math.PI / 2;
+    [1, 2, 4, 5, 7].forEach((lx, i) => pat(lx, 7, 'slots', { face: UP, seed: i }));
+    [1, 3, 5].forEach((lx, i) => pat(lx, 11, 'slots', { face: UP, seed: 5 + i }));
+    [[8, 10], [9, 10], [12, 10], [13, 10]].forEach(([lx, ly], i) => pat(lx, ly, 'cards', { sit: true, face: UP, seed: i }));
+    [[8, 13], [9, 13], [12, 13]].forEach(([lx, ly], i) => pat(lx, ly, 'dice', { sit: true, face: UP, seed: i }));
+    pat(9, 8, 'dealer', { face: DOWN, role: 'dealer' }); pat(12, 8, 'dealer', { face: DOWN, role: 'dealer' });
+    pat(8, 11, 'dealer', { face: DOWN, role: 'dealer' }); pat(13, 11, 'dealer', { face: DOWN, role: 'dealer' });
+    [12, 14, 16].forEach((lx, i) => pat(lx, 14, 'bar', { sit: true, face: DOWN, seed: i }));
+    pat(13, 16, 'bartend', { face: UP, role: 'bartender' }); pat(16, 10, 'cashier', { face: Math.PI, role: 'cashier' });
+    pat(2, 14, 'lounge', { sit: true, face: DOWN }); pat(6, 14, 'lounge', { sit: true, face: DOWN });
+    [12, 13, 14].forEach((lx, i) => pat(lx, 4, 'cards', { sit: true, face: UP, seed: 7 + i, vip: true })); pat(13, 2, 'dealer', { face: DOWN, role: 'dealer' });
+    pat(1, 21, 'smoke', { sit: true, face: 0 }); pat(16, 21, 'smoke', { sit: true, face: Math.PI });
+    out.civilians.push({ x: cx(5), y: (fy + 3) * TILE, kind: 'patron', act: 'chat', face: 0, seed: 1 }, { x: cx(6) - 14, y: (fy + 3) * TILE, kind: 'patron', act: 'chat', face: Math.PI, seed: 2 });
+    out.civilians.push({ x: cx(6), y: (fy + 3) * TILE + 6, kind: 'patron', act: 'valet', face: 0, role: 'valet' });
+    const door = { x: cx(8) + 16, y: (fy + 1) * TILE };
+    const walk = (seed, route) => out.civilians.push({ x: route[0].x, y: route[0].y, kind: 'patron', act: 'walk', route, seed });
+    walk(1, [{ x: door.x, y: 127 * TILE + 16 }, { x: door.x, y: (fy + 1) * TILE }, { x: cx(8) + 16, y: cy(15) }, { x: cx(10), y: cy(11) }, { x: cx(10), y: cy(8) }, { x: cx(10), y: cy(12) }, { x: cx(8) + 16, y: cy(16) }, { x: door.x, y: (fy + 2) * TILE }]);
+    walk(2, [{ x: cx(7), y: cy(9) }, { x: cx(7), y: cy(12) }, { x: cx(10), y: cy(15) }, { x: cx(7), y: cy(15) }, { x: cx(7), y: cy(8) }]);
+    walk(3, [{ x: cx(14), y: cy(12) }, { x: cx(14), y: cy(8) }, { x: cx(11), y: cy(9) }, { x: cx(11), y: cy(14) }]);
+    walk(4, [{ x: door.x - 160, y: 127 * TILE + 16 }, { x: door.x - 20, y: (fy + 2) * TILE }, { x: door.x, y: (fy + 1) * TILE }, { x: cx(8) + 16, y: cy(14) }, { x: door.x, y: (fy + 1) * TILE }, { x: door.x - 160, y: 127 * TILE + 16 }]);
+
+    const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    out.casino = {
+      X, Y, W, H,
+      door: { x: door.x, y: (fy + 1) * TILE + 20 },
+      sign: { x: door.x, y: fy * TILE + 4 },
+      sean: { x: cx(6), y: cy(15) },
+      jiro: { x: cx(11), y: cy(8) },
+      vipGate: { x: L(13), y: M(7) },
+      vipRoom: { x0: L(11), y0: M(1), x1: L(16), y1: M(6) },
+      interior: { x0: L(1), y0: M(1), x1: L(16), y1: M(16) },
+      stations,
+      neons: [
+        { key: 'neon_sec', x: cx(3), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_wc', x: cx(8), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_vip', x: cx(13), y: M(7) * TILE + 30, sy: -46 },
+        { key: 'neon_slots', x: cx(5), y: M(1) * TILE + 6, sy: -20 }, { key: 'neon_cards', x: cx(9) + 16, y: M(1) * TILE + 6, sy: -20, noWall: true },
+        { key: 'neon_cash', x: cx(16), y: M(8) * TILE + 20, sy: -30 }, { key: 'neon_bar', x: cx(14), y: M(16) * TILE + 20, sy: -40 }, { key: 'neon_lounge', x: cx(3), y: M(16) * TILE + 20, sy: -40 },
+        { key: 'neon_welcome', x: door.x, y: fy * TILE + 12, sy: -36 }
+      ],
+      chandeliers: [[4, 8.2], [10.5, 8.2], [4.5, 12.5], [10.5, 12.5], [14, 5], [8.5, 15.5]].map(([lx, ly]) => ({ x: L(0) * TILE + lx * TILE + 16, y: M(0) * TILE + ly * TILE })),
+      lights: [
+        lt(cx(5), cy(8), 0xffe8b0), lt(cx(11), cy(8), 0xffe8b0), lt(cx(5), cy(12), 0xffdca0), lt(cx(11), cy(12), 0xffdca0), lt(cx(8), cy(15), 0xfff0d0),
+        lt(cx(3), cy(7), 0xff4a8a, { neon: true }), lt(cx(8), cy(6), 0xffd24a, { neon: true }), lt(cx(15), cy(13), 0x3ad8ff, { neon: true }), lt(cx(13), cy(4), 0xff9a4a), lt(cx(14), cy(10), 0xffd24a, { neon: true }),
+        lt(door.x, (fy + 1) * TILE + 10, 0xffd24a, { neon: true }), lt(door.x - 130, (fy + 1) * TILE, 0xff4a8a, { neon: true }), lt(door.x + 130, (fy + 1) * TILE, 0x3ad8ff, { neon: true }),
+        lt(door.x, (fy - 4) * TILE, 0xff5a9a, { neon: true }), lt(cx(2), cy(2), 0xc8e8ff)
+      ]
+    };
+  }
+
   function commercial(b) {
     const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
     const bottoms = [iy0 + 9, iy1 - 2];
     bottoms.forEach((bottom, rowI) => {
       let x = ix0;
+      if (b.c === 2 && b.r === 3 && rowI === 1) { wiseSole(x, bottom - 9, 14, 10); x += 15; }     // WISE SOLE opens at the west end of Market Street
       while (x + 9 <= ix1) {
         const w = Math.min(ri(9, 12), ix1 - x + 1);
         if (w < 9) break;
@@ -926,6 +1093,73 @@ export function generateWorld(seed = 20240) {
     if (bd.free.length) { const t = bd.free.pop(); civ(t.x, t.y, 'stand'); }
   }
 
+  /* ---- Kenny Aquiles' hidden gang alley: two warehouses with a narrow alley between them, walled in, one gap in the
+          fence flanked by dumpsters and lookouts. Graffiti walls, junk, a motorbike, a trading counter at the far end. ---- */
+  function hideout(b) {
+    const cx = Math.floor((b.x0 + b.x1) / 2);
+    const ax0 = cx - 2, ax1 = cx + 2;                     // alley columns (5 wide)
+    const top = b.y0 + 10, bot = top + 15;                // buildings' top row / bottom wall row
+    const fenceY = b.y1 - 2;
+    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+    // hidden by trees from the north side
+    for (let yy = b.y0 + 1; yy < top - 2; yy++) for (let xx = b.x0 + 1; xx < b.x1; xx++) if (rng() < 0.35 && obj[yy][xx] === -1 && isGrass(ground[yy][xx])) obj[yy][xx] = T.tree;
+    // the two buildings (plain grey warehouses; graffiti is painted on afterwards)
+    const A = block(b.x0 + 3, top, ax0 - (b.x0 + 3), 16, { wall: T.wall2, floor: T.concrete, crates: 3, tier: 'crate', noPartition: true, windowChance: 0.12, roof: 'metal', kind: 'warehouse', loose: 1 });
+    const B = block(ax1 + 1, top, (b.x1 - 3) - ax1, 16, { wall: T.wall2, floor: T.concrete, crates: 3, tier: 'crate', noPartition: true, windowChance: 0.12, roof: 'metal', kind: 'warehouse', loose: 1 });
+    // alley + yard ground
+    for (let yy = top - 1; yy <= b.y1 - 1; yy++) for (let xx = ax0; xx <= ax1; xx++) if (obj[yy][xx] === -1) ground[yy][xx] = T.concrete;
+    for (let yy = bot + 1; yy <= b.y1 - 1; yy++) for (let xx = b.x0 + 1; xx <= b.x1 - 1; xx++) if (obj[yy][xx] === -1) ground[yy][xx] = T.concrete;
+    // closing wall at the dead end + graffiti on it and on the alley-facing walls of both buildings
+    for (let xx = ax0; xx <= ax1; xx++) obj[top - 1][xx] = T.graf1 + (xx % 3);
+    for (let yy = top + 1; yy < bot; yy++) {
+      if (obj[yy][ax0 - 1] === T.wall2 && (yy * 5 + 1) % 3 !== 0) obj[yy][ax0 - 1] = T.graf1 + ((yy + 1) % 3);
+      if (obj[yy][ax1 + 1] === T.wall2 && (yy * 7 + 2) % 3 !== 0) obj[yy][ax1 + 1] = T.graf1 + ((yy + 2) % 3);
+    }
+    for (let xx = ax0 - 7; xx < ax0 - 1; xx += 2) if (obj[bot][xx] === T.wall2) obj[bot][xx] = T.graf1 + (xx % 3);
+    // perimeter fence with ONE gap (flanked by dumpsters) and a narrow side gate
+    const gapA = cx - 1, gapB = cx;
+    for (let xx = b.x0 + 1; xx <= b.x1 - 1; xx++) if (xx !== gapA && xx !== gapB && obj[fenceY][xx] === -1) obj[fenceY][xx] = T.fence;
+    for (let yy = top; yy <= fenceY; yy++) {
+      if (obj[yy][b.x0 + 1] === -1 && !(yy >= fenceY - 4 && yy <= fenceY - 3)) obj[yy][b.x0 + 1] = T.fence;     // west fence with a gate-sized gap
+      if (obj[yy][b.x1 - 1] === -1) obj[yy][b.x1 - 1] = T.fence;
+    }
+    const dump = (tx, ty) => { if (obj[ty][tx] === -1) { obj[ty][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: ty * TILE + 30 }); addContainer(tx, ty, 'trash', 'Dumpster'); } };
+    dump(gapA - 1, fenceY); dump(gapB + 1, fenceY); dump(ax0, bot + 3); dump(ax1, top + 13);
+    out.decor.push({ kind: 'gatepost', x: px(b.x0 + 1) - 2, y: (fenceY - 4) * TILE + 30 }, { kind: 'gatepost', x: px(b.x0 + 1) - 2, y: (fenceY - 2) * TILE + 30 });
+    // furniture dumped in the alley, crates, barrels, bags
+    const put = (tx, ty, idx) => { if (obj[ty][tx] === -1) obj[ty][tx] = idx; };
+    put(ax0, top + 8, T.sofa); put(ax0, top + 9, T.table); put(ax1, top + 14, T.dresser); put(ax0, top + 12, T.fridge); put(ax1, top + 10, T.cabinet);
+    out.crates.push({ x: px(ax0), y: px(top + 6), tier: 'crate' }, { x: px(ax1), y: px(top + 11), tier: 'crate' });
+    [[ax0, top + 4, 6], [ax1, top + 7, 6], [ax0, top + 11, -4], [ax1, top + 15, 6], [ax0 + 1, bot + 2, 0]].forEach(([tx, ty, o]) => out.decor.push({ kind: 'barrel', x: px(tx) + o, y: ty * TILE + 28 }));
+    [[ax0, top + 14], [ax1, top + 8], [cx, bot + 1], [ax1, top + 5], [gapB + 3, fenceY - 1], [b.x0 + 8, fenceY - 1], [b.x1 - 6, fenceY - 2]].forEach(([tx, ty]) => out.decor.push({ kind: 'trashbag', x: px(tx) + ri(-6, 6), y: ty * TILE + 30 }));
+    out.decor.push({ kind: 'barrel_fire', x: px(ax1) - 2, y: (top + 12) * TILE + 30 });
+    out.decor.push({ kind: 'weaponrack', x: px(cx), y: (top) * TILE + 30 });
+    out.decor.push({ kind: 'neon', x: px(cx + 2), y: top * TILE + 24 });
+    out.decor.push({ kind: 'gang_sign', x: px(gapA - 3), y: (fenceY) * TILE + 6 });
+    // trading counter with a gap in the middle so the player can walk up to Kenny
+    put(cx - 2, top + 3, T.counter); put(cx - 1, top + 3, T.counter); put(cx + 1, top + 3, T.counter); put(cx + 2, top + 3, T.counter);
+    // vehicles
+    vehicle('moto', 0, px(cx - 1), px(top + 10), Math.PI / 2, 'parked');
+    vehicle('moto', 1, px(cx + 1), px(bot + 3), -Math.PI / 2, 'parked');
+    vehicle('van', 1, px(b.x0 + 8), px(bot + 3), 0, 'parked');
+    vehicle('sedan', 5, px(b.x1 - 9), px(bot + 3), Math.PI, 'parked');
+    // people. Kenny is a story-style NPC (see npcs.js); the gang uses the normal armed-NPC AI but only fights when provoked
+    const gang = (tx, ty, role, type, extra = {}) => out.enemies.push({ x: px(tx), y: px(ty), role, type, mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 30, route: extra.route || null, hostility: 'provoked', hideout: true, ...extra });
+    gang(cx - 1, fenceY - 2, 'gang', 'pistol', { fixedFace: Math.PI / 2 });                       // entrance lookouts
+    gang(cx + 2, fenceY - 2, 'gang2', 'pistol', { fixedFace: Math.PI / 2 });
+    gang(ax0, top + 5, 'gang3', 'pistol', { fixedFace: Math.PI * 0.5 });                             // guard Kenny
+    gang(ax1, top + 5, 'gang4', 'shotgun', { fixedFace: Math.PI * 0.5 });
+    gang(ax1, top + 9, 'gang2', 'pistol', { fixedFace: 0 });                                         // leaning on the wall
+    gang(ax1, top + 13, 'gang', 'pistol', { sit: true, fixedFace: Math.PI });                        // sitting by the fire barrel
+    gang(cx, top + 10, 'gang3', 'pistol', { route: [{ x: px(cx), y: px(top + 8) }, { x: px(cx + 1), y: px(top + 8) }, { x: px(cx + 1), y: px(bot - 1) }, { x: px(cx), y: px(bot - 1) }], wait: [1800, 4200] });   // walks the alley
+    civ(cx - 1, top + 11, 'stand'); civ(cx + 1, bot + 1, 'stand');
+    out.hideout = {
+      kenny: { x: px(cx), y: px(top + 2) },
+      zone: { x: (ax0 - 1) * TILE, y: (top - 1) * TILE, w: 7 * TILE, h: (b.y1 - top + 2) * TILE },
+      lights: [{ x: px(cx), y: (top + 3) * TILE + 6 }, { x: px(cx), y: (top + 9) * TILE + 6 }, { x: px(cx), y: (top + 15) * TILE + 6 }, { x: px(cx), y: (bot + 3) * TILE + 6 }, { x: px(ax1) - 2, y: (top + 12) * TILE + 6, fire: true }, { x: px(cx + 2), y: top * TILE + 14, neon: true }]
+    };
+  }
+
   /* ------------------------------------------------------- fill the blocks */
   blocks.forEach((b) => {
     switch (b.kind) {
@@ -938,6 +1172,7 @@ export function generateWorld(seed = 20240) {
       case 'ind_gas': industrial(b, true); break;
       case 'park': park(b); break;
       case 'park2': park(b, 'Riverside Park'); break;
+      case 'hideout': hideout(b); break;
       case 'suburb': suburb(b); break;
       case 'school': school(b); break;
       case 'mall': mall(b); break;
@@ -955,6 +1190,7 @@ export function generateWorld(seed = 20240) {
         });
         break;
       case 'forest': forestBlock(b, 0.5); break;
+      case 'casino': forestBlock(b, 0.45); casino(b); break;
       default: break;
     }
   });
@@ -1113,6 +1349,7 @@ export function generateWorld(seed = 20240) {
   /* ------------------------------------------------ wall faces vs. cap tiles */
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const o = obj[y][x];
+    if (o >= T.graf1 && o <= T.graf3) continue;                 // graffiti walls keep their art (GameScene gives them a flat top)
     const capOf = o === T.wall ? T.wallCap : o === T.wall2 ? T.wall2Cap : o === T.tent ? T.tentCap : o === T.glass ? T.glassCap : -1;
     if (capOf < 0) continue;
     if (y + 1 < H && WALL_FAMILY.has(obj[y + 1][x])) obj[y][x] = capOf;
@@ -1157,5 +1394,6 @@ export function generateWorld(seed = 20240) {
   /* -------------------------------------------------------------- districts */
   out.districts = DISTRICTS.map((d) => ({ name: d.name, color: d.color, x0: COLS[d.c0][0], y0: ROWS[d.r0][0], x1: COLS[d.c1][1], y1: ROWS[d.r1][1] }));
   out.blocks = blocks;
+  out.roadGrid = { VR: VR.slice(), HR: HR.slice() };
   return out;
 }

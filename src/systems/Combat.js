@@ -28,8 +28,12 @@ export default class Combat {
       b.startX = x;
       b.startY = y;
       b.range = weapon.range;
-      b.trail = weapon.id === 'sniper' ? 16 : 9;
-      b.col = owner === 'player' ? 0xffe27a : 0xff6a3a;
+      b.trail = weapon.aoe ? 18 : weapon.cat === 'sniper' ? 16 : weapon.silent ? 5 : weapon.cat === 'smg' ? 6 : 9;
+      b.col = weapon.aoe ? 0xffa030 : weapon.silent ? 0xb0b4c0 : owner === 'player' ? 0xffe27a : 0xff6a3a;
+      b.aoe = weapon.aoe || 0;
+      b.exploded = false;
+      b.thick = weapon.aoe ? 5 : weapon.cat === 'sniper' ? 3 : 2;
+      b.puff = 0;
     }
   }
 
@@ -41,13 +45,15 @@ export default class Combat {
       const dx = b.x - b.startX, dy = b.y - b.startY;
       if (dx * dx + dy * dy > b.range * b.range) { this.kill(b); return; }
       const ca = Math.cos(b.rotation), sa = Math.sin(b.rotation);
-      const y = b.y - BULLET_HEIGHT;
-      g.lineStyle(2, b.col, 0.35).lineBetween(b.x - ca * b.trail * 2, y - sa * b.trail * 2, b.x - ca * b.trail, y - sa * b.trail);
-      g.lineStyle(2, b.col, 1).lineBetween(b.x - ca * b.trail, y - sa * b.trail, b.x, y);
+      const eo = this.scene.elev(BULLET_HEIGHT), bx = b.x + eo.x, y = b.y + eo.y;
+      g.lineStyle(b.thick, b.col, 0.35).lineBetween(bx - ca * b.trail * 2, y - sa * b.trail * 2, bx - ca * b.trail, y - sa * b.trail);
+      g.lineStyle(b.thick, b.col, 1).lineBetween(bx - ca * b.trail, y - sa * b.trail, bx, y);
+      if (b.aoe && (b.puff = (b.puff || 0) + 1) % 3 === 0) this.scene.emitUp(this.scene.fxSmoke, b.x, b.y, BULLET_HEIGHT, 1);
     });
   }
 
   kill(b) {
+    if (b.aoe && !b.exploded) { b.exploded = true; this.scene.explode(b.x, b.y, b.aoe, b.damage, b.owner); }
     b.disableBody(true, true);
   }
 }

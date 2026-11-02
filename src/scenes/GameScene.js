@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import Atmosphere from '../systems/Atmosphere.js';
+import Nav from '../systems/Nav.js';
 import { TILE, MAP_W as W, MAP_H as H, MELEE } from '../config.js';
-import { T, SOLID, LOS_BLOCK, BULLET_PASS, defaultAppearance, generateCharacter } from '../assets/textures.js';
+import { T, SOLID, LOS_BLOCK, BULLET_PASS, WALL_FAMILY, defaultAppearance, generateCharacter } from '../assets/textures.js';
 import { generateWorld } from '../systems/WorldGen.js';
 import Combat from '../systems/Combat.js';
 import { ITEMS, rollTier, rollNpcDrop, giveItem } from '../systems/Loot.js';
@@ -19,10 +20,22 @@ import MissionManager from '../systems/Missions.js';
 import RandomEvents from '../systems/Events.js';
 import { getDialogue, dialogueState, chatDialogue } from '../systems/Dialogue.js';
 import { STORY_NPCS } from '../story/npcs.js';
+import * as Casino from '../systems/Casino.js';
+import { AMBIENT } from '../story/casinoTalk.js';
 import { buildPlaces } from '../story/places.js';
 import { OUTFITS } from './ShopScene.js';
 
 const CHUNK = 512;
+// Lower, angled camera: the ground plane is tilted away from the viewer. TILT is the vertical foreshortening of the
+// ground (1 = straight top-down, smaller = lower camera). Upright things (walls, characters, trees...) are NOT
+// foreshortened: they are pre-stretched by 1/TILT so the camera's ground tilt cancels out on them.
+const TILT = 0.62;
+const UPY = 1 / TILT;
+const WALL_PX = 40;        // on-screen height of a wall face (the 32px wall art is stretched up to this)
+const WALL_TOPS = new Set([T.wallCap, T.wall2Cap, T.tentCap, T.glassCap]);
+// Depth = position along the SCREEN's vertical axis, squeezed into 100..4800 (fixed overlay layers live above that)
+const DEPTH_D0 = (W + H) * TILE;
+const DEPTH_K = 4700 / (2 * DEPTH_D0);
 const PROP_TEX = { lamp: 'lamp', sign: 'sign', stop: 'stop', bin: 'bin', fountain: 'fountain', dumpster: 'dumpster' };
 const wrapA = Phaser.Math.Angle.Wrap;
 const SHOP_KIND = { Hardware: 'hardware', Pharmacy: 'pharmacy', Clothing: 'clothing' };
@@ -92,23 +105,33 @@ export default class GameScene extends Phaser.Scene {
     this.buildScenery();
     this.places = buildPlaces(this);
     this.lockSafehouse();
+    if (this.wd.casino) {                                  // the VIP room stays locked for non-members
+      const g = this.wd.casino.vipGate; this.vipGateKey = g.y * W + g.x;
+      if (!Casino.state().vip) this.lockedDoors.add(this.vipGateKey);
+    }
 
     // ---- crates (warehouses, camps, hidden stashes) and searchable furniture
     this.crates = this.physics.add.staticGroup();
     this.wd.crates.forEach((c, i) => {
       const s = this.crates.create(c.x, c.y, c.tier === 'crate' ? 'crate' : 'supply');
-      s.setDepth(100 + c.y);
+      s.setDepth(this.depthOf(c.x, c.y)).setScale(1, UPY).setOrigin(0.5, 0.72);
       s.tier = c.tier;
       s.idx = i;
       s.opened = false;
       if (profile.opened.includes(i)) { s.opened = true; s.setTexture(c.tier === 'crate' ? 'crate_open' : 'supply_open'); }
       this.blockMove[Math.floor(c.y / TILE) * W + Math.floor(c.x / TILE)] = 1;
     });
+    this.nav = new Nav(this);
+    // Kenny's hideout: grimy darkness over the alley floor + remembered discovery on the map
+    const hz = this.wd.hideout && this.wd.hideout.zone;
+    if (hz) this.add.rectangle(hz.x + hz.w / 2, hz.y + hz.h / 2, hz.w, hz.h, 0x05030a, 0.34).setDepth(3.9);
+    this.kennyPoi = null;
+    if (profile.flags.kennyFound) this.revealKenny();
     this.containers = this.wd.containers;
     this.containerMarks = [];
     this.containers.forEach((c, i) => {
       c.idx = i;
-      if (profile.searched.includes(i)) { c.searched = true; this.containerMarks.push(this.add.image(c.x, c.y + 6, 'open_mark').setDepth(100 + c.y + 1)); }
+      if (profile.searched.includes(i)) { c.searched = true; this.containerMarks.push(this.add.image(c.x, c.y + 6, 'open_mark').setDepth(this.depthOf(c.x, c.y, 1))); }
     });
 
     // ---- fx emitters
@@ -132,6 +155,9 @@ export default class GameScene extends Phaser.Scene {
     this.wd.vehicles.forEach((v) => {
       const civ = v.mode === 'parked' && ['sedan', 'van', 'moto'].includes(v.type);
       const veh = this.spawnVehicle({ ...v, locked: civ && Math.random() < 0.35 });
+      // the collision body sits ~12px below the sprite: put the BODY on the lane row, not the picture (parked cars used to poke into the driving lane)
+      if (veh.mode === 'parked') { const dy = veh.body.center.y - veh.y, dx = veh.body.center.x - veh.x; veh.body.reset(veh.x - dx, veh.y - dy); }
+      if (veh.mode === 'patrol' || veh.mode === 'traffic') this.placeOnRoad(veh);
       this.ensureFree(veh);
     });
     (profile.ownedVehicles || []).forEach((o) => this.ensureFree(this.spawnVehicle({ type: o.type, variant: o.variant, x: o.x, y: o.y, heading: o.heading || 0, hp: o.hp, fuel: o.fuel, mode: 'parked', ownedId: o.id, locked: true })));
@@ -195,15 +221,13 @@ export default class GameScene extends Phaser.Scene {
 
     // ---- camera
     const cam = this.cameras.main;
-    cam.setBounds(0, 0, W * TILE, H * TILE);
-    cam.startFollow(this.player, true, 0.12, 0.12);
-    cam.setZoom(this.zoomTarget);
+    this.initCamera(cam);
     cam.setBackgroundColor('#0b0f0b');
     this.atmo = new Atmosphere(this, this.startHour ?? 9.5);
     cam.fadeIn(500);
 
     // ---- input
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,Q,C,Z,M,L,J,SPACE,ONE,TWO,THREE,FOUR');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,G,Q,X,V,C,Z,M,L,J,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.input.mouse.disableContextMenu();
     this.input.keyboard.on('keydown-O', () => this.atmo && this.atmo.cycleWeather());
     this.input.keyboard.on('keydown-Y', () => { if (this.atmo) { this.atmo.skipHours(3); this.events.emit('toast', 'Time ' + this.atmo.timeText); } });
@@ -241,31 +265,355 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  /* ------------------------------------------------------- rotatable 2.5D camera
+     Phaser rotates the whole scene about the screen centre (kept on the player). Flat things - ground, roads, roofs,
+     shadows - simply rotate with the world. Upright things (characters, vehicles, trees, walls, props) are billboards:
+     they are counter-rotated so they stay upright, and everything that is "above the ground" is offset along the
+     SCREEN's vertical axis (elev) instead of world y. Depth sorting uses the screen-vertical coordinate. */
+  initCamera(cam) {
+    this.camRot = 0; this.camRotVel = 0; this.cs = 1; this.sn = 0; this.camResetting = false; this.camDrag = null;
+    this.camFocus = this.player; this.camSnap = true; this.camCenter = { x: this.player.x, y: this.player.y };
+    cam.stopFollow();
+    cam.removeBounds();
+    this.upY = UPY; this.TILT = TILT;
+    // Phaser builds cam.matrix as translate * rotate * zoom. Insert the ground tilt AFTER the rotation, about the screen
+    // centre, so the world can be orbited and the ground still recedes toward the top of the screen at every angle.
+    if (!cam._tilted) {
+      const orig = cam.preRender.bind(cam);
+      cam.preRender = () => {
+        orig();
+        const m = cam.matrix.matrix, cyy = cam.y + cam.height * cam.originY;
+        m[1] *= TILT; m[3] *= TILT; m[5] = cyy + (m[5] - cyy) * TILT;
+      };
+      cam._tilted = true;
+    }
+    cam.setZoom(this.zoomTarget);
+    cam.roundPixels = false;
+    // (camera rotation was removed: the view stays at one fixed angle, camRot is always 0)
+  }
+
+  // a vector given in SCREEN terms -> the matching world vector
+  fromScreen(vx, vy) { vy /= TILT; return { x: vx * this.cs + vy * this.sn, y: -vx * this.sn + vy * this.cs }; }
+  // world offset that appears h pixels straight UP the screen (height above the ground)
+  elev(h) { const q = h / TILT; return { x: -q * this.sn, y: -q * this.cs }; }
+  // sort key along the screen's vertical axis (extra: px in front of the point)
+  depthOf(x, y, extra = 0) { return 100 + (x * this.sn + y * this.cs + DEPTH_D0 + extra) * DEPTH_K; }
+  // world point -> position on screen (px)
+  worldToScreen(x, y) {
+    const c = this.cameras.main;
+    const mx = c.scrollX + c.width / 2, my = c.scrollY + c.height / 2;   // centre straight from the scroll we set this frame
+    const dx = (x - mx) * c.zoom, dy = (y - my) * c.zoom;
+    return { x: c.width / 2 + dx * this.cs - dy * this.sn, y: c.height / 2 + (dx * this.sn + dy * this.cs) * TILT };
+  }
+  // screen position (px) -> world point under it
+  screenToWorld(sx, sy) {
+    const c = this.cameras.main;
+    const dx = sx - c.width / 2, dy = (sy - c.height / 2) / TILT;
+    return { x: c.scrollX + c.width / 2 + (dx * this.cs + dy * this.sn) / c.zoom, y: c.scrollY + c.height / 2 + (-dx * this.sn + dy * this.cs) / c.zoom };
+  }
+  // axis-aligned world rectangle that contains everything visible (the rotated view), with a margin
+  viewRect(m = 0) {
+    const c = this.cameras.main;
+    const dw = c.width / c.zoom, dh = c.height / (c.zoom * TILT);       // the tilted ground shows MORE world vertically
+    const aw = dw * Math.abs(this.cs) + dh * Math.abs(this.sn) + m * 2, ah = dw * Math.abs(this.sn) + dh * Math.abs(this.cs) + m * 2;
+    const x = c.scrollX + c.width / 2 - aw / 2, y = c.scrollY + c.height / 2 - ah / 2;
+    return { x, y, right: x + aw, bottom: y + ah, contains(px, py) { return px >= x && px <= x + aw && py >= y && py <= y + ah; } };
+  }
+  isOnScreen(x, y, m = 0) {
+    const c = this.cameras.main, s = this.worldToScreen(x, y);
+    return s.x > -m && s.x < c.width + m && s.y > -m && s.y < c.height + m;
+  }
+
+  updateCamera(now, dt, aimWorld) {
+    const cam = this.cameras.main, p = this.player, v = p.vehicle, k = this.keys;
+    // ---- fixed view: no rotation. The angled 2.5D perspective, follow, zoom and bounds below are unchanged.
+    this.camRot = 0; this.camRotVel = 0; this.camResetting = false; this.camDrag = null;
+    this.cs = 1; this.sn = 0;
+    cam.setRotation(0);
+
+    // ---- zoom (unchanged: wheel / buttons, eases back a little at speed)
+    const speedFrac = v ? Math.min(1, Math.abs(v.speed) / v.cfg.max) : 0;
+    const zoomWanted = this.zoomTarget * (1 - 0.22 * speedFrac);
+    cam.zoom += (zoomWanted - cam.zoom) * Math.min(1, dt / 120);
+
+    // ---- follow: aim look-ahead / driving lead are WORLD vectors (smoothed); the player's place on screen is fixed in SCREEN space
+    const look = v ? 0 : p.current === 'sniper' ? 0.55 : 0.2;
+    const ox = Phaser.Math.Clamp((aimWorld.x - p.x) * look, -320, 320);
+    const oy = Phaser.Math.Clamp((aimWorld.y - p.y) * look, -240, 240);
+    const lead = v ? { x: Math.cos(v.heading) * v.speed * 0.32, y: Math.sin(v.heading) * v.speed * 0.32 } : { x: 0, y: 0 };
+    const kk = Math.min(1, dt / (v ? 220 : 160));
+    this.camOff.x += (ox + lead.x - this.camOff.x) * kk;
+    this.camOff.y += (oy + lead.y - this.camOff.y) * kk;
+    const f = this.camFocus && this.camFocus.active ? this.camFocus : p;
+    const goal = { x: f.x + this.camOff.x, y: f.y + this.camOff.y };
+    if (this.camSnap || Math.hypot(goal.x - this.camCenter.x, goal.y - this.camCenter.y) > 700) { this.camCenter.x = goal.x; this.camCenter.y = goal.y; this.camSnap = false; }
+    else {
+      const ks = 1 - Math.exp(-dt / (v ? 130 : 90));
+      this.camCenter.x += (goal.x - this.camCenter.x) * ks;
+      this.camCenter.y += (goal.y - this.camCenter.y) * ks;
+    }
+    const b = this.fromScreen(0, (v ? 26 : 50));      // the player sits a little below the screen centre, at any angle
+    const m = 260;
+    const cx = Phaser.Math.Clamp(this.camCenter.x - b.x, -m, W * TILE + m), cy = Phaser.Math.Clamp(this.camCenter.y - b.y, -m, H * TILE + m);
+    cam.setScroll(cx - cam.width / 2, cy - cam.height / 2);
+
+    // ---- culling: Phaser culls against the UNrotated view, so pad the tile layers and skip sprite culling while rotated
+    cam.disableCull = true;                       // Phaser's sprite culling does not know about the tilt / rotation
+    const dw = cam.width / cam.zoom, dh = cam.height / cam.zoom;     // what Phaser thinks is visible
+    const th = dh / TILT;
+    const aw = dw * Math.abs(this.cs) + th * Math.abs(this.sn), ah = dw * Math.abs(this.sn) + th * Math.abs(this.cs);
+    const px = Math.ceil(Math.max(0, aw - dw) / 2 / TILE) + 1, py = Math.ceil(Math.max(0, ah - dh) / 2 / TILE) + 1;
+    this.groundLayer.cullPaddingX = this.objLayer.cullPaddingX = px;
+    this.groundLayer.cullPaddingY = this.objLayer.cullPaddingY = py;
+
+    this.updateWalls();
+
+    // ---- billboards that are not updated by their own entity: re-orient + re-sort when the angle changed
+    if (Math.abs(this.camRot - (this.lastBillRot ?? 99)) > 0.0002) { this.lastBillRot = this.camRot; this.refreshBillboards(); }
+  }
+
+  // static upright things: counter-rotate and depth-sort for the current camera angle
+  refreshBillboards() {
+    const r = -this.camRot;
+    for (const k of this.activeChunks) {
+      const c = this.chunks.get(k);
+      for (let i = 0; i < c.live.length; i++) { const im = c.live[i], it = c.items[i]; im.setRotation(r).setDepth(this.depthOf(it.x, it.y)); }
+    }
+    this.crates.getChildren().forEach((s) => s.setRotation(r).setDepth(this.depthOf(s.x, s.y)));
+    for (const s of this.items) { s.setRotation(r + (s.tilt || 0)); }
+    for (const m of this.containerMarks) m.setRotation(r);
+    for (const f of this.facade) {
+      const o = this.fromScreen(f.sx, f.sy);
+      f.img.setPosition(f.gx + o.x, f.gy + o.y).setRotation(r).setDepth(this.depthOf(f.gx, f.gy, f.dz));
+    }
+    this.vehicles.children.iterate((v) => { if (v && v.active) v.refreshView(); });
+    this.refreshRoofs();
+  }
+
+  // glass tower walls: the sides that face the camera, extruded from the ground edge up to the roof
+  drawFacade(r) {
+    const g = r.fg, b = r.b, E = this.elev(r.lift);
+    g.clear();
+    r.fgDrawn = true;
+    const x0 = b.x * TILE, x1 = (b.x + b.w) * TILE, y0 = b.y * TILE, y1 = (b.y + b.h) * TILE;
+    const sides = [{ nx: 0, ny: 1, a: [x0, y1], b: [x1, y1] }, { nx: 0, ny: -1, a: [x1, y0], b: [x0, y0] }, { nx: 1, ny: 0, a: [x1, y1], b: [x1, y0] }, { nx: -1, ny: 0, a: [x0, y0], b: [x0, y1] }];
+    for (const s of sides) {
+      const facing = s.nx * this.sn + s.ny * this.cs;                 // screen-vertical component of the outward normal
+      if (facing <= 0.02) continue;
+      const side = -s.nx * this.cs + s.ny * this.sn;                   // sideways lean (for shading)
+      const k = 0.62 + 0.38 * Math.min(1, facing) - 0.08 * side;
+      const col = Phaser.Display.Color.GetColor(Math.round(70 * k + 20), Math.round(120 * k + 25), Math.round(170 * k + 30));
+      const bot0 = { x: s.a[0] - E.x, y: s.a[1] - E.y }, bot1 = { x: s.b[0] - E.x, y: s.b[1] - E.y }, top0 = { x: s.a[0], y: s.a[1] }, top1 = { x: s.b[0], y: s.b[1] };
+      g.fillStyle(col, 1).fillPoints([bot0, bot1, top1, top0], true);
+      const dark = Phaser.Display.Color.GetColor(Math.round(30 * k + 8), Math.round(60 * k + 12), Math.round(90 * k + 16));
+      g.lineStyle(1, dark, 0.8);
+      const rows = Math.max(2, Math.round(r.lift / 12));
+      for (let i = 1; i < rows; i++) { const t = i / rows; g.lineBetween(bot0.x + (top0.x - bot0.x) * t, bot0.y + (top0.y - bot0.y) * t, bot1.x + (top1.x - bot1.x) * t, bot1.y + (top1.y - bot1.y) * t); }
+      const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]), cols = Math.max(1, Math.round(len / 24));
+      for (let i = 0; i <= cols; i++) { const t = i / cols; g.lineBetween(bot0.x + (bot1.x - bot0.x) * t, bot0.y + (bot1.y - bot0.y) * t, top0.x + (top1.x - top0.x) * t, top0.y + (top1.y - top0.y) * t); }
+      g.lineStyle(2, 0xffffff, 0.18 * facing).lineBetween(top0.x, top0.y, top1.x, top1.y);
+      g.lineStyle(3, 0x000000, 0.25).lineBetween(bot0.x, bot0.y, bot1.x, bot1.y);
+    }
+  }
+
+  // is the player standing behind this roof (hidden by it on screen)?
+  roofHides(r, ps, pkey) {
+    if (r.key === undefined || pkey >= r.key - 6) return false;                  // in front of it, or beside it
+    if (Math.hypot(r.cx - this.player.x, r.cy - this.player.y) > r.rad + 140) return false;
+    const b = r.b, xs = [b.x * TILE, (b.x + b.w) * TILE], ys = [b.y * TILE, (b.y + b.h) * TILE];
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const x of xs) for (const y of ys) { const s = this.worldToScreen(x, y); const sy = s.y - r.lift * this.cameras.main.zoom; x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); y0 = Math.min(y0, sy); y1 = Math.max(y1, s.y); }
+    return ps.x > x0 - 10 && ps.x < x1 + 10 && ps.y - 56 * this.cameras.main.zoom < y1 && ps.y > y0;
+  }
+
+  refreshRoofs() {
+    for (const r of this.roofs) {
+      const o = this.elev(r.lift);
+      r.cont.setPosition(o.x, o.y);
+      if (r.fg) { r.fgDrawn = false; if (this.viewRect(r.rad).contains(r.cx, r.cy)) this.drawFacade(r); }
+      const b = r.b, x0 = b.x * TILE, x1 = (b.x + b.w) * TILE, y0 = b.y * TILE, y1 = (b.y + b.h) * TILE;
+      const key = Math.max(x0 * this.sn + y0 * this.cs, x1 * this.sn + y0 * this.cs, x0 * this.sn + y1 * this.cs, x1 * this.sn + y1 * this.cs);
+      r.cont.setDepth(100 + (key + DEPTH_D0 - 4) * DEPTH_K);
+      r.key = key;
+    }
+  }
+
+  /* ------------------------------------------------------- walls as extruded faces
+     Every wall / window / door cell is a little box. Each of its exposed sides that points toward the camera is drawn as
+     ONE skewed, textured panel standing on that edge (the same 32x32 wall art as before), so walls stay continuous at
+     every angle. At 0 deg this reproduces the original south-facing walls exactly. Wall tops (cap tiles) stay flat
+     in the tilemap and rotate with the ground. Panels are batched into thin depth bands so characters and vehicles
+     still walk in front of / behind them correctly. */
+  initWalls(addScenery) {
+    const wd = this.wd;
+    this.isWall = new Uint8Array(W * H);
+    this.wallFace = new Uint8Array(W * H);
+    const tiles = this.textures.get('tiles');
+    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
+    WALL_FAMILY.forEach((idx) => { if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE); });
+    for (let idx = 0; idx < 64; idx++) if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE);
+    const FLAT_OBJ = new Set([T.water, T.tree, T.prop]);     // left flat in the tilemap (water) or blank (tree / prop: drawn as sprites)
+    this.wallUV = new Map();
+    this.isLow = new Uint8Array(W * H);
+    const LOW = new Map([[T.fence, 26], [T.barricade, 24], [T.sandbag, 20]]);   // long barriers: continuous low panels
+    this.lowH = LOW;
+    this.boxTop = new Set();
+    // furniture: world-aligned boxes (front/side faces + a top), height in px
+    const FH = { 32: 18, 33: 18, 34: 20, 35: 22, 36: 32, 37: 40, 38: 40, 39: 22, 40: 22, 41: 30, 42: 26, 43: 40, 44: 28, 45: 8, 46: 26, 47: 20, 48: 36, 49: 26, 50: 38, 51: 20, 60: 38 };
+    Object.keys(FH).forEach((k) => { LOW.set(+k, FH[k]); if (+k !== 48 && +k !== 45) this.boxTop.add(+k); });
+    [...WALL_FAMILY, ...LOW.keys()].forEach((idx) => { const f = tiles.get('t' + idx); const e = (f.u1 - f.u0) * 0.012, ev = (f.v1 - f.v0) * 0.012; this.wallUV.set(idx, [f.u0 + e, f.v0 + ev, f.u1 - e, f.v1 - ev]); });
+    this.wallGL = tiles.source[0];
+    for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+      const idx = wd.obj[ty][tx];
+      if (LOW.has(idx)) {
+        this.isLow[ty * W + tx] = 1; this.wallFace[ty * W + tx] = idx;
+        const t3 = this.objLayer.getTileAt(tx, ty); if (t3) t3.alpha = 0;
+        continue;
+      }
+      if (idx >= 0 && !WALL_FAMILY.has(idx) && !FLAT_OBJ.has(idx)) {
+        // an object standing on the floor: draw it upright so it keeps its height under the tilted ground
+        const it = addScenery(tx * TILE + 16, ty * TILE + 26, 'tiles', 1, 't' + idx);
+        it.sy = UPY * 0.85;
+        const t2 = this.objLayer.getTileAt(tx, ty); if (t2) t2.alpha = 0;
+        continue;
+      }
+      if (!WALL_FAMILY.has(idx)) continue;
+      const i = ty * W + tx;
+      this.isWall[i] = 1;
+      this.wallFace[i] = FACE.get(idx) ?? idx;
+      if (!WALL_TOPS.has(idx)) { const tile = this.objLayer.getTileAt(tx, ty); if (tile) tile.alpha = 0; }   // faces become panels; tops stay flat
+    }
+    this.wallBands = new Map();
+    this.wallPool = [];
+    this.wallBuild = { dirty: true, rot: 99, mx: 1e9, my: 1e9, zoom: 0 };
+  }
+
+  makeWallBand() {
+    const gs = this;
+    const img = this.wallPool.pop() || this.add.image(640, 360, 'tiles').setScrollFactor(0);
+    img.quads = [];
+    img.renderWebGL = function (renderer, src, camera) {
+      const q = src.quads;
+      if (!q.length) return;
+      const pipeline = src.pipeline;
+      renderer.pipelines.set(pipeline, src);
+      renderer.pipelines.preBatch(src);
+      const gl = gs.wallGL.glTexture;
+      const unit = pipeline.setTexture2D(gl);
+      const z = camera.zoom, cs = gs.cs, sn = gs.sn, hw = camera.width / 2, hh = camera.height / 2;
+      const mx = camera.scrollX + hw, my = camera.scrollY + hh, hz = WALL_PX * z;
+      for (let i = 0; i < q.length; i++) {
+        const p = q[i];
+        let dx = (p.ax - mx) * z, dy = (p.ay - my) * z;
+        const ax = hw + dx * cs - dy * sn, ay = hh + (dx * sn + dy * cs) * TILT;
+        dx = (p.bx - mx) * z; dy = (p.by - my) * z;
+        const bx = hw + dx * cs - dy * sn, by = hh + (dx * sn + dy * cs) * TILT;
+        if ((ax < -hz && bx < -hz) || (ax > camera.width + hz && bx > camera.width + hz) || (ay < -hz && by < -hz) || (ay > camera.height + hz * 2 && by > camera.height + hz * 2)) continue;
+        const qh = (p.h || WALL_PX) * z;
+        if (p.top) {
+          const T4 = p.top, pr = (x, y) => { const ddx = (x - mx) * z, ddy = (y - my) * z; return [hw + ddx * cs - ddy * sn, hh + (ddx * sn + ddy * cs) * TILT - qh]; };
+          const a0 = pr(T4[0], T4[1]), a1 = pr(T4[2], T4[3]), a2 = pr(T4[4], T4[5]), a3 = pr(T4[6], T4[7]);
+          pipeline.batchQuad(src, a0[0], a0[1], a1[0], a1[1], a2[0], a2[1], a3[0], a3[1], p.u0, p.v0, p.u1, p.v1, p.tint, p.tint, p.tint, p.tint, 0, gl, unit);
+          continue;
+        }
+        let tint = p.tint;
+        const xr = gs.xray;
+        if (xr && xr.on && p.key > xr.key + 3) {                                   // the face is in front of the player: ghost it where it covers them
+          const lo = Math.min(ax, bx) - 8, hi = Math.max(ax, bx) + 8, top = Math.min(ay, by) - qh;
+          if (xr.x > lo && xr.x < hi && xr.y > top && xr.y - 54 * z < Math.max(ay, by)) tint = p.tintFade;
+        }
+        pipeline.batchQuad(src, ax, ay - qh, ax, ay, bx, by, bx, by - qh, p.u0, p.v0, p.u1, p.v1, tint, tint, tint, tint, 0, gl, unit);
+      }
+      renderer.pipelines.postBatch(src);
+    };
+    return img;
+  }
+
+  updateWalls() {
+    const c = this.cameras.main, b = this.wallBuild;
+    const mx = c.scrollX + c.width / 2, my = c.scrollY + c.height / 2;
+    if (!b.dirty && Math.abs(this.camRot - b.rot) < 1e-4 && Math.hypot(mx - b.mx, my - b.my) < 48 && Math.abs(c.zoom - b.zoom) < 0.03) return;
+    b.dirty = false; b.rot = this.camRot; b.mx = mx; b.my = my; b.zoom = c.zoom;
+    const vr = this.viewRect(130);
+    const tx0 = Math.max(0, Math.floor(vr.x / TILE)), tx1 = Math.min(W - 1, Math.ceil(vr.right / TILE));
+    const ty0 = Math.max(0, Math.floor(vr.y / TILE)), ty1 = Math.min(H - 1, Math.ceil(vr.bottom / TILE));
+    const cs = this.cs, sn = this.sn, BAND = 6;
+    this.wallBands.forEach((img) => { img.quads.length = 0; });
+    const SIDES = [[0, 1, 0, 1, 1, 1, 0, 1], [0, -1, 1, 0, 0, 0, 0, -1], [1, 0, 1, 1, 1, 0, 1, 0], [-1, 0, 0, 0, 0, 1, -1, 0]];   // S, N, E, W: nx, ny, then the base edge a(x,y) -> b(x,y) in cell units, then the neighbour offset
+    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+      const i = ty * W + tx;
+      const low = this.isLow[i];
+      if (!this.isWall[i] && !low) continue;
+      if (low && this.boxTop.has(this.wallFace[i])) {
+        const x0 = tx * TILE, y0 = ty * TILE, x1 = x0 + TILE, y1 = y0 + TILE, kk = (x0 + x1) / 2 * sn + (y0 + y1) / 2 * cs + DEPTH_D0;
+        const bi0 = Math.floor(kk / BAND);
+        let im0 = this.wallBands.get(bi0);
+        if (!im0) { im0 = this.makeWallBand(); this.wallBands.set(bi0, im0); }
+        const uv0 = this.wallUV.get(this.wallFace[i]), th = uv0[1] + (uv0[3] - uv0[1]) * 0.3;
+        im0.quads.push({ ax: x0, ay: y0, bx: x1, by: y1, key: kk - 1, top: [x0, y0, x0, y1, x1, y1, x1, y0], h: this.lowH.get(this.wallFace[i]), u0: uv0[0], v0: uv0[1], u1: uv0[2], v1: th, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(0xffffff, 1) });
+      }
+      for (let s = 0; s < 4; s++) {
+        const S = SIDES[s];
+        const facing = S[0] * sn + S[1] * cs;                     // does this side point toward the camera (down the screen)?
+        if (facing <= 0.03) continue;
+        const nx = tx + (s === 2 ? 1 : s === 3 ? -1 : 0), ny = ty + (s === 0 ? 1 : s === 1 ? -1 : 0);
+        if (nx >= 0 && ny >= 0 && nx < W && ny < H && (low ? this.isLow[ny * W + nx] : this.isWall[ny * W + nx])) continue;   // buried against a neighbouring cell of the same kind
+        const ax = (tx + (S[2] === 1 ? 1 : 0) ) * TILE, ay = (ty + (S[3] === 1 ? 1 : 0)) * TILE;
+        const bx = (tx + (S[4] === 1 ? 1 : 0)) * TILE, by = (ty + (S[5] === 1 ? 1 : 0)) * TILE;
+        const key = ((ax + bx) / 2) * sn + ((ay + by) / 2) * cs + DEPTH_D0;
+        const bi = Math.floor(key / BAND);
+        let img = this.wallBands.get(bi);
+        if (!img) { img = this.makeWallBand(); this.wallBands.set(bi, img); }
+        const uv = this.wallUV.get(this.wallFace[i]);
+        const k = Math.round(255 * (0.7 + 0.3 * Math.min(1, facing)));
+        const rgb = (k << 16) | (k << 8) | k;
+        img.quads.push({ ax, ay, bx, by, key, u0: uv[0], v0: uv[1], u1: uv[2], v1: uv[3], h: low ? this.lowH.get(this.wallFace[i]) : 0, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 0.3) });
+      }
+    }
+    this.wallBands.forEach((img, bi) => {
+      if (!img.quads.length) { img.setVisible(false); this.wallPool.push(img); this.wallBands.delete(bi); return; }
+      img.setVisible(true).setDepth(100 + ((bi + 0.5) * BAND) * DEPTH_K);
+    });
+  }
+
   /* ---------------------------------------------------------------- scenery */
   buildScenery() {
     const wd = this.wd;
     // static scenery lives in chunks: sprites are only created/recycled for chunks near the camera (pooled)
     this.chunks = new Map(); this.chunkPool = []; this.activeChunks = new Set(); this.chunkTick = 0;
-    const addScenery = (x, y, key, oy) => {
+    const addScenery = (x, y, key, oy, frame) => {
       const k = Math.floor(x / CHUNK) + ',' + Math.floor(y / CHUNK);
       let c = this.chunks.get(k);
       if (!c) { c = { cx: Math.floor(x / CHUNK), cy: Math.floor(y / CHUNK), items: [], live: [] }; this.chunks.set(k, c); }
-      c.items.push({ x, y, key, oy, sc: key.startsWith('tree') ? 0.82 + (((x * 73 + y * 31) | 0) % 37) / 100 : 1 });
+      const it = { x, y, key, frame, oy, im: null, wall: false, sc: key.startsWith('tree') ? 0.82 + (((x * 73 + y * 31) | 0) % 37) / 100 : 1 };
+      c.items.push(it);
+      return it;
     };
+    this.initWalls(addScenery);
     wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
     wd.decor.forEach((d) => addScenery(d.x, d.y, d.kind, 1));
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
       if (key) addScenery(p.x, p.y, key, 1);
     });
-    // porches over house doors, striped awnings over shop doors
+    // upright decoration attached to walls: (gx, gy) is its spot on the ground, sy its height (screen px, negative = up)
+    this.facade = [];
+    const dec = (key, gx, gy, sx, sy, ox, oy, dz, sc = 1) => { const img = this.add.image(gx + sx, gy + sy, key).setOrigin(ox, oy).setScale(sc); this.facade.push({ img, gx, gy, sx, sy, dz }); img.setScale(sc, sc * UPY); return img; };
+    // WISE SOLE storefront sign (upright, glued to the wall above the entrance)
+    if (wd.casino) {
+      const cs = wd.casino;
+      this.casinoSign = dec('casino_sign', cs.sign.x, cs.sign.y, 0, -26, 0.5, 1, 60);
+      this.casinoDecs = [];
+      cs.neons.forEach((n) => this.casinoDecs.push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, 40)));
+      cs.chandeliers.forEach((ch) => this.casinoDecs.push(dec('chandelier', ch.x, ch.y, 0, -86, 0.5, 0.5, 60)));
+    }
+    if (wd.wise) this.wiseSign = dec('wise_sign', wd.wise.door.x, wd.wise.door.y - 34, 0, -24, 0.5, 1, 60);
+    // porches over house doors (flat on the ground), striped awnings over shop doors (upright)
     wd.houseDoors.forEach((d, i) => {
       this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2);
-      if (!d.abandoned) this.add.image(d.x, d.y - 38, 'awning' + (i % 5)).setOrigin(0.5, 0).setScale(0.8, 0.8).setDepth(100 + d.y + 24);
+      if (!d.abandoned) dec('awning' + (i % 5), d.x, d.y - 32, 0, -6, 0.5, 0, 12, 0.8);   // anchored on the door tile
     });
-    wd.publicDoors.forEach((d, i) => {
-      this.add.image(d.x, d.y - 40, 'awning' + ((i * 3 + 1) % 5)).setOrigin(0.5, 0).setDepth(100 + d.y + 24);
-    });
+    wd.publicDoors.forEach((d, i) => { dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
     // window flower boxes + shutters on house fronts, balconies on apartment blocks
     wd.buildings.forEach((b) => {
       if (b.kind !== 'house' || b.broken) return;
@@ -274,23 +622,24 @@ export default class GameScene extends Phaser.Scene {
       for (let x = b.x; x < b.x + b.w; x++) {
         const hsh = (x * 31 + b.id * 17) % 10;
         if (wd.obj[ty][x] === T.window && !apt) {
-          if (hsh < 4) this.add.image(x * TILE + 16, ty * TILE + 30, 'flowerbox').setOrigin(0.5, 0.5).setDepth(100 + ty * TILE + 31);
-          if (hsh < 7) { this.add.image(x * TILE + 3, ty * TILE + 10, 'shutterL').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 30); this.add.image(x * TILE + 29, ty * TILE + 10, 'shutterR').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 30); }
+          const cx = x * TILE + 16, cy = ty * TILE + 16;     // the window tile's centre
+          if (hsh < 4) dec('flowerbox', cx, cy, 0, 14, 0.5, 0.5, 12);
+          if (hsh < 7) { dec('shutterL', cx, cy, -13, -6, 0.5, 0, 11); dec('shutterR', cx, cy, 13, -6, 0.5, 0, 11); }
         }
       }
       if (apt) for (let x = b.x + 2; x < b.x + b.w - 3; x += 4) {
-        if (wd.obj[ty][x] === T.window || wd.obj[ty][x + 1] === T.window) this.add.image(x * TILE + 32, ty * TILE + 14, 'balcony').setOrigin(0.5, 0).setDepth(100 + ty * TILE + 34);
+        if (wd.obj[ty][x] === T.window || wd.obj[ty][x + 1] === T.window) dec('balcony', x * TILE + 32, ty * TILE + 16, 0, -2, 0.5, 0, 14);
       }
     });
     const sh = this.add.graphics().setDepth(1);
     sh.fillStyle(0x000000, 0.22);
     wd.buildings.forEach((b) => {
-      sh.fillRect((b.x + b.w) * TILE, b.y * TILE + 6, 22 + b.lift * 0.6, b.h * TILE);
-      sh.fillRect(b.x * TILE + 8, (b.y + b.h) * TILE, b.w * TILE + 14, 12 + Math.min(14, b.lift * 0.3));
+      sh.fillRect((b.x + b.w) * TILE, b.y * TILE + 10, 36 + b.lift * 0.7, b.h * TILE);
+      sh.fillRect(b.x * TILE + 12, (b.y + b.h) * TILE, b.w * TILE + 30, 22 + Math.min(20, b.lift * 0.4));
     });
     this.roofs = wd.buildings.map((b) => {
       const key = b.style === 'shingle' ? 'roofpat_shingle' + (b.colorIdx % 6) : 'roofpat_' + b.style;
-      const x = b.x * TILE - 4, y = b.y * TILE - 16 - b.lift, w = b.w * TILE + 8, h = b.h * TILE - 8;
+      const x = b.x * TILE - 4, y = b.y * TILE, w = b.w * TILE + 8, h = b.h * TILE - 8;
       const parts = [];
       parts.push(this.add.tileSprite(x, y, w, h, key).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y, w, 2, 0xffffff, 0.25).setOrigin(0, 0));
@@ -299,19 +648,18 @@ export default class GameScene extends Phaser.Scene {
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
-      if (b.lift > 0) {
-        parts.push(this.add.tileSprite(x, y + h, w, b.lift, 'facade_glass').setOrigin(0, 0));
-        parts.push(this.add.rectangle(x, y + h, w, 4, 0x000000, 0.25).setOrigin(0, 0));
-      }
-      const cont = this.add.container(0, 0, parts).setDepth(100 + (b.y + b.h) * TILE - 4);
-      return { id: b.id, cont, alpha: 1, bx0: x - 40, by0: y - 40, bx1: x + w + 40, by1: y + h + b.lift + 120 };
+      let fg = null;
+      if (b.lift > 0) { fg = this.add.graphics(); parts.push(fg); }
+      const L = WALL_PX - 8 * TILT + b.lift;
+      const cont = this.add.container(0, -L, parts).setDepth(100 + (b.y + b.h) * TILE - 4);
+      return { id: b.id, cont, b, fg, fgDrawn: false, lift: L, alpha: 1, cx: x + w / 2, cy: y + h / 2, rad: Math.hypot(w, h) / 2 + b.lift + 90 };
     });
   }
 
   updateChunks(force = false) {
-    const v = this.cameras.main.worldView;
-    const x0 = Math.floor((v.x - CHUNK * 0.6) / CHUNK), x1 = Math.floor((v.right + CHUNK * 0.6) / CHUNK);
-    const y0 = Math.floor((v.y - CHUNK * 0.6) / CHUNK), y1 = Math.floor((v.bottom + CHUNK * 0.9) / CHUNK);
+    const v = this.viewRect(CHUNK * 0.6);
+    const x0 = Math.floor(v.x / CHUNK), x1 = Math.floor(v.right / CHUNK);
+    const y0 = Math.floor(v.y / CHUNK), y1 = Math.floor(v.bottom / CHUNK);
     const want = new Set();
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       const k = cx + ',' + cy, c = this.chunks.get(k);
@@ -321,7 +669,8 @@ export default class GameScene extends Phaser.Scene {
       this.activeChunks.add(k);
       for (const it of c.items) {
         const im = this.chunkPool.pop() || this.add.image(0, 0, 'tree0');
-        im.setTexture(it.key).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc).setDepth(100 + it.y).setVisible(true).setActive(true);
+        im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc, it.sy ?? it.sc * UPY).setRotation(-this.camRot).setDepth(this.depthOf(it.x, it.y)).setVisible(true).setActive(true);
+        it.im = im;
         c.live.push(im);
       }
     }
@@ -330,6 +679,7 @@ export default class GameScene extends Phaser.Scene {
       const c = this.chunks.get(k);
       this.activeChunks.delete(k);
       for (const im of c.live) { im.setVisible(false).setActive(false); this.chunkPool.push(im); }
+      for (const it of c.items) it.im = null;
       c.live.length = 0;
     }
   }
@@ -501,7 +851,10 @@ export default class GameScene extends Phaser.Scene {
   setDoor(tx, ty, open) {
     const idx = open ? T.doorOpen : T.doorClosed;
     this.wd.obj[ty][tx] = idx;
-    this.objLayer.putTileAt(idx, tx, ty);
+    const nt = this.objLayer.putTileAt(idx, tx, ty);
+    if (nt) nt.alpha = 0;
+    this.wallFace[ty * W + tx] = idx;
+    this.wallBuild.dirty = true;
     this.refreshCell(tx, ty);
     sfx.door();
     this.alertNoise(tx * TILE + 16, ty * TILE + 16, 90, 'step');
@@ -621,10 +974,19 @@ export default class GameScene extends Phaser.Scene {
         n.mark = this.add.text(0, 0, '!', { fontFamily: '"Courier New", monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffd23a', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5, 1).setDepth(6001);
       }
       const d = Math.hypot(p.x - n.x, p.y - n.y);
-      n.tag.setPosition(n.x, n.y - 58).setVisible(d < 260 && !p.vehicle);
+      const e58 = this.elev(58);
+      n.tag.setPosition(n.x + e58.x, n.y + e58.y).setRotation(-this.camRot).setScale(1, UPY).setVisible(d < 260 && !p.vehicle && ((id !== 'sean' && id !== 'jiro') || this.insideBuilding));
+      if (id === 'sean' || id === 'jiro') {
+        if (!n.nextChat) n.nextChat = this.gt + 2500 + Math.random() * 4000;
+        if (d < 240 && this.gt > n.nextChat) { n.chatUntil = this.gt + 4200; n.nextChat = this.gt + 13000 + Math.random() * 10000; const L = AMBIENT[id]; n.chatLine = L[Math.floor(Math.random() * L.length)]; }
+        if (!n.chat) n.chat = this.add.text(0, 0, '', { fontFamily: '"Courier New", monospace', fontSize: '12px', fontStyle: 'bold', color: '#ffffff', backgroundColor: '#1d0f2cdd', padding: { x: 6, y: 3 }, wordWrap: { width: 200 }, align: 'center' }).setOrigin(0.5, 1).setDepth(6002);
+        const show = this.gt < (n.chatUntil || 0) && d < 300 && !p.vehicle && this.insideBuilding;
+        n.chat.setVisible(show);
+        if (show) { const eh = this.elev(84); n.chat.setText(n.chatLine || '').setPosition(n.x + eh.x, n.y + eh.y).setRotation(-this.camRot).setScale(1, UPY); }
+      }
       const giver = avail.some((m) => m.giver === id);
       const target = this.missions.obj && ((this.missions.obj.type === 'talk' && this.missions.obj.npc === id));
-      n.mark.setVisible((giver || target) && d < 1200).setPosition(n.x, n.y - 74 + Math.sin(this.gt / 220) * 3).setText(target ? '?' : '!').setColor(target ? '#7aff9a' : '#ffd23a');
+      n.mark.setVisible((giver || target) && d < 1200).setRotation(-this.camRot).setScale(1, UPY).setPosition(n.x + this.elev(74 + Math.sin(this.gt / 220) * -3).x, n.y + this.elev(74 + Math.sin(this.gt / 220) * -3).y).setText(target ? '?' : '!').setColor(target ? '#7aff9a' : '#ffd23a');
     });
   }
 
@@ -715,6 +1077,41 @@ export default class GameScene extends Phaser.Scene {
     if (cb) cb();
   }
 
+  revealKenny() {
+    const h = this.wd.hideout;
+    if (!h || this.kennyPoi) return;
+    this.kennyPoi = { type: 'kenny', name: "Kenny's Place (black market)", x: h.kenny.x, y: h.kenny.y, tx: Math.floor(h.kenny.x / TILE), ty: Math.floor(h.kenny.y / TILE), w: 6, h: 6 };
+    this.wd.pois.push(this.kennyPoi);
+  }
+
+  // somebody in Kenny's crew was hit / threatened: those close by turn hostile, the rest only get suspicious (never everyone at once)
+  provokeHideout(src, r) {
+    const p = this.player;
+    this.enemies.children.iterate((e) => {
+      if (!e || e.dead || !e.hideout || e === src || e.crew !== src.crew) return;
+      const d = Math.hypot(e.x - src.x, e.y - src.y);
+      if (d < r) { e.angry = true; e.angryUntil = this.gt + 60000; e.lastKnown = { x: p.x, y: p.y }; e.lastSeen = this.gt; if (e.ai === 'idle') e.enterAlert(this.gt, true); }
+      else if (d < r * 3 && e.ai === 'idle') e.hear({ x: p.x, y: p.y }, 'ally', d, r * 3, this.gt);
+    });
+  }
+
+  // game: 'lobby' | 'slots' | 'blackjack' | 'dice' | 'cashier'; host: whose bubble shows (sean | jiro)
+  openCasino(game = 'lobby', host = 'sean') {
+    if (this.scene.isActive('Casino')) return;
+    this.scene.pause('Game');
+    this.scene.launch('Casino', { game, host });
+  }
+
+  openWise() {
+    this.scene.pause('Game');
+    this.scene.launch('Wise');
+  }
+
+  openArms() {
+    this.scene.pause('Game');
+    this.scene.launch('Arms');
+  }
+
   // E on a story character
   talkTo(npcId) {
     const m = this.missions;
@@ -724,6 +1121,9 @@ export default class GameScene extends Phaser.Scene {
       const av = m.availableStory().find((x) => x.giver === npcId);
       if (av) { this.offerMission(av, npcId); return; }
     }
+    if (npcId === 'kenny') { this.openArms(); return; }
+    if (npcId === 'ezekiel') { this.openWise(); return; }
+    if (npcId === 'sean' || npcId === 'jiro') { this.openCasino('lobby', npcId); return; }
     if (npcId === 'gordy') { this.events.emit('toast', "Gordy: \"Take a look at the lot.\""); this.openShop('dealer', "Gordy's Used Cars"); return; }
     this.startDialogue(null, { dialogue: chatDialogue(npcId, dialogueState(this)) });
   }
@@ -872,7 +1272,7 @@ export default class GameScene extends Phaser.Scene {
     this.wanted.clear();
     if (this.missions.active) this.missions.fail('You were wasted');
     engine.stop();
-    this.cameras.main.startFollow(p, true, 0.12, 0.12);
+    this.camFocus = p; this.camSnap = true;
     this.cameras.main.fadeIn(600);
     this.scene.resume('Game');
     this.input.setDefaultCursor('crosshair');
@@ -937,10 +1337,15 @@ export default class GameScene extends Phaser.Scene {
       const d = Math.hypot(e.x - x, e.y - y);
       if (d > 380 || !this.hasLOS(e.x, e.y, x, y)) return;
       if (e.isPolice) { witnessed = true; this.wanted.policeSees(now, pos); }
-      else if (e.hostility === 'provoked' || e.hostility === 'zone') {
+      else if ((e.hostility === 'provoked' || e.hostility === 'zone') && (!e.hideout || e.crew === 'casino')) {   // the hideout crew has its own, graded reaction (provokeHideout)
         witnessed = true;
-        if (severity >= CRIME.PUNCH) { e.angry = true; e.angryUntil = now + 60000; e.lastKnown = { x: this.player.x, y: this.player.y }; e.lastSeen = now; }
+        if (severity >= CRIME.PUNCH) { e.angry = true; e.angryUntil = now + 60000; e.lastKnown = { x: this.player.x, y: this.player.y }; e.lastSeen = now; if (e.crew === 'casino') this.provokeHideout(e, 520); }
       }
+    });
+    this.vehicles.children.iterate((o) => {
+      if (!o || !o.active || o.wrecked || !o.cfg.police || (o.mode !== 'patrol' && o.mode !== 'chase')) return;
+      if (Math.hypot(o.x - x, o.y - y) > 420 || !this.hasLOS(o.x, o.y, x, y)) return;
+      witnessed = true; this.wanted.policeSees(now, pos);
     });
     if (witnessed) this.wanted.add(severity, pos, reason);
     return witnessed;
@@ -963,6 +1368,112 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /* ------------------------------------------------------------ police response */
+  // Police cars with eyes on the suspect keep the radio fed; nobody gets the player's position for free.
+  updateVehicleSight(now) {
+    if (this.wanted.level < 1) return;
+    const p = this.player;
+    this.vehicles.children.iterate((o) => {
+      if (!o || !o.active || o.wrecked || !o.cfg.police || o.driver === 'player' || (o.mode !== 'patrol' && o.mode !== 'chase')) return;
+      if (Math.hypot(o.x - p.x, o.y - p.y) < 520 && this.hasLOS(o.x, o.y, p.x, p.y)) this.wanted.policeSees(now, p);
+    });
+  }
+
+  chaseCars() {
+    return this.vehicles.getChildren().filter((o) => o.active && o.mode === 'chase' && !o.wrecked);
+  }
+
+  otherChaseGoals(v) {
+    const s = new Set();
+    this.vehicles.children.iterate((o) => { if (o && o !== v && o.active && o.mode === 'chase' && o.goalNode >= 0) s.add(o.goalNode); });
+    return s;
+  }
+
+  // Where a pursuing car should head: the last place police actually saw the suspect. While they can see them the car
+  // leads the target (and the 2nd / 3rd cars cut them off or flank) so several cars do not queue up in a single file.
+  pursuitTarget(v) {
+    const w = this.wanted, p = this.player;
+    const seen = this.gt - w.lastPoliceSight < 3500;
+    const t = w.lastKnown ? { x: w.lastKnown.x, y: w.lastKnown.y } : { x: p.x, y: p.y };
+    if (seen && p.vehicle && Math.abs(p.vehicle.speed) > 70) {
+      const h = p.vehicle.heading, sp = Math.abs(p.vehicle.speed);
+      const role = this.chaseCars().indexOf(v) % 3;
+      if (role === 1) { const n = this.nav.nodeAhead(t.x, t.y, h, 130 + sp * 1.4); return { x: n.x, y: n.y, seen }; }
+      if (role === 2) return { x: t.x + Math.cos(h + Math.PI / 2) * 150, y: t.y + Math.sin(h + Math.PI / 2) * 150, seen };
+      return { x: t.x + Math.cos(h) * sp * 0.55, y: t.y + Math.sin(h) * sp * 0.55, seen };
+    }
+    if (seen) return { x: p.x, y: p.y, seen };
+    return { x: t.x, y: t.y, seen };
+  }
+
+  isOnScreen(x, y, m = 0) {
+    const v = this.cameras.main.worldView;
+    return x > v.x - m && x < v.right + m && y > v.y - m && y < v.bottom + m;
+  }
+
+  // start a driven NPC car on the middle lane of the nearest road, facing the one-way direction and clear of other cars
+  placeOnRoad(v) {
+    const A = this.nav.snapRoad(v.x, v.y);
+    const horiz = A.kind === 'h', fwd = A.idx % 2 === 0;
+    const hd = horiz ? (fwd ? 0 : Math.PI) : (fwd ? Math.PI / 2 : -Math.PI / 2);
+    const dx = Math.cos(hd), dy = Math.sin(hd);
+    let px = A.point.x, py = A.point.y;
+    for (let k = 0; k < 10; k++) {
+      const clash = this.vehicles.getChildren().some((o) => o !== v && o.active && Math.hypot(o.body.center.x - px, o.body.center.y - py) < 84);
+      if (!clash) break;
+      px += dx * 72; py += dy * 72;
+    }
+    v.heading = hd;
+    v.refreshView(true);
+    v.speed = 0;
+    v.body.reset(px - (v.body.center.x - v.x), py - (v.body.center.y - v.y));
+    v.homePos = { x: px, y: py };
+  }
+
+  // last-resort unstick: move a hopelessly stuck car to a free road spot nobody is looking at
+  repositionVehicle(v) {
+    const P = v.pilot;
+    const here = this.nav.nearestNode(v.x, v.y);
+    const cands = this.nav.nodes.map((n) => ({ n, d: Math.hypot(n.x - v.x, n.y - v.y) })).filter((c) => c.d > 150 && c.d < 1500).sort((a, b) => a.d - b.d);
+    for (const { n } of cands) {
+      if (this.isOnScreen(n.x, n.y, 140) || this.isOnScreen(v.x, v.y, 60)) continue;
+      if (this.nav.actorAt(n.x, n.y, v, 30)) continue;
+      v.setPosition(n.x, n.y); v.body.reset(n.x, n.y); v.speed = 0;
+      const nb = this.nav.nodes[(n.any[0] || { to: n.id }).to];
+      v.heading = Math.atan2(nb.y - n.y, nb.x - n.x);
+      v.refreshView(true);
+      P.fails = 0; P.wp = []; P.node = -1; P.rec = null; P.stats.repositions++;
+      return true;
+    }
+    P.fails = 2; // someone is watching: keep trying with longer manoeuvres instead of teleporting in view
+    return false;
+  }
+
+  // police reach the suspect: stop and cuff them (wanted 1-3), fine, release at the station
+  arrestPlayer(officer) {
+    if (this.over || this.arresting || this.player.dead || this.arrestDisabled) return;
+    this.arresting = true;
+    const p = this.player;
+    if (p.vehicle) this.exitVehicle(true);
+    const fine = Math.min(Math.round(profile.money), Math.round(60 + this.wanted.level * 50 + this.wanted.heat));
+    this.events.emit('toast', 'BUSTED! You were arrested.');
+    this.cameras.main.fadeOut(700, 0, 0, 0);
+    this.time.delayedCall(900, () => {
+      if (this.over) { this.arresting = false; return; }
+      profile.money -= fine;
+      const st = this.wd.policeStation || this.wd.spawn;
+      const spot = this.freeSpotNear(st.x, st.y + 60, 220) || { x: st.x, y: st.y + 60 };
+      p.setPosition(spot.x, spot.y); p.body.reset(spot.x, spot.y);
+      this.wanted.clear();
+      this.enemies.children.iterate((e) => { if (e && !e.dead && e.response) { e.die(true); this.kills = Math.max(0, this.kills - 1); } });
+      this.chaseCars().forEach((c) => c.endChase());
+      this.enemies.children.iterate((e) => { if (e && !e.dead && e.isPolice) e.returnToPost(this.gt); });
+      this.events.emit('profile');
+      this.events.emit('toast', fine > 0 ? `Fined $${fine} and released from the station` : 'Released from the station');
+      this.cameras.main.fadeIn(600);
+      this.arresting = false;
+    });
+  }
+
   chaseTarget() {
     return this.wanted.lastKnown || { x: this.player.x, y: this.player.y };
   }
@@ -979,11 +1490,25 @@ export default class GameScene extends Phaser.Scene {
       if (!e || e.dead || !e.isPolice) return;
       const d = Math.hypot(e.x - pos.x, e.y - pos.y);
       const reach = lvl >= 5 ? 99999 : lvl >= 3 ? 1800 : lvl >= 2 ? 1100 : 800;
-      if (lvl >= 1 && d < reach && (e.ai === 'patrol' || e.ai === 'idle')) {
+      if (lvl >= 1 && d < reach && (e.ai === 'patrol' || e.ai === 'idle' || e.ai === 'return')) {
         e.lastKnown = { x: pos.x + Phaser.Math.Between(-60, 60), y: pos.y + Phaser.Math.Between(-60, 60) };
         e.lastSeen = now;
         if (lvl >= 2) e.enterSearch(now); else e.enterSuspicious(now);
       }
+    });
+
+    // burnt-out wrecks that nobody is looking at disappear after a while so they cannot clog the roads forever
+    this.vehicles.children.iterate((o) => {
+      if (o && o.active && o.wrecked && !o.ownedId && !o.questTag && o.driver !== 'player' && now - (o.wreckedAt ?? now) > 30000 && !this.isOnScreen(o.x, o.y, 200)) { o.destroyParts(); o.destroy(); }
+    });
+
+    this.vehicles.children.iterate((o) => {
+      if (!o || !o.active || o.wrecked || !o.cfg.police || o.driver === 'player') return;
+      if (lvl >= 2 && o.mode === 'patrol') {
+        const dd = Math.hypot(o.x - pos.x, o.y - pos.y);
+        if (dd < (lvl >= 4 ? 99999 : lvl >= 3 ? 2200 : 1400)) o.beginChase();
+      }
+      if (lvl === 0 && o.mode === 'chase') o.endChase();
     });
 
     const footCap = [0, 0, 2, 5, 8, 12][lvl];
@@ -1007,8 +1532,8 @@ export default class GameScene extends Phaser.Scene {
     this.vehicles.children.iterate((v) => {
       if (!v || !v.active || !v.temp) return;
       const far = Math.hypot(v.x - p.x, v.y - p.y) > 900;
-      if (lvl === 0 && v.mode === 'chase') { v.sirenOn = false; v.mode = 'parked'; v.driver = null; v.setVelocity(0, 0); v.body.setImmovable(true); }
-      if (lvl === 0 && far && v.mode === 'parked' && v.driver !== 'player') { v.destroyParts(); v.destroy(); }
+      if (lvl === 0 && v.mode === 'chase') v.endChase();
+      if (lvl === 0 && far && v.mode !== 'chase' && v.driver !== 'player' && !this.isOnScreen(v.x, v.y, 160)) { v.destroyParts(); v.destroy(); }
     });
   }
 
@@ -1041,7 +1566,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   spawnPoliceCar(pos) {
-    const spot = this.offscreenSpot(650, 1000, true);
+    // pick an off-screen road spot that is well away from the other pursuit cars (measured AFTER snapping to the road)
+    let spot = null;
+    for (let i = 0; i < 24 && !spot; i++) {
+      const s = this.offscreenSpot(650, 1000, true);
+      if (!s) continue;
+      const sn = this.nav.snapRoad(s.x, s.y);
+      const cand = { x: sn.point.x, y: sn.point.y };
+      if (!this.chaseCars().some((o) => Math.hypot(o.x - cand.x, o.y - cand.y) < 320)) spot = cand;
+    }
     if (!spot) return;
     const v = this.spawnVehicle({ type: 'police', variant: 0, x: spot.x, y: spot.y, heading: Math.atan2(pos.y - spot.y, pos.x - spot.x), mode: 'chase', temp: true });
     v.driver = 'ai';
@@ -1064,7 +1597,7 @@ export default class GameScene extends Phaser.Scene {
   vehicleLabel(v) {
     const name = VEHICLES[v.vtype].name;
     if (v.ownedId) return v.locked ? `Unlock & enter your ${name} (L toggles lock)` : `Enter your ${name} (L locks)`;
-    if (v.locked) return `${name} is locked - E twice to break in`;
+    if (v.locked) return `${name} is locked - F twice to break in`;
     return `Enter ${name}`;
   }
 
@@ -1081,19 +1614,29 @@ export default class GameScene extends Phaser.Scene {
         return;
       }
       v.breakAt = this.gt;
-      this.events.emit('toast', 'Locked! Press E again to break in (witnesses will call the police)');
+      this.events.emit('toast', 'Locked! Press F again to break in (witnesses will call the police)');
       return;
     }
     this.enterVehicle(v);
+  }
+
+  // spawn particles h px above a ground point (straight up the SCREEN, whatever the camera angle)
+  emitUp(em, x, y, h, count) { const o = this.elev(h); em.emitParticleAt(x + o.x, y + o.y, count); }
+
+  // filled rectangle drawn upright on screen: (x, y) is a ground anchor, (ox, oy) the box's top-left in screen px from it
+  fillUpright(g, x, y, ox, oy, w, h) {
+    const a = this.fromScreen(ox, oy), b = this.fromScreen(ox + w, oy), c = this.fromScreen(ox + w, oy + h), d = this.fromScreen(ox, oy + h);
+    g.fillPoints([{ x: x + a.x, y: y + a.y }, { x: x + b.x, y: y + b.y }, { x: x + c.x, y: y + c.y }, { x: x + d.x, y: y + d.y }], true);
   }
 
   // a car door swings open (and fades) on the camera-facing side
   doorSwing(v) {
     if (!v || !v.active) return;
     const side = v.view === 's' ? (v.flipX ? -1 : 1) : 0;
-    const hx = v.x + (side ? side * 8 : -v.cfg.wid * 0.5 - 1), hy = v.y - 8 + (side ? v.cfg.wid * 0.38 : 4);
-    const d = this.add.rectangle(hx, hy, 15, 3, 0xe8e8e8).setOrigin(0, 0.5).setDepth(v.depth + 2).setRotation(side < 0 ? Math.PI : 0);
-    this.tweens.add({ targets: d, rotation: d.rotation + (side < 0 ? -1.15 : 1.15), alpha: 0, duration: 380, ease: 'Sine.easeOut', onComplete: () => d.destroy() });
+    const ho = this.fromScreen(side ? side * 8 : -v.cfg.wid * 0.5 - 1, -20 + (side ? v.cfg.wid * 0.38 : 4));
+    const base = (side < 0 ? Math.PI : 0) - this.camRot;
+    const d = this.add.rectangle(v.x + ho.x, v.y + ho.y, 15, 3, 0xe8e8e8).setOrigin(0, 0.5).setDepth(v.depth + 0.5).setRotation(base);
+    this.tweens.add({ targets: d, rotation: base + (side < 0 ? -1.15 : 1.15), alpha: 0, duration: 380, ease: 'Sine.easeOut', onComplete: () => d.destroy() });
   }
 
   enterVehicle(v) {
@@ -1108,18 +1651,18 @@ export default class GameScene extends Phaser.Scene {
     if (v.mode === 'chase') v.sirenOn = false;
     // short "climb in" animation: a ghost of the player slides into the car
 const pk = p.dir === 'l' ? 'r' : p.dir;
-    const ghost = this.add.sprite(p.x, p.y, p.texture.key, pk + '12').setOrigin(0.5, 0.9).setFlipX(p.flipX).setDepth(6000);
+    const ghost = this.add.sprite(p.x, p.y, p.texture.key, pk + '12').setOrigin(0.5, 0.9).setFlipX(p.flipX).setRotation(-this.camRot).setScale(1, UPY).setDepth(6000);
     this.time.delayedCall(90, () => ghost.active && ghost.setFrame(pk + '10'));
-    this.tweens.add({ targets: ghost, x: v.x, y: v.y + 4, alpha: 0, scaleX: 0.55, scaleY: 0.7, duration: 260, ease: 'Sine.easeIn', onComplete: () => ghost.destroy() });
+    this.tweens.add({ targets: ghost, x: v.x, y: v.y + 4, alpha: 0, scaleX: 0.55, scaleY: 0.7 * UPY, duration: 260, ease: 'Sine.easeIn', onComplete: () => ghost.destroy() });
     v.occupy('player');
     p.vehicle = v;
     p.setHidden(true);
     p.swing = null;
     if (v.ownedId) profile.lastVehicleId = v.ownedId;
-    this.cameras.main.startFollow(v, true, 0.07, 0.07);
+    this.camFocus = v;
     engine.start();
     sfx.doorSlam();
-    this.events.emit('toast', `${VEHICLES[v.vtype].name}: W gas, S brake/reverse, A/D steer, Space handbrake, H horn, E exit`);
+    this.events.emit('toast', `${VEHICLES[v.vtype].name}: W gas, S brake/reverse, A/D steer, Space handbrake, H horn, F exit`);
   }
 
   // a spot beside the vehicle that is free of walls, other vehicles and people; null if there is none
@@ -1158,12 +1701,12 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     p.body.reset(spot.x, spot.y);
     p.knockUntil = 0;
 const pk = p.dir === 'l' ? 'r' : p.dir;
-    const ghost = this.add.sprite(v.x, v.y, p.texture.key, pk + '10').setOrigin(0.5, 0.9).setFlipX(p.flipX).setDepth(6000).setAlpha(0.2).setScale(0.6);
+    const ghost = this.add.sprite(v.x, v.y, p.texture.key, pk + '10').setOrigin(0.5, 0.9).setFlipX(p.flipX).setRotation(-this.camRot).setDepth(6000).setAlpha(0.2).setScale(0.6, 0.6 * UPY);
     this.time.delayedCall(110, () => ghost.active && ghost.setFrame(pk + '12'));
-    this.tweens.add({ targets: ghost, x: spot.x, y: spot.y, alpha: 0.9, scaleX: 1, scaleY: 1, duration: 230, ease: 'Sine.easeOut', onComplete: () => ghost.destroy() });
+    this.tweens.add({ targets: ghost, x: spot.x, y: spot.y, alpha: 0.9, scaleX: 1, scaleY: UPY, duration: 230, ease: 'Sine.easeOut', onComplete: () => ghost.destroy() });
     p.pickupUntil = this.gt + 240;
     v.release();
-    this.cameras.main.startFollow(p, true, 0.12, 0.12);
+    this.camFocus = p;
     engine.stop();
     sfx.doorSlam();
   }
@@ -1184,8 +1727,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
   onVehicleWrecked(v) {
     sfx.crash(1);
-    this.fxFire.emitParticleAt(v.x, v.y - 14, 10);
-    this.fxSmoke.emitParticleAt(v.x, v.y - 20, 8);
+    this.emitUp(this.fxFire, v.x, v.y, 14, 10);
+    this.emitUp(this.fxSmoke, v.x, v.y, 20, 8);
     if (v.questTag && this.missions.active && this.missions.spawned.vehicles.includes(v) && this.missions.obj && this.missions.obj.type !== 'losewanted') {
       this.missions.fail('The vehicle was destroyed');
     }
@@ -1225,7 +1768,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     v.takeDamage(spd * 0.02);
     v.speed *= 0.8;
     sfx.thud();
-    this.fxBlood.emitParticleAt(a.x, a.y - 14, 8);
+    this.emitUp(this.fxBlood, a.x, a.y, 14, 8);
   }
 
   nearestPump(v) {
@@ -1253,7 +1796,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         if (unaware && Math.abs(wrapA(Math.atan2(p.y - t.y, p.x - t.x) - t.face)) > 1.9) dmg *= 2.5;
       }
       hitAny = true;
-      this.fxBlood.emitParticleAt(t.x, t.y - CHEST, 6);
+      this.emitUp(this.fxBlood, t.x, t.y, CHEST, 6);
       if (isCivilian) {
         this.reportCrime(t.x, t.y, t.hp - dmg <= 0 ? CRIME.KILL_CIVILIAN : CRIME.PUNCH, 'assault', { victim: t });
         t.knock(ang, weapon.knock, 220);
@@ -1277,7 +1820,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     profile.stats.kills = this.kills;
     if (e.spawnIdx !== undefined && !profile.killedSpawns.includes(e.spawnIdx)) profile.killedSpawns.push(e.spawnIdx);
     if (!silent) sfx.kill();
-    this.fxBlood.emitParticleAt(e.x, e.y - 14, silent ? 6 : 14);
+    this.emitUp(this.fxBlood, e.x, e.y, 14, silent ? 6 : 14);
     this.addCorpse(e.x, e.y);
     rollNpcDrop(e.role, e.weaponCfg.id).forEach((id, i) => {
       const a = Math.random() * Math.PI * 2;
@@ -1289,7 +1832,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   onCivilianKilled(c, byPlayer) {
-    this.fxBlood.emitParticleAt(c.x, c.y - 14, 12);
+    this.emitUp(this.fxBlood, c.x, c.y, 14, 12);
     this.addCorpse(c.x, c.y);
     if (byPlayer) { this.kills++; this.reportCrime(c.x, c.y, CRIME.KILL_CIVILIAN, 'murder', { victim: c }); this.events.emit('kill', this.kills); this.addRep(-4); }
     if (Math.random() < 0.12) this.spawnItem(c.x + 8, c.y, 'medkit');
@@ -1308,7 +1851,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const glow = this.add.sprite(x, y, 'glow').setDepth(3.6);
     if (mission) glow.setTint(0x7affb0).setScale(1.3);
     const s = this.add.sprite(x, y - 4, def.tex).setDepth(4);
-    if (def.kind === 'weapon' || def.kind === 'melee') s.setRotation(-0.35);
+    if (def.kind === 'weapon' || def.kind === 'melee') s.tilt = -0.35;
+    s.setRotation(-this.camRot + (s.tilt || 0)).setScale(1, UPY);
     s.itemId = id;
     s.glow = glow;
     s.mission = mission;
@@ -1352,7 +1896,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     sfx.crate();
     const ids = rollTier(c.tier);
     this.dropLoot(ids, this.player.x, this.player.y, 18);
-    this.containerMarks.push(this.add.image(c.x, c.y + 6, 'open_mark').setDepth(100 + c.y + 1));
+    this.containerMarks.push(this.add.image(c.x, c.y + 6, 'open_mark').setRotation(-this.camRot).setScale(1, UPY).setDepth(this.depthOf(c.x, c.y, 1)));
     this.events.emit('toast', ids.length ? `Searched ${c.name.toLowerCase()}: found ${ids.length} item${ids.length > 1 ? 's' : ''}` : `${c.name} is empty`);
     if (c.shop && ids.length) this.reportCrime(c.x, c.y, CRIME.THEFT, 'shoplifting');
   }
@@ -1374,12 +1918,19 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       if (d < 58) consider(d, { kind: 'container', ref: c, x: c.x, y: c.y, label: c.searched ? `${c.name} (empty)` : `Search ${c.name.toLowerCase()}` });
     }
+    if (this.vipGateKey !== undefined && this.lockedDoors.has(this.vipGateKey) && Casino.state().vip) this.lockedDoors.delete(this.vipGateKey);
+    if (this.wd.casino) {
+      for (const st of this.wd.casino.stations) {
+        const d = Math.hypot(st.x - p.x, st.y - p.y);
+        if (d < 40) consider(d, { kind: 'casino', ref: st, x: st.x, y: st.y, label: st.game === 'slots' ? 'Play the slot machine' : st.game === 'blackjack' ? 'Play Blackjack' : st.game === 'dice' ? 'Play Poker Dice' : 'Cashier / VIP desk' });
+      }
+    }
     for (const dr of this.wd.doors) {
       const cx = dr.x * TILE + TILE / 2, cy = dr.y * TILE + TILE / 2;
       const d = Math.hypot(cx - p.x, cy - p.y);
       if (d < 54) {
         const locked = this.lockedDoors.has(dr.y * W + dr.x);
-        consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: locked ? 'Locked door' : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
+        consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: locked ? (dr.y * W + dr.x === this.vipGateKey ? 'VIP room (members only)' : 'Locked door') : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
       }
     }
     this.vehicles.children.iterate((v) => {
@@ -1433,6 +1984,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
           if (id === 'q_wallet' && !this.missions.wantsItem(id)) { this.takeQuest(id); this.startDialogue('ev_wallet'); } else this.missionEvent('questItem', id);
         } else this.missionEvent('itemPicked', id);
       } else this.events.emit('toast', "Can't carry any more " + def.label.toLowerCase());
+    } else if (t.kind === 'casino') {
+      this.openCasino(t.ref.game === 'hub' ? 'cashier' : t.ref.game, t.ref.game === 'blackjack' || t.ref.game === 'dice' ? 'jiro' : 'sean');
     } else if (t.kind === 'crate') {
       this.openCrate(t.ref);
     } else if (t.kind === 'container') {
@@ -1465,6 +2018,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       p.pickupUntil = this.gt + 320;
       const { x, y } = t.ref;
       const key = y * W + x;
+      if (key === this.vipGateKey && this.lockedDoors.has(key)) {
+        this.events.emit('toast', 'VIP members only. Ask Sean, or visit the cashier.');
+        return;
+      }
       if (this.lockedDoors.has(key)) {
         if (this.missions.obj && this.missions.obj.type === 'unlock' && this.hasQuest('q_key')) {
           this.lockedDoors.delete(key);
@@ -1500,13 +2057,47 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   /* ----------------------------------------------------------- bullet events */
+  // rocket blast: area damage to people, cars and the player, scorch + smoke + fire, huge noise
+  explode(x, y, r, dmg, owner) {
+    const p = this.player;
+    sfx.explosion();
+    for (let i = 0; i < 4; i++) this.emitUp(this.fxFire, x + Phaser.Math.Between(-r / 3, r / 3), y + Phaser.Math.Between(-r / 3, r / 3), 8 + i * 6, 6);
+    this.emitUp(this.fxSmoke, x, y, 16, 16);
+    this.emitUp(this.fxSpark, x, y, 10, 14);
+    const ring = this.add.circle(x, y, r * 0.25, 0xffb040, 0.5).setStrokeStyle(3, 0xffe8a0, 0.9).setDepth(5001);
+    this.tweens.add({ targets: ring, scale: 4, alpha: 0, duration: 380, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    if (settings.shake) this.cameras.main.shake(260, Math.min(0.02, 0.012 * Math.max(0.25, 1 - Phaser.Math.Distance.Between(p.x, p.y, x, y) / 700)));
+    const fall = (d) => Math.max(0.15, 1 - (d / r) * 0.85);
+    let hurtCivs = 0;
+    this.enemies.children.iterate((e) => {
+      if (!e || e.dead) return;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d < r) { if (owner === 'player') { const cr = this.armedAttackCrime(e); if (cr) this.reportCrime(e.x, e.y, cr, 'explosive attack', { victim: e }); } e.takeDamage(dmg * fall(d), this.gt); }
+    });
+    this.civilians.children.iterate((c) => {
+      if (!c || c.dead || c.sleeping) return;
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < r) { hurtCivs++; c.takeDamage(dmg * fall(d), this.gt, owner === 'player'); }
+      else if (d < r * 3 && !c.dead) { c.threat = { x, y }; if (c.state !== 'flee') c.beginFlee(this.gt, 6000); }
+    });
+    this.vehicles.children.iterate((v) => {
+      if (!v || !v.active || v.wrecked) return;
+      const d = Math.hypot(v.x - x, v.y - y);
+      if (d < r + 30) { v.takeDamage(dmg * 0.9 * fall(d)); const a = Math.atan2(v.y - y, v.x - x); v.setVelocity(Math.cos(a) * 160, Math.sin(a) * 160); }
+    });
+    if (!p.vehicle && !p.dead) { const d = Math.hypot(p.x - x, p.y - y); if (d < r) p.takeDamage(dmg * 0.55 * fall(d)); }
+    else if (p.vehicle) { const d = Math.hypot(p.x - x, p.y - y); if (d < r) p.takeDamage(dmg * 0.3 * fall(d), true); }
+    this.alertNoise(x, y, 950, 'shot');
+    if (owner === 'player') this.reportCrime(x, y, CRIME.KILL_COP * 0.5, 'explosion');
+  }
+
   onBulletWall(b) {
-    this.fxSpark.emitParticleAt(b.x, b.y - CHEST, 4);
+    this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
     this.combat.kill(b);
   }
 
   onBulletEnemy(b, e) {
-    this.fxBlood.emitParticleAt(b.x, b.y - CHEST, 5);
+    this.emitUp(this.fxBlood, b.x, b.y, CHEST, 5);
     const crime = this.armedAttackCrime(e);
     if (crime) this.reportCrime(e.x, e.y, crime, e.isPolice ? 'shot an officer' : 'armed assault', { victim: e });
     e.takeDamage(b.damage, this.gt);
@@ -1516,7 +2107,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   onBulletCivilian(b, c) {
-    this.fxBlood.emitParticleAt(b.x, b.y - CHEST, 5);
+    this.emitUp(this.fxBlood, b.x, b.y, CHEST, 5);
     if (b.owner === 'player') this.reportCrime(c.x, c.y, c.hp - b.damage <= 0 ? CRIME.KILL_CIVILIAN : CRIME.PUNCH * 1.5, 'shot a civilian', { victim: c });
     c.takeDamage(b.damage, this.gt, b.owner === 'player');
     sfx.hit();
@@ -1524,14 +2115,14 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   onBulletPlayer(b) {
-    this.fxBlood.emitParticleAt(b.x, b.y - CHEST, 4);
+    this.emitUp(this.fxBlood, b.x, b.y, CHEST, 4);
     this.player.takeDamage(b.damage);
     if (settings.shake) this.cameras.main.shake(90, 0.004);
     this.combat.kill(b);
   }
 
   onBulletVehicle(b, v) {
-    this.fxSpark.emitParticleAt(b.x, b.y - CHEST, 3);
+    this.emitUp(this.fxSpark, b.x, b.y, CHEST, 3);
     v.takeDamage(b.damage * 0.12);
     if (v.driver === 'player' && b.owner === 'enemy') this.player.takeDamage(b.damage * 0.25);
     this.combat.kill(b);
@@ -1546,6 +2137,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const cam = this.cameras.main;
     const ptr = this.input.activePointer;
     ptr.updateWorldPoint(cam);
+    { const pw = this.screenToWorld(ptr.x, ptr.y); ptr.worldX = pw.x; ptr.worldY = pw.y; }   // exact for the (rotating) camera, no frame of lag
     const tm = touchEnabled();
     this.touchOn = tm;
     this.gfx.clear();
@@ -1558,11 +2150,13 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const aimWorld = this.lastAimWorld || { x: ptr.worldX, y: ptr.worldY };
 
     // NPC / vehicle simulation
+    this.nav.refreshActors(now);
+    if (now - (this.vehSightT || 0) > 300) { this.vehSightT = now; this.updateVehicleSight(now); }
     this.enemies.children.iterate((e) => { if (e && e.active) e.updateEnemy(now, dt); });
     this.civilians.children.iterate((c) => { if (c && c.active) c.updateCivilian(now, dt); });
     const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
     const near = (v) => Math.abs(v.x - p.x) < rx && Math.abs(v.y - p.y) < ry;
-    this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver || v.mode === 'chase' || near(v))) v.updateVehicle(now, dt); });
+    this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver === 'player' || v.mode === 'chase' || near(v))) v.updateVehicle(now, dt); });
     this.combat.update();
     this.wanted.update(dt, now);
     this.updatePoliceResponse(now);
@@ -1570,6 +2164,11 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.updateNpcTags();
+    if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
+      this.kennyChk = now;
+      const kh = this.wd.hideout.kenny;
+      if (Math.hypot(p.x - kh.x, p.y - kh.y) < 230) { profile.flags.kennyFound = true; this.revealKenny(); this.events.emit('banner', { title: 'HIDDEN ALLEY', sub: 'YOU FOUND A BLACK-MARKET HIDEOUT', color: '#ffb060' }); this.events.emit('toast', "Somebody is selling guns back here - it's now on your map"); }
+    }
     this.updateFare();
     this.updateShade();
     profile.stats.time = now;
@@ -1578,35 +2177,29 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
     // roofs fade out while the player is inside, and come back when leaving
     const cb = this.currentBuilding();
+    const pscr = this.worldToScreen(p.x, p.y), pkey = p.x * this.sn + p.y * this.cs;
+    this.xray = { x: pscr.x, y: pscr.y, key: pkey + DEPTH_D0, on: !p.dead };
     for (const r of this.roofs) {
-      const target = r.id === cb ? 0 : 1;
+      let target = r.id === cb ? 0 : 1;
+      if (target === 1 && this.roofHides(r, pscr, pkey)) target = 0.28;
       r.alpha += (target - r.alpha) * Math.min(1, dt / 140);
       if (Math.abs(r.alpha - target) < 0.02) r.alpha = target;
-      const wv = cam.worldView;
-      const onScreen = r.bx1 > wv.x && r.bx0 < wv.right && r.by1 > wv.y && r.by0 < wv.bottom;
+      const vr = this.viewRect(0);
+      const onScreen = r.cx + r.rad > vr.x && r.cx - r.rad < vr.right && r.cy + r.rad > vr.y && r.cy - r.rad < vr.bottom;
       r.cont.setAlpha(r.alpha).setVisible(onScreen && r.alpha > 0.01);
+      if (r.fg && onScreen && !r.fgDrawn) this.drawFacade(r);
     }
     this.insideBuilding = cb >= 0;
+    if (this.wiseSign) this.wiseSign.setAlpha(this.insideBuilding ? 0.1 : 1);
+    if (this.casinoSign) this.casinoSign.setAlpha(this.insideBuilding ? 0.1 : 1);       // keep the big storefront sign out of the way indoors
 
-    // camera: zoom + look-ahead, smoothed so driving does not jitter
-    const v = p.vehicle;
-    const speedFrac = v ? Math.min(1, Math.abs(v.speed) / v.cfg.max) : 0;
-    const zoomWanted = this.zoomTarget * (1 - 0.22 * speedFrac);
-    cam.zoom += (zoomWanted - cam.zoom) * Math.min(1, dt / 120);
-    const look = v ? 0 : p.current === 'sniper' ? 0.55 : 0.2;
-    const ox = Phaser.Math.Clamp((aimWorld.x - p.x) * look, -320, 320);
-    const oy = Phaser.Math.Clamp((aimWorld.y - p.y) * look, -240, 240);
-    const lead = v ? { x: Math.cos(v.heading) * v.speed * 0.32, y: Math.sin(v.heading) * v.speed * 0.32 } : { x: 0, y: 0 };
-    const k = Math.min(1, dt / (v ? 220 : 160));
-    this.camOff.x += (-ox - lead.x - this.camOff.x) * k;
-    this.camOff.y += (-oy - lead.y + (v ? 26 : 50) - this.camOff.y) * k;
-    cam.setFollowOffset(this.camOff.x, this.camOff.y);
+    this.updateCamera(now, dt, aimWorld);
 
     this.enemies.children.iterate((e) => {
       if (!e || !e.visible || e.hpShowUntil < now) return;
       const w = 26;
-      this.gfx.fillStyle(0x000000, 0.7).fillRect(e.x - w / 2 - 1, e.y - 49, w + 2, 5);
-      this.gfx.fillStyle(0xd02020, 1).fillRect(e.x - w / 2, e.y - 48, (w * Math.max(0, e.hp)) / e.maxHp, 3);
+      this.gfx.fillStyle(0x000000, 0.7); this.fillUpright(this.gfx, e.x, e.y, -w / 2 - 1, -49, w + 2, 5);
+      this.gfx.fillStyle(0xd02020, 1); this.fillUpright(this.gfx, e.x, e.y, -w / 2, -48, (w * Math.max(0, e.hp)) / e.maxHp, 3);
     });
 
     // never leave the player stuck inside geometry
@@ -1626,17 +2219,18 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const p = this.player;
     const k = this.keys;
     const cam = this.cameras.main;
-    let aimX = ptr.worldX, aimY = ptr.worldY + CHEST;
+    const dn = this.fromScreen(0, CHEST);                 // pointer sees the target's chest; the ground point is lower on the screen
+    let aimX = ptr.worldX + dn.x, aimY = ptr.worldY + dn.y;
     if (tm) {
       const moving = Math.hypot(touch.moveX, touch.moveY) > 0.15;
-      const a = touch.aiming ? touch.aimAngle : moving ? Math.atan2(touch.moveY, touch.moveX) : p.aim;
+      const a = (touch.aiming ? touch.aimAngle : moving ? Math.atan2(touch.moveY, touch.moveX) : p.aim + this.camRot) - this.camRot;   // screen angle -> world angle
       aimX = p.x + Math.cos(a) * 200;
       aimY = p.y + Math.sin(a) * 200;
       p.updatePlayer(now, dt, { mx: touch.moveX, my: touch.moveY, sprint: touch.sprint, aimX, aimY });
     } else {
       p.updatePlayer(now, dt, { left: k.A.isDown, right: k.D.isDown, up: k.W.isDown, down: k.S.isDown, sprint: k.SHIFT.isDown, aimX, aimY });
     }
-    this.lastAimWorld = tm ? { x: aimX, y: aimY - CHEST } : { x: ptr.worldX, y: ptr.worldY };
+    this.lastAimWorld = tm ? { x: aimX - dn.x, y: aimY - dn.y } : { x: ptr.worldX, y: ptr.worldY };
     if (p.dead) { this.interact = null; return; }
 
     // tutorial hooks
@@ -1654,14 +2248,11 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
     if (Phaser.Input.Keyboard.JustDown(k.R) || consumeAction('reload')) p.startReload(now);
     if (Phaser.Input.Keyboard.JustDown(k.C) || consumeAction('crouch')) { p.crouching = !p.crouching; sfx.click(); if (p.crouching) this.missionEvent('tut:crouch'); }
-    if (Phaser.Input.Keyboard.JustDown(k.ONE)) p.equip('pistol');
-    if (Phaser.Input.Keyboard.JustDown(k.TWO)) p.equip('rifle');
-    if (Phaser.Input.Keyboard.JustDown(k.THREE)) p.equip('shotgun');
-    if (Phaser.Input.Keyboard.JustDown(k.FOUR)) p.equip('sniper');
+    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((kn, i) => { if (Phaser.Input.Keyboard.JustDown(k[kn])) p.selectCategory(i); });
     if (Phaser.Input.Keyboard.JustDown(k.Z) || consumeAction('melee-swap')) p.cycleMelee();
-    if (Phaser.Input.Keyboard.JustDown(k.Q) || consumeAction('cycle')) p.cycleWeapon(1);
+    if (Phaser.Input.Keyboard.JustDown(k.X) || consumeAction('cycle')) p.cycleWeapon(1);
     if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('medkit')) { if (p.useMedkit()) this.events.emit('toast', 'Used medkit (+50 HP)'); }
-    if (Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('armor')) { if (p.useArmor()) this.events.emit('toast', 'Armor plate applied (+40)'); }
+    if (Phaser.Input.Keyboard.JustDown(k.G) || consumeAction('armor')) { if (p.useArmor()) this.events.emit('toast', 'Armor plate applied (+40)'); }
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.toggleLock();
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
 
@@ -1672,8 +2263,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       if (it.kind === 'item') this.gfx.strokeEllipse(it.x, it.y, 34, 14);
       else if (it.kind === 'vehicle') this.gfx.strokeEllipse(it.x, it.y + 6, 60, 24);
       else this.gfx.strokeRect(it.x - 18, it.y - 18, 36, 36);
-      const pressed = Phaser.Input.Keyboard.JustDown(k.E) || consumeAction('interact');
-      const held = (k.E.isDown || touch.interactHeld) && it.kind === 'item' && now - this.lastPick > 180;
+      const pressed = Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('interact');
+      const held = (k.F.isDown || touch.interactHeld) && it.kind === 'item' && now - this.lastPick > 180;
       if (pressed || held) { this.lastPick = now; this.doInteract(it); }
     }
     if (Phaser.Input.Keyboard.JustDown(k.M) || consumeAction('map')) this.events.emit('request-map');
@@ -1690,15 +2281,15 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('horn')) { sfx.horn(); this.alertNoise(v.x, v.y, 260, 'step'); }
     if (Phaser.Input.Keyboard.JustDown(k.M) || consumeAction('map')) this.events.emit('request-map');
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
-    if (Phaser.Input.Keyboard.JustDown(k.E) || consumeAction('interact')) { this.exitVehicle(); if (!p.vehicle) return; }
+    if (Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('interact')) { this.exitVehicle(); if (!p.vehicle) return; }
 
     // refuel (hold F / FUEL) and repair (R) at a gas station
     const pump = this.nearestPump(v);
     this.interact = { kind: 'drive', label: 'Exit vehicle', x: v.x, y: v.y };
     if (pump && Math.abs(v.speed) < 40) {
-      if (v.fuel < 99) this.interact = { kind: 'drive', label: 'Hold F to refuel ($1 per 2 units)', x: v.x, y: v.y };
+      if (v.fuel < 99) this.interact = { kind: 'drive', label: 'Hold G to refuel ($1 per 2 units)', x: v.x, y: v.y };
       else if (v.hp < v.maxHp) this.interact = { kind: 'drive', label: `Press R to repair ($${Math.ceil((v.maxHp - v.hp) * 0.9)})`, x: v.x, y: v.y };
-      if ((k.F.isDown || touch.refuel) && v.fuel < 100) {
+      if ((k.G.isDown || touch.refuel) && v.fuel < 100) {
         const add = Math.min(100 - v.fuel, 26 * dt / 1000);
         const cost = add * 0.5;
         if (profile.money >= cost) { v.fuel += add; profile.money -= cost; this.events.emit('profile'); if (now - this.refuelMsgAt > 600) { this.refuelMsgAt = now; sfx.click(); } }
@@ -1732,13 +2323,13 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const p = this.player;
     const v = p.vehicle;
     if (v && Math.abs(v.speed) < 45 && Math.hypot(v.x - this.fareNpc.x, v.y - this.fareNpc.y) < 110 && this.missions.obj && this.missions.obj.type === 'fare') this.boardFare();
-    if (this.fareNpc.tag) this.fareNpc.tag.setPosition(this.fareNpc.x, this.fareNpc.y - 58);
+    if (this.fareNpc.tag) { const o = this.elev(58); this.fareNpc.tag.setPosition(this.fareNpc.x + o.x, this.fareNpc.y + o.y).setRotation(-this.camRot).setScale(1, UPY); }
   }
 
   updateShade() {
     const s = this.shadeNpc;
     if (!s || !s.active) return;
-    if (s.tag) s.tag.setPosition(s.x, s.y - 58);
+    if (s.tag) { const o = this.elev(58); s.tag.setPosition(s.x + o.x, s.y + o.y).setRotation(-this.camRot).setScale(1, UPY); }
     const p = this.player;
     if (Math.hypot(s.x - p.x, s.y - p.y) > 950) {
       const spot = this.offscreenSpot(420, 560);
@@ -1793,7 +2384,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       [T.tree]: '#1c3d1c', [T.fence]: '#b0b0b0', [T.barricade]: '#8a5a2a', [T.water]: '#2f6fb0', [T.sandbag]: '#b79a62',
       [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'
     };
-    const bld = { house: '#9a6a52', abandoned: '#6a5a50', shop: '#c9a24a', restaurant: '#d98a3a', police: '#3a62c0', hospital: '#d96a6a', tower: '#3f8aa8', warehouse: '#7a6a9a', tent: '#6a7a46', hq: '#56663c' };
+    const bld = { house: '#9a6a52', abandoned: '#6a5a50', shop: '#c9a24a', restaurant: '#d98a3a', police: '#3a62c0', hospital: '#d96a6a', tower: '#3f8aa8', casino: '#b04aa8', warehouse: '#7a6a9a', tent: '#6a7a46', hq: '#56663c' };
     const mk = (key, scale, detail) => {
       if (this.textures.exists(key)) this.textures.remove(key);
       const tex = this.textures.createCanvas(key, W * scale, H * scale);

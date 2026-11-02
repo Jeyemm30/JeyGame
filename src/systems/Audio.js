@@ -1,4 +1,5 @@
 import { settings } from './Settings.js';
+import { WEAPONS } from '../config.js';
 
 let ctx = null;
 let noiseBuf = null;
@@ -24,19 +25,20 @@ function throttle(name, ms) {
   return true;
 }
 
-function noise(dur, { freq = 1200, endFreq = 300, vol = 0.5, type = 'lowpass', q = 1 } = {}) {
+function noise(dur, { freq = 1200, endFreq = 300, vol = 0.5, type = 'lowpass', q = 1, delay = 0 } = {}) {
   const c = ac(); if (!c) return;
+  const T0 = c.currentTime + delay;
   const src = c.createBufferSource();
   src.buffer = noiseBuf;
   const f = c.createBiquadFilter();
   f.type = type; f.Q.value = q;
-  f.frequency.setValueAtTime(freq, c.currentTime);
-  f.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), c.currentTime + dur);
+  f.frequency.setValueAtTime(freq, T0);
+  f.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), T0 + dur);
   const g = c.createGain();
-  g.gain.setValueAtTime(vol * settings.volume, c.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + dur);
+  g.gain.setValueAtTime(vol * settings.volume, T0);
+  g.gain.exponentialRampToValueAtTime(0.0001, T0 + dur);
   src.connect(f); f.connect(g); g.connect(c.destination);
-  src.start(c.currentTime, Math.random() * 0.5, dur + 0.05);
+  src.start(T0, Math.random() * 0.5, dur + 0.05);
 }
 
 function tone(freq, dur, { type = 'square', vol = 0.2, slideTo = null, delay = 0 } = {}) {
@@ -55,16 +57,43 @@ function tone(freq, dur, { type = 'square', vol = 0.2, slideTo = null, delay = 0
 
 export const sfx = {
   unlock() { ac(); },
+  // every gun has its own synthesised voice (WEAPONS[id].snd picks it)
   shoot(id, v = 1) {
-    if (!throttle('shot' + id + (v < 1 ? 'e' : ''), 40)) return;
-    switch (id) {
+    if (!throttle('shot' + id + (v < 1 ? 'e' : ''), 36)) return;
+    const w = WEAPONS[id];
+    switch (w ? w.snd : id) {
       case 'pistol': noise(0.14, { freq: 3000, endFreq: 400, vol: 0.5 * v }); tone(220, 0.08, { type: 'square', vol: 0.15 * v, slideTo: 80 }); break;
+      case 'deagle': noise(0.26, { freq: 2200, endFreq: 180, vol: 0.9 * v }); tone(115, 0.2, { type: 'sawtooth', vol: 0.28 * v, slideTo: 40 }); break;
+      case 'revolver': noise(0.2, { freq: 2600, endFreq: 190, vol: 0.8 * v }); tone(135, 0.14, { type: 'square', vol: 0.22 * v, slideTo: 55 }); break;
+      case 'silenced': noise(0.07, { freq: 1300, endFreq: 500, vol: 0.12 * v }); tone(420, 0.03, { vol: 0.05 * v }); break;
+      case 'smg': noise(0.08, { freq: 3300, endFreq: 650, vol: 0.45 * v }); tone(270, 0.05, { type: 'square', vol: 0.12 * v, slideTo: 120 }); break;
+      case 'smg2': noise(0.09, { freq: 2800, endFreq: 520, vol: 0.5 * v }); tone(200, 0.06, { type: 'square', vol: 0.14 * v, slideTo: 90 }); break;
+      case 'mac': noise(0.06, { freq: 3600, endFreq: 950, vol: 0.5 * v }); tone(310, 0.04, { type: 'square', vol: 0.12 * v, slideTo: 170 }); break;
       case 'rifle': noise(0.16, { freq: 2500, endFreq: 250, vol: 0.6 * v }); tone(150, 0.1, { type: 'sawtooth', vol: 0.2 * v, slideTo: 60 }); break;
+      case 'rifle2': noise(0.12, { freq: 3300, endFreq: 420, vol: 0.55 * v }); tone(190, 0.08, { type: 'sawtooth', vol: 0.17 * v, slideTo: 85 }); break;
+      case 'rifle3': noise(0.14, { freq: 2200, endFreq: 300, vol: 0.62 * v }); tone(130, 0.1, { type: 'sawtooth', vol: 0.22 * v, slideTo: 55 }); break;
       case 'shotgun': noise(0.35, { freq: 1800, endFreq: 120, vol: 0.9 * v }); tone(90, 0.22, { type: 'sawtooth', vol: 0.3 * v, slideTo: 40 }); break;
+      case 'shotgun2': noise(0.42, { freq: 1500, endFreq: 90, vol: 1 * v }); tone(70, 0.28, { type: 'sawtooth', vol: 0.34 * v, slideTo: 32 }); break;
+      case 'shotgun3': noise(0.3, { freq: 2100, endFreq: 150, vol: 0.85 * v }); tone(105, 0.18, { type: 'sawtooth', vol: 0.26 * v, slideTo: 50 }); break;
       case 'sniper': noise(0.55, { freq: 4000, endFreq: 100, vol: 0.9 * v }); tone(70, 0.4, { type: 'sawtooth', vol: 0.3 * v, slideTo: 30 }); break;
+      case 'sniper2': noise(0.4, { freq: 3600, endFreq: 140, vol: 0.8 * v }); tone(92, 0.3, { type: 'sawtooth', vol: 0.26 * v, slideTo: 38 }); break;
+      case 'lmg': noise(0.13, { freq: 2000, endFreq: 200, vol: 0.7 * v }); tone(100, 0.1, { type: 'sawtooth', vol: 0.28 * v, slideTo: 45 }); break;
+      case 'rocket': noise(0.8, { freq: 900, endFreq: 60, vol: 0.9 * v }); tone(58, 0.55, { type: 'sawtooth', vol: 0.36 * v, slideTo: 22 }); noise(0.5, { freq: 3000, endFreq: 300, vol: 0.3 * v, delay: 0.05 }); break;
+      default: noise(0.14, { freq: 3000, endFreq: 400, vol: 0.5 * v });
     }
   },
-  reload() { tone(300, 0.05, { type: 'square', vol: 0.12 }); tone(500, 0.06, { type: 'square', vol: 0.12, delay: 0.35 }); },
+  explosion() { noise(1.1, { freq: 700, endFreq: 40, vol: 1 }); tone(48, 0.8, { type: 'sawtooth', vol: 0.45, slideTo: 18 }); noise(0.5, { freq: 2500, endFreq: 200, vol: 0.5 }); },
+  rack() { tone(170, 0.05, { type: 'square', vol: 0.14 }); tone(260, 0.06, { type: 'square', vol: 0.14, delay: 0.09 }); noise(0.04, { freq: 2200, endFreq: 800, vol: 0.2, delay: 0.09 }); },
+  reload(style = 'mag') {
+    switch (style) {
+      case 'shell': for (let i = 0; i < 4; i++) tone(240 + i * 25, 0.04, { type: 'square', vol: 0.12, delay: 0.25 + i * 0.3 }); tone(160, 0.06, { type: 'square', vol: 0.14, delay: 1.6 }); break;
+      case 'revolver': tone(300, 0.04, { type: 'square', vol: 0.12 }); for (let i = 0; i < 6; i++) tone(420 + i * 18, 0.025, { type: 'square', vol: 0.1, delay: 0.5 + i * 0.22 }); tone(250, 0.05, { type: 'square', vol: 0.14, delay: 2.0 }); break;
+      case 'belt': tone(120, 0.12, { type: 'sawtooth', vol: 0.16 }); noise(0.1, { freq: 1500, endFreq: 500, vol: 0.2, delay: 0.7 }); noise(0.2, { freq: 1800, endFreq: 400, vol: 0.25, delay: 2.4 }); tone(200, 0.08, { type: 'square', vol: 0.16, delay: 3.8 }); break;
+      case 'rocket': tone(140, 0.1, { type: 'sawtooth', vol: 0.2 }); tone(90, 0.12, { type: 'sawtooth', vol: 0.22, delay: 1.2 }); tone(260, 0.07, { type: 'square', vol: 0.16, delay: 2.4 }); break;
+      default: tone(300, 0.05, { type: 'square', vol: 0.12 }); tone(500, 0.06, { type: 'square', vol: 0.12, delay: 0.35 });
+    }
+  },
+  _unusedReload() { tone(300, 0.05, { type: 'square', vol: 0.12 }); tone(500, 0.06, { type: 'square', vol: 0.12, delay: 0.35 }); },
   reloadDone() { tone(420, 0.05, { vol: 0.15 }); tone(640, 0.08, { vol: 0.15, delay: 0.07 }); },
   empty() { if (throttle('empty', 120)) tone(180, 0.04, { vol: 0.12 }); },
   hit() { if (throttle('hit', 30)) noise(0.06, { freq: 1500, endFreq: 500, vol: 0.3, type: 'bandpass' }); },
@@ -88,6 +117,15 @@ sfx.thud = () => { if (throttle('thud', 60)) { noise(0.1, { freq: 500, endFreq: 
 sfx.horn = () => { if (throttle('horn', 250)) { tone(392, 0.35, { type: 'square', vol: 0.12 }); tone(494, 0.35, { type: 'square', vol: 0.1 }); } };
 sfx.crash = (v = 1) => { if (throttle('crash', 120)) { noise(0.35, { freq: 1500, endFreq: 90, vol: Math.min(1, 0.4 + v * 0.5) }); tone(80, 0.25, { type: 'sawtooth', vol: 0.25 * v, slideTo: 40 }); } };
 sfx.doorSlam = () => { if (throttle('slam', 150)) noise(0.12, { freq: 700, endFreq: 150, vol: 0.35 }); };
+// ---- casino
+sfx.card = () => { noise(0.07, { freq: 3200, endFreq: 1400, vol: 0.22, type: 'bandpass' }); };
+sfx.chip = () => { tone(1500, 0.03, { type: 'triangle', vol: 0.14 }); tone(2100, 0.04, { type: 'triangle', vol: 0.1, delay: 0.035 }); };
+sfx.slotTick = () => { if (throttle('slotTick', 40)) tone(900 + Math.random() * 200, 0.02, { type: 'square', vol: 0.05 }); };
+sfx.slotStop = () => { tone(180, 0.08, { type: 'square', vol: 0.16, slideTo: 90 }); noise(0.05, { freq: 900, endFreq: 300, vol: 0.2 }); };
+sfx.diceRoll = () => { for (let i = 0; i < 7; i++) noise(0.04, { freq: 900 + Math.random() * 900, endFreq: 300, vol: 0.2, type: 'bandpass', delay: i * 0.065 }); };
+sfx.win = () => { [523, 659, 784].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.18, delay: i * 0.09 })); };
+sfx.bigWin = () => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, 0.16, { type: 'triangle', vol: 0.2, delay: i * 0.1 })); for (let i = 0; i < 10; i++) tone(1800 + Math.random() * 900, 0.03, { type: 'triangle', vol: 0.08, delay: 0.3 + i * 0.07 }); };
+sfx.lose = () => { tone(220, 0.22, { type: 'sawtooth', vol: 0.14, slideTo: 130 }); tone(165, 0.3, { type: 'sawtooth', vol: 0.12, slideTo: 90, delay: 0.16 }); };
 sfx.phone = () => { if (throttle('phone', 800)) { tone(880, 0.06, { type: 'square', vol: 0.1 }); tone(880, 0.06, { type: 'square', vol: 0.1, delay: 0.1 }); } };
 
 // Looping engine drone driven by speed (0..1) and a looping two-tone siren

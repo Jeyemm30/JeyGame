@@ -1,4 +1,6 @@
 // Procedurally generated pixel-art assets (3/4 "angled top-down" style).
+import { chubbyCell } from './armsArt.js';
+import { SHIRT_BASE, PANTS_BASE, legsFront, legsSide, shoesFront, shoesSide, topFront, topSide, accessories, shoeAccent } from './wearArt.js';
 // Everything is drawn into canvases at boot time, so the game needs no external
 // image files and works fully offline.
 import { mulberry32 } from '../systems/Rng.js';
@@ -17,7 +19,7 @@ export const T = {
   toilet: 40, sink: 41, dresser: 42, locker: 43, stove: 44, rubble: 45,
   // city additions
   counter: 46, hospBed: 47, bars: 48, desk: 49, pump: 50, bench: 51,
-  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, glass: 58, glassCap: 59, shopShelf: 60
+  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, glass: 58, glassCap: 59, shopShelf: 60, graf1: 61, graf2: 62, graf3: 63
 };
 
 // Anything in this set stops movement.
@@ -25,19 +27,19 @@ export const SOLID = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.fence, T.barricade, T.water, T.sandbag,
   T.doorClosed, T.window, T.windowBroken, T.prop, T.tree,
   T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
-  T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf
+  T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.tree, T.barricade, T.sandbag, T.doorClosed,
-  T.fridge, T.shelf, T.locker, T.cabinet, T.glass, T.glassCap
+  T.fridge, T.shelf, T.locker, T.cabinet, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3
 ]);
 // Solid for walking but bullets (and sight) go through.
 export const BULLET_PASS = new Set([
   T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser,
   T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf
 ]);
-export const WALL_FAMILY = new Set([T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap]);
+export const WALL_FAMILY = new Set([T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
 
 export const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
 
@@ -388,8 +390,8 @@ function drawTiles(scene) {
 /* =========================================================== characters */
 export const SKIN_TONES = ['#f1c9a5', '#e0ac7e', '#c68642', '#a0693a', '#7a4a2b', '#4f2f1c'];
 export const HAIR_COLORS = ['#1b1b1b', '#4a2e1a', '#8a4a22', '#d6b25a', '#9a9a9a', '#a8321f', '#2a4a8a', '#ececec'];
-export const CLOTH_COLORS = ['#3a5a8a', '#c0392b', '#2e7d32', '#6d6d6d', '#1d1d1d', '#e8e8e8', '#d4a017', '#6b4b2b', '#4b5320', '#7b3fa0'];
-export const SHOE_COLORS = ['#2a2420', '#e8e8e8', '#6b4b2b', '#1d3a6a', '#a02a2a', '#4b5320'];
+export const CLOTH_COLORS = ['#3a5a8a', '#c0392b', '#2e7d32', '#6d6d6d', '#1d1d1d', '#e8e8e8', '#d4a017', '#6b4b2b', '#4b5320', '#7b3fa0', '#ff7a1a', '#e84a8a', '#2ac0d0', '#f2e04a', '#8a2a2a', '#1f2a5a', '#b8b8b8', '#a8d070', '#c8a878', '#d4af37'];
+export const SHOE_COLORS = ['#2a2420', '#e8e8e8', '#6b4b2b', '#1d3a6a', '#a02a2a', '#4b5320', '#d4af37', '#ff7a1a', '#2ac0d0', '#e84a8a', '#111111', '#7a3ae0', '#6a6a72', '#f2e04a', '#2a8a4a'];
 export const OPTIONS = {
   hair: ['Bald', 'Short', 'Buzz', 'Long', 'Ponytail', 'Mohawk'],
   hat: ['None', 'Baseball Cap', 'Beanie', 'Military Helmet', 'Cowboy Hat'],
@@ -402,7 +404,7 @@ export const OPTIONS = {
 export function defaultAppearance() {
   return {
     skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 0, shirtColor: 2, pants: 0, pantsColor: 0,
-    shoes: 0, shoeColor: 0, backpack: 1, backpackColor: 8
+    shoes: 0, shoeColor: 0, shoeAccent: 1, glasses: 0, watch: 0, necklace: 0, mask: 0, backpack: 1, backpackColor: 8
   };
 }
 
@@ -426,7 +428,7 @@ export const ENEMY_LOOKS = {
 };
 
 function drawChar(c, ox, oy, dir, f, a) {
-  const skin = SKIN_TONES[a.skin];
+  const skin = a.skinHex || SKIN_TONES[a.skin];
   const skinD = shade(skin, -0.2);
   const hairC = HAIR_COLORS[a.hairColor];
   const shirtC = CLOTH_COLORS[a.shirtColor];
@@ -434,10 +436,12 @@ function drawChar(c, ox, oy, dir, f, a) {
   const shoeC = SHOE_COLORS[a.shoeColor];
   const hatC = CLOTH_COLORS[a.hatColor];
   const packC = CLOTH_COLORS[a.backpackColor];
+  const shirtS = SHIRT_BASE[a.shirt] ?? a.shirt;      // styles 4+ start from a base look and add their own details (wearArt.js)
+  const pantsS = PANTS_BASE[a.pants] ?? a.pants;
   const bob = f === 2 || f === 4 || f === 5 || f === 6 || f === 8 ? 1 : 0;
   const liftL = f === 1 ? -2 : f === 6 ? -4 : 0, liftR = f === 3 ? -2 : f === 8 ? -4 : 0;
   const P = (x, y, w, h, col) => R(c, ox + x, oy + y, w, h, col);
-  const longSleeves = a.shirt !== 0;
+  const longSleeves = shirtS !== 0;
   const camo = (x, y, w, h, base) => {
     P(x, y, w, h, base);
     P(x + 1, y + 1, 3, 2, shade(base, -0.3)); P(x + w - 5, y + 2, 4, 2, shade(base, 0.2)); P(x + 3, y + h - 3, 4, 2, shade(base, -0.25));
@@ -453,15 +457,9 @@ function drawChar(c, ox, oy, dir, f, a) {
     const back = dir === 'u';
     // legs
     const legBot = 40;
-    P(11, 29, 5, legBot - 29 + liftL, pantsC); P(17, 29, 5, legBot - 29 + liftR, pantsC);
-    P(11, 29, 1, legBot - 29 + liftL, shade(pantsC, -0.25)); P(21, 29, 1, legBot - 29 + liftR, shade(pantsC, -0.25));
-    if (a.pants === 1) { P(11, 33 + liftL * 0, 2, 4, shade(pantsC, -0.3)); P(20, 33, 2, 4, shade(pantsC, -0.3)); }
-    if (a.pants === 2) { P(12, 32, 3, 2, shade(pantsC, -0.35)); P(18, 35, 3, 2, shade(pantsC, 0.2)); }
+    legsFront(P, a, pantsC, legBot, liftL, liftR, skin);
     // shoes
-    const sh = a.shoes === 1 ? 7 : 4;
-    P(11, legBot + liftL - (sh - 4), 5, sh, shoeC); P(17, legBot + liftR - (sh - 4), 5, sh, shoeC);
-    P(10, legBot + liftL + 4 - 1, 6, 1, shade(shoeC, a.shoes ? -0.4 : 0.6)); P(17, legBot + liftR + 3, 6, 1, shade(shoeC, a.shoes ? -0.4 : 0.6));
-    if (a.shoes === 1) { P(11, legBot + liftL - 3, 5, 1, shade(shoeC, 0.25)); P(17, legBot + liftR - 3, 5, 1, shade(shoeC, 0.25)); }
+    shoesFront(P, a, legBot, liftL, liftR, shoeC, skin, pantsC);
     // backpack (behind torso when seen from front)
     if (!back && a.backpack > 0) {
       const w = a.backpack === 1 ? 2 : 3;
@@ -469,24 +467,25 @@ function drawChar(c, ox, oy, dir, f, a) {
     }
     // torso
     const ty = 15 + bob;
-    if (a.shirt === 3) camo(10, ty, 12, 14, shirtC); else P(10, ty, 12, 14, shirtC);
+    if (shirtS === 3) camo(10, ty, 12, 14, shirtC); else P(10, ty, 12, 14, shirtC);
     P(10, ty, 12, 1, shade(shirtC, 0.25)); P(10, ty, 2, 14, shade(shirtC, -0.15)); P(20, ty, 2, 14, shade(shirtC, -0.25));
     // belt
-    P(10, ty + 12, 12, 2, a.pants === 2 ? '#2a2a22' : '#3a2a1a'); P(15, ty + 12, 2, 2, '#c9b050');
+    P(10, ty + 12, 12, 2, pantsS === 2 ? '#2a2a22' : '#3a2a1a'); P(15, ty + 12, 2, 2, '#c9b050');
     // arms
     const sleeveEnd = longSleeves ? 11 : 6;
-    const armL = (a.shirt === 3) ? shade(shirtC, -0.1) : shirtC;
+    const armL = (shirtS === 3) ? shade(shirtC, -0.1) : shirtC;
     P(7, 16 + bob, 3, sleeveEnd, armL); P(22, 16 + bob, 3, sleeveEnd, armL);
     P(7, 16 + bob + sleeveEnd, 3, 12 - sleeveEnd, skin); P(22, 16 + bob + sleeveEnd, 3, 12 - sleeveEnd, skin);
     if (a.armband && !back) P(7, 20 + bob, 3, 3, a.armband);
     // shirt details
     if (!back) {
-      if (a.shirt === 1) { P(15, ty, 2, 14, shade(shirtC, -0.4)); P(13, ty, 6, 2, shade(shirtC, -0.3)); }
-      if (a.shirt === 2) { P(12, ty - 1, 8, 3, shade(shirtC, -0.2)); P(12, ty + 8, 8, 4, shade(shirtC, -0.2)); P(12, ty + 8, 8, 1, shade(shirtC, -0.4)); }
-      if (a.shirt === 3) { P(12, ty + 3, 3, 3, shade(shirtC, -0.35)); P(17, ty + 3, 3, 3, shade(shirtC, -0.35)); }
+      if (shirtS === 1) { P(15, ty, 2, 14, shade(shirtC, -0.4)); P(13, ty, 6, 2, shade(shirtC, -0.3)); }
+      if (shirtS === 2) { P(12, ty - 1, 8, 3, shade(shirtC, -0.2)); P(12, ty + 8, 8, 4, shade(shirtC, -0.2)); P(12, ty + 8, 8, 1, shade(shirtC, -0.4)); }
+      if (shirtS === 3) { P(12, ty + 3, 3, 3, shade(shirtC, -0.35)); P(17, ty + 3, 3, 3, shade(shirtC, -0.35)); }
     } else {
-      if (a.shirt === 2) P(12, ty - 1, 8, 4, shade(shirtC, -0.2));
+      if (shirtS === 2) P(12, ty - 1, 8, 4, shade(shirtC, -0.2));
     }
+    topFront(P, a, ty, bob, shirtC, skin, back);
     // neck + head
     P(14, 13 + bob, 4, 2, skinD);
     P(11, 3 + bob, 10, 10, skin); P(11, 3 + bob, 1, 10, skinD); P(20, 3 + bob, 1, 10, skinD);
@@ -499,6 +498,7 @@ function drawChar(c, ox, oy, dir, f, a) {
       if (a.hair === 3) { P(10, 2 + hy, 12, 4, hairC); P(9, 4 + hy, 3, 14, hairC); P(20, 4 + hy, 3, 14, hairC); if (back) P(10, 2 + hy, 12, 16, hairC); }
       if (a.hair === 4) { P(10, 2 + hy, 12, 4, hairC); if (back) { P(10, 2 + hy, 12, 9, hairC); P(14, 11 + hy, 4, 9, hairC); } else P(22, 6 + hy, 2, 5, hairC); }
       if (a.hair === 5) { P(14, 0 + hy, 4, 6, hairC); if (back) P(14, 0 + hy, 4, 10, hairC); }
+      if (a.hair === 6) { P(10, 2 + hy, 12, 3, hairC); P(12, 0 + hy, 10, 3, hairC); P(19, 0 + hy, 4, 2, shade(hairC, 0.25)); if (back) P(10, 2 + hy, 12, 7, hairC); else { P(10, 4 + hy, 1, 3, hairC); P(21, 4 + hy, 1, 3, hairC); } }
     }
     if (a.hat > 0) {
       hatFront();
@@ -519,13 +519,8 @@ function drawChar(c, ox, oy, dir, f, a) {
   } else {
     // ---------- side view, facing right ----------
     const s = [0, 2, 0, -2, 0, 0, 4, 0, -4, 0][f] || 0;
-    P(13 - s, 29, 5, 11, shade(pantsC, -0.25)); P(13 - s, 40 - 0, 5, 0, pantsC);
-    P(14 + s, 29, 5, 11, pantsC);
-    if (a.pants === 1) P(15 + s, 33, 3, 4, shade(pantsC, -0.3));
-    if (a.pants === 2) { P(14 + s, 31, 3, 2, shade(pantsC, -0.35)); }
-    const sh = a.shoes === 1 ? 7 : 4;
-    P(13 - s, 40 - (sh - 4), 7, sh, shade(shoeC, -0.15)); P(14 + s, 40 - (sh - 4), 7, sh, shoeC);
-    P(14 + s, 43, 7, 1, shade(shoeC, a.shoes ? -0.4 : 0.6));
+    legsSide(P, a, s, pantsC, skin);
+    shoesSide(P, a, s, shoeC, skin);
     // backpack (on the back = left side)
     if (a.backpack > 0) {
       const big = a.backpack >= 2;
@@ -535,15 +530,16 @@ function drawChar(c, ox, oy, dir, f, a) {
     }
     // torso
     const ty = 15 + bob;
-    if (a.shirt === 3) camo(12, ty, 9, 14, shirtC); else P(12, ty, 9, 14, shirtC);
+    if (shirtS === 3) camo(12, ty, 9, 14, shirtC); else P(12, ty, 9, 14, shirtC);
     P(12, ty, 9, 1, shade(shirtC, 0.25)); P(12, ty, 2, 14, shade(shirtC, -0.2));
-    P(12, ty + 12, 9, 2, a.pants === 2 ? '#2a2a22' : '#3a2a1a');
-    if (a.shirt === 2) { P(18, ty - 1, 3, 3, shade(shirtC, -0.2)); }
+    P(12, ty + 12, 9, 2, pantsS === 2 ? '#2a2a22' : '#3a2a1a');
+    if (shirtS === 2) { P(18, ty - 1, 3, 3, shade(shirtC, -0.2)); }
     // near arm
-    const armL = (a.shirt === 3) ? shade(shirtC, -0.1) : shirtC;
+    const armL = (shirtS === 3) ? shade(shirtC, -0.1) : shirtC;
     P(14, 16 + bob, 4, longSleeves ? 11 : 6, armL); P(14, 16 + bob + (longSleeves ? 11 : 6), 4, 12 - (longSleeves ? 11 : 6), skin);
     P(14, 16 + bob, 1, longSleeves ? 11 : 6, shade(armL, -0.2));
     if (a.armband) P(14, 20 + bob, 4, 3, a.armband);
+    topSide(P, a, ty, bob, shirtC, skin);
     // head
     P(14, 13 + bob, 3, 2, skinD);
     P(12, 3 + bob, 9, 10, skin); P(21, 8 + bob, 2, 3, skin); P(12, 3 + bob, 1, 10, skinD);
@@ -556,15 +552,39 @@ function drawChar(c, ox, oy, dir, f, a) {
       if (a.hair === 3) { P(11, 2 + hy, 10, 4, hairC); P(10, 4 + hy, 6, 14, hairC); }
       if (a.hair === 4) { P(11, 2 + hy, 10, 4, hairC); P(10, 4 + hy, 4, 6, hairC); P(8, 8 + hy, 3, 9, hairC); }
       if (a.hair === 5) { P(13, 0 + hy, 7, 5, hairC); }
+      if (a.hair === 6) { P(11, 2 + hy, 10, 3, hairC); P(13, 0 + hy, 9, 3, hairC); P(11, 4 + hy, 3, 5, hairC); }
     }
     if (a.hat === 1) { P(12, 2, 9, 5, hatC); P(12, 2, 9, 1, shade(hatC, 0.25)); P(20, 6, 6, 2, shade(hatC, -0.25)); }
     if (a.hat === 2) { P(11, 2, 11, 6, hatC); P(11, 6, 11, 2, shade(hatC, -0.25)); P(14, 0, 5, 2, shade(hatC, 0.3)); }
     if (a.hat === 3) { P(11, 1, 11, 8, hatC); P(11, 1, 11, 2, shade(hatC, 0.2)); P(11, 7, 11, 2, shade(hatC, -0.3)); P(20, 8, 3, 1, shade(hatC, -0.4)); }
     if (a.hat === 4) { P(13, 0, 7, 5, hatC); P(13, 3, 7, 1, shade(hatC, -0.4)); P(7, 5, 19, 2, shade(hatC, -0.1)); P(8, 7, 17, 1, shade(hatC, -0.4)); P(7, 5, 19, 1, shade(hatC, 0.2)); }
   }
+  accessories(P, a, dir, bob);
 }
 
 export const CHAR_COLS = 18;
+
+/* Body build post-pass (same idea as chubbyCell): the head keeps its size, everything below the neck is squeezed (slim)
+   or broadened (big). It runs on every frame, so the build survives idle, walk, run, sit, hurt and death poses. */
+function buildCell(c, x0, y0, dir, f, kind) {
+  const tmp = document.createElement('canvas');
+  tmp.width = 32; tmp.height = 48;
+  const t = tmp.getContext('2d');
+  t.imageSmoothingEnabled = false;
+  t.drawImage(c.canvas, x0, y0, 32, 48, 0, 0, 32, 48);
+  c.save();
+  c.beginPath(); c.rect(x0, y0, 32, 48); c.clip();
+  c.imageSmoothingEnabled = false;
+  if (f < 15) {
+    const k = kind === 'slim' ? (f >= 10 ? 0.86 : 0.74) : (f >= 10 ? 1.12 : 1.3);
+    const legK = kind === 'slim' ? (f >= 10 ? 0.9 : 0.8) : (f >= 10 ? 1.06 : 1.16);
+    const neck = 14;        // rows 0..13 = head, left alone
+    c.clearRect(x0, y0 + neck, 32, 48 - neck);
+    c.drawImage(tmp, 0, neck, 32, 16, x0 + 16 - 16 * k, y0 + neck, 32 * k, 16);
+    c.drawImage(tmp, 0, neck + 16, 32, 48 - neck - 16, x0 + 16 - 16 * legK, y0 + neck + 16, 32 * legK, 48 - neck - 16);
+  }
+  c.restore();
+}
 export const CHAR_FRAMES = { idle: 0, walk: 1, breath: 5, run: 6, crouch: 10, hurt: 11, pickup: 12, sit: 13, panic: 14, fall1: 15, fall2: 16, dead: 17 };
 
 function outlineCell(c, x0, y0) {
@@ -618,6 +638,8 @@ export function generateCharacter(scene, key, app) {
     ['d', 'u', 'r'].forEach((dir, row) => {
       for (let f = 0; f < CHAR_COLS; f++) {
         drawPose(c, f * 32, row * 48, dir, f, app);
+        if (app.build === 'chubby') chubbyCell(c, f * 32, row * 48, dir, f);
+        if (app.build === 'slim' || app.build === 'big') buildCell(c, f * 32, row * 48, dir, f, app.build);
         outlineCell(c, f * 32, row * 48);
       }
     });

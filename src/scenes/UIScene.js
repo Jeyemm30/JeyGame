@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
+import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, WEAPON_CATS, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
 import { label, button, fs, uiK } from '../ui/widgets.js';
 import { settings } from '../systems/Settings.js';
 import { sfx } from '../systems/Audio.js';
@@ -56,8 +56,8 @@ export default class UIScene extends Phaser.Scene {
     this.wSub = label(this, wx, 646 + wy, '', 16, '#bcd0b0', 1, 0.5).setDepth(3);
     this.slotIcons = [];
     this.slotKeys = [];
-    ['Z', '1', '2', '3', '4'].forEach((k, i) => {
-      const x = wx - (4 - i) * 62 - 28;
+    ['Z', '1', '2', '3', '4', '5', '6'].forEach((k, i) => {
+      const x = wx - (6 - i) * 58 - 26;
       const ic = this.add.image(x, 692 + wy, 'm_fist').setDepth(3);
       const kt = label(this, x - 26, 674 + wy, k, 12, '#ffffff', 0, 0).setDepth(3);
       this.slotIcons.push(ic);
@@ -90,6 +90,14 @@ export default class UIScene extends Phaser.Scene {
     this.mmHit = this.add.rectangle(MM_X, MM_Y, MM_W, MM_H, 0xffffff, 0.001).setOrigin(0, 0).setDepth(6).setInteractive({ useHandCursor: true });
     this.mmHit.on('pointerup', () => { sfx.click(); this.openMap(); });
     this.mmLabel = label(this, MM_X + MM_W - 4, MM_Y + MM_H - 4, 'MAP', 11, '#ffffff', 1, 1).setDepth(7);
+
+    // compass: the arrow always points world-north
+    this.compass = this.add.container(MM_X + 17, MM_Y + 17).setDepth(4).setScale(0.62);
+    const cbg = this.add.graphics();
+    cbg.fillStyle(0x0e151c, 0.8).fillCircle(0, 0, 21); cbg.lineStyle(2, 0x6b8f5a, 1).strokeCircle(0, 0, 21);
+    cbg.fillStyle(0xe04a3a, 1).fillTriangle(0, -17, -6, 2, 6, 2); cbg.fillStyle(0xd8e2d0, 1).fillTriangle(0, 17, -6, 2, 6, 2);
+    const cn = label(this, 0, -30, 'N', 12, '#ffffff', 0.5, 0.5);
+    this.compass.add([cbg, cn]);
 
     // wanted level (under the minimap)
     this.wantedG = this.add.graphics().setDepth(3);
@@ -217,37 +225,38 @@ export default class UIScene extends Phaser.Scene {
     const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.65).setInteractive();
     const panel = this.add.rectangle(640, 360, 1140, 590, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
     c.add([dim, panel, label(this, 640, 98, 'INVENTORY', 32, '#f2e08a', 0.5, 0.5)]);
-    c.add(label(this, 100, 134, 'FIREARMS (optional)', 17, '#9db890'));
-    c.add(label(this, 470, 134, 'MELEE WEAPONS', 17, '#9db890'));
-    c.add(label(this, 840, 134, 'AMMO RESERVE', 17, '#9db890'));
-    c.add(label(this, 840, 300, 'SUPPLIES', 17, '#9db890'));
+    c.add(label(this, 90, 134, 'FIREARMS  (keys 1-6 pick a class, press again to cycle)', 16, '#9db890'));
+    c.add(label(this, 90, 452, 'MELEE WEAPONS', 16, '#9db890'));
+    c.add(label(this, 840, 134, 'AMMO RESERVE', 16, '#9db890'));
+    c.add(label(this, 840, 392, 'SUPPLIES', 16, '#9db890'));
 
     const mkRow = (id, isMelee, x, y, w, h) => {
       const def = isMelee ? MELEE[id] : WEAPONS[id];
       const bg = this.add.rectangle(x, y, w, h, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
       bg.on('pointerup', () => { if (this.p.weapons[id]) this.p.equip(id); });
-      const icon = this.add.image(x + 12, y + h / 2, isMelee ? def.tex : def.gun).setOrigin(0, 0.5).setScale(isMelee ? 1.0 : 1.2);
-      const name = label(this, x + 76, y + 6, def.name, 16, '#ffffff');
-      const info = label(this, x + 76, y + h - 24, '', 13, '#bcd0b0');
+      const icon = this.add.image(x + 6, y + h / 2, isMelee ? def.tex : def.gun).setOrigin(0, 0.5);
+      icon.setScale(Math.min(1.3, 50 / icon.width));
+      const name = label(this, x + 62, y + 4, def.name, 14, '#ffffff');
+      const info = label(this, x + 62, y + h - 19, '', 11, '#bcd0b0');
       c.add([bg, icon, name, info]);
       return { id, isMelee, bg, icon, name, info };
     };
     this.invRows = [];
-    WEAPON_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, false, 100, 160 + i * 66, 340, 60)));
-    MELEE_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, true, 470, 160 + i * 58, 340, 52)));
+    WEAPON_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, false, 90 + (i % 3) * 236, 158 + Math.floor(i / 3) * 48, 230, 44)));
+    MELEE_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, true, 90 + (i % 4) * 178, 476 + Math.floor(i / 4) * 48, 172, 44)));
 
     this.invAmmo = Object.keys(AMMO_TYPES).map((k, i) => {
-      const t = label(this, 840, 162 + i * 28, '', 15, '#e8f2e0');
+      const t = label(this, 840, 158 + i * 22, '', 14, '#e8f2e0');
       c.add(t);
       return { k, t };
     });
-    this.medText = label(this, 840, 332, '', 16, '#e8f2e0');
-    this.plateText = label(this, 840, 392, '', 16, '#e8f2e0');
-    this.packText = label(this, 840, 450, '', 16, '#e8f2e0');
-    this.statText = label(this, 100, 598, '', 17, '#ffffff');
-    this.questText = label(this, 840, 500, '', 14, '#7aff9a');
-    const useMed = button(this, 1160, 340, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
-    const usePlate = button(this, 1160, 402, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
+    this.medText = label(this, 840, 418, '', 16, '#e8f2e0');
+    this.plateText = label(this, 840, 458, '', 16, '#e8f2e0');
+    this.packText = label(this, 840, 498, '', 16, '#e8f2e0');
+    this.statText = label(this, 90, 606, '', 16, '#ffffff');
+    this.questText = label(this, 840, 532, '', 14, '#7aff9a');
+    const useMed = button(this, 1160, 426, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
+    const usePlate = button(this, 1160, 466, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
     c.add([this.medText, this.plateText, this.packText, this.statText, this.questText, useMed, usePlate]);
     c.add(label(this, 640, 642, this.touchMode ? 'Tap X to close - tap a weapon to equip it' : 'TAB / ESC to close - click a weapon to equip it (Z cycles melee, Q cycles all)', 14, '#7f9a72', 0.5, 0.5));
     c.add(button(this, 1150, 98, 'X', () => this.toggleInventory(), { w: 50, h: 44, size: 22 }));
@@ -262,15 +271,15 @@ export default class UIScene extends Phaser.Scene {
       r.name.setText((r.isMelee ? MELEE[r.id].name : WEAPONS[r.id].name) + (p.current === r.id ? '  *' : ''));
       if (r.isMelee) {
         const w = MELEE[r.id];
-        r.info.setText(own ? `Dmg ${w.dmg}   ${(1000 / w.cd).toFixed(1)}/s` : 'Not found yet');
+        r.info.setText(own ? `Dmg ${w.dmg}  ${(1000 / w.cd).toFixed(1)}/s` : 'Not found yet');
       } else {
         const w = WEAPONS[r.id];
-        r.info.setText(own ? `Mag ${own.mag}/${w.mag}  Res ${p.ammo[w.ammo]}` : 'Not found yet');
+        r.info.setText(own ? `Dmg ${w.damage}${w.pellets > 1 ? 'x' + w.pellets : ''}  ${own.mag}/${w.mag}  Res ${p.ammo[w.ammo]}` : 'Not found yet');
       }
       r.bg.setStrokeStyle(2, own ? (p.current === r.id ? 0xf2e08a : 0x44603c) : 0x2c3a28);
     });
     this.invAmmo.forEach((a) => {
-      a.t.setText(`${AMMO_TYPES[a.k].name.padEnd(12)} ${String(p.ammo[a.k]).padStart(3)} / ${p.ammoCap(a.k)}`);
+      a.t.setText(`${AMMO_TYPES[a.k].name.padEnd(13)} ${String(p.ammo[a.k]).padStart(3)} / ${p.ammoCap(a.k)}`);
     });
     this.medText.setText(`Medkits  ${p.medkits}/${p.medCap()}`);
     this.plateText.setText(`Plates   ${p.plates}/${p.plateCap()}`);
@@ -371,7 +380,7 @@ export default class UIScene extends Phaser.Scene {
     bar(60, 672 + this.bo, 260, 8, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
     this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
     this.arText.setText(String(Math.ceil(p.armor)));
-    this.supplyText.setText(`[H] Medkits ${p.medkits}/${p.medCap()}   [F] Plates ${p.plates}/${p.plateCap()}`);
+    this.supplyText.setText(`[H] Medkits ${p.medkits}/${p.medCap()}   [G] Plates ${p.plates}/${p.plateCap()}`);
     this.supplyText.setY(588 + this.bo).setX(20);
 
     // weapon block
@@ -389,15 +398,22 @@ export default class UIScene extends Phaser.Scene {
     const meleeIcon = p.isMelee ? MELEE[p.current].tex : MELEE[lastMelee].tex;
     this.slotIcons[0].setTexture(meleeIcon).setAlpha(1).setTint(p.isMelee ? 0xf2e08a : 0xffffff);
     this.slotKeys[0].setColor(p.isMelee ? '#f2e08a' : '#ffffff');
-    WEAPON_ORDER.forEach((id, i) => {
-      const own = p.weapons[id];
-      this.slotIcons[i + 1].setTexture(WEAPONS[id].gun).setAlpha(own ? 1 : 0.2).setTint(p.current === id ? 0xf2e08a : 0xffffff);
-      this.slotKeys[i + 1].setColor(p.current === id ? '#f2e08a' : '#ffffff');
+    // one slot per weapon class (keys 1-6): shows the gun you carry / last used in that class
+    this.slotIds = [null];
+    WEAPON_CATS.forEach((cat, i) => {
+      const owned = WEAPON_ORDER.filter((id) => WEAPONS[id].cat === cat.id && p.weapons[id]);
+      const showing = owned.includes(p.current) ? p.current : owned.includes(p.catLast[cat.id]) ? p.catLast[cat.id] : owned[0];
+      const first = WEAPON_ORDER.find((id) => WEAPONS[id].cat === cat.id);
+      const ic = this.slotIcons[i + 1];
+      ic.setTexture(WEAPONS[showing || first].gun).setAlpha(showing ? 1 : 0.2).setTint(p.current === showing ? 0xf2e08a : 0xffffff);
+      ic.setScale(Math.min(1, 40 / ic.width));
+      this.slotKeys[i + 1].setColor(p.current === showing ? '#f2e08a' : '#ffffff');
+      this.slotIds.push(showing || null);
     });
-    for (let i = 0; i < 5; i++) {
-      const x = this.wx - (4 - i) * 62 - 28;
-      const on = i === 0 ? p.isMelee : p.current === WEAPON_ORDER[i - 1];
-      h.lineStyle(2, on ? 0xf2e08a : 0x6b8f5a, on ? 1 : 0.8).strokeRect(x - 28, 674 + this.wy, 56, 36);
+    for (let i = 0; i < 7; i++) {
+      const x = this.wx - (6 - i) * 58 - 26;
+      const on = i === 0 ? p.isMelee : p.current === this.slotIds[i];
+      h.lineStyle(2, on ? 0xf2e08a : 0x6b8f5a, on ? 1 : 0.8).strokeRect(x - 26, 674 + this.wy, 52, 36);
     }
 
     if (p.reloading) {
@@ -410,6 +426,7 @@ export default class UIScene extends Phaser.Scene {
     const secs = Math.floor(g.gt / 1000);
     this.killText.setText(`$${Math.round(profile.money).toLocaleString()}`);
     this.timeText.setText(`${repTitle()} (${profile.rep >= 0 ? '+' : ''}${profile.rep})   ${g.atmo ? `${g.atmo.timeText}${g.atmo.weather === 'clear' ? '' : ' ' + g.atmo.weather}` : ''}`);
+    this.compass.setRotation(g.camRot || 0);
     this.fpsText.setText(settings.fps ? `FPS ${Math.round(this.game.loop.actualFps)}` : '');
     this.zoneText.setText(g.inRestricted(p.x, p.y) ? 'RESTRICTED MILITARY AREA' : '');
     this.stance.setText(p.vehicle ? '' : p.crouching ? 'CROUCHING (quiet)' : p.sprinting ? 'SPRINTING (noisy)' : g.insideBuilding ? 'INSIDE' : '');
@@ -426,7 +443,7 @@ export default class UIScene extends Phaser.Scene {
 
     // prompt / toast
     const it = g.interact;
-    this.prompt.setText(it && !this.invOpen ? (this.touchMode ? it.label : `[E] ${it.label}`) : '');
+    this.prompt.setText(it && !this.invOpen ? (this.touchMode ? it.label : `[F] ${it.label}`) : '');
     if (this.time.now > this.toastUntil) this.toastText.setAlpha(Math.max(0, this.toastText.alpha - 0.05));
     if (p.hp < 30 && !p.dead) this.vignette.setFillStyle(0xff0000, 0.08 + 0.06 * Math.sin(this.time.now / 180));
     if (this.touchMode) this.updateTouch();
@@ -489,7 +506,7 @@ export default class UIScene extends Phaser.Scene {
     const cam = g.cameras.main;
     const wps = g.waypoints().slice(0, 4);
     wps.forEach((w, i) => {
-      const sx = (w.x - cam.worldView.x) * cam.zoom, sy = (w.y - cam.worldView.y) * cam.zoom;
+      const ws2 = g.worldToScreen(w.x, w.y), sx = ws2.x, sy = ws2.y;
       const col = w.kind === 'giver' ? 0x66ccff : w.kind === 'event' ? 0xff9a3a : 0xffd23a;
       const d = Math.round(Math.hypot(w.x - p.x, w.y - p.y) / 16);
       const txt = this.wpTexts[i];

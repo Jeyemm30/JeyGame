@@ -118,7 +118,7 @@ export function runAutotest(game) {
         const sp = gs.freeSpotNear(pump.x, pump.y + 40, 120);
         tp(gs, sp.x, sp.y); gs.enterVehicle(car); car.setPosition(sp.x, sp.y); car.body.reset(sp.x, sp.y);
         car.fuel = 10; car.hp = 60; profile.money = 100;
-        gs.keys.F.isDown = true; await wait(900); gs.keys.F.isDown = false;
+        gs.keys.G.isDown = true; await wait(900); gs.keys.G.isDown = false;
         log('REFUEL: fuel 10 ->', car.fuel.toFixed(1), 'money 100 ->', Math.round(profile.money));
         gs.exitVehicle(true);
       }

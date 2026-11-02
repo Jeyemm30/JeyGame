@@ -22,7 +22,7 @@ export const STORY = [
       { type: 'event', name: 'tut:melee', text: 'Swing your weapon: click, or press SPACE', textTouch: 'Tap HIT' },
       { type: 'event', name: 'tut:map', text: 'Open the world map: press M or click the minimap', textTouch: 'Tap MAP' },
       { type: 'goto', place: 'corner', radius: 90, text: 'Walk to the marked corner' },
-      { type: 'collect', real: 'medkit', at: 'corner', off: [30, 40], text: 'Pick up the medkit on the ground (E)' }
+      { type: 'collect', real: 'medkit', at: 'corner', off: [30, 40], text: 'Pick up the medkit on the ground (F)' }
     ]
   },
   {
@@ -107,7 +107,7 @@ export const STORY = [
     reward: { money: 150, rep: 2 },
     objectives: [
       { type: 'goto', place: 'safehouse', radius: 120, text: 'Go to the marked safehouse' },
-      { type: 'unlock', place: 'safehouse', text: 'Unlock the safehouse door (E)' },
+      { type: 'unlock', place: 'safehouse', text: 'Unlock the safehouse door (F)' },
       { type: 'collect', item: 'q_stash', label: "Rico's stash", tex: 'q_stash', at: 'safeInside', text: 'Search the safehouse' }
     ],
     onComplete: (gs) => { gs.unlockSafehouse(); }
@@ -144,7 +144,7 @@ export const STORY = [
     reward: { money: 100, rep: 3 },
     objectives: [
       { type: 'talk', npc: 'marla', dialogue: 'm12_marla', text: 'Listen to Marla' },
-      { type: 'tail', dialogue: 'm12_shade', text: 'You are being followed - confront the man in the grey hoodie (E)' }
+      { type: 'tail', dialogue: 'm12_shade', text: 'You are being followed - confront the man in the grey hoodie (F)' }
     ]
   },
   {

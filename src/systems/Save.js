@@ -1,6 +1,7 @@
 // localStorage save slots. A save is a plain JSON snapshot; the world itself is deterministic
 // (same seed) so we only store what changed: player, profile, searched containers, taken items ...
 import { profile, loadProfile } from './Profile.js';
+import { resetRound } from './Casino.js';
 
 const KEY = (slot) => `jeygame-save-${slot}`;
 export const SLOTS = 3;
@@ -68,10 +69,11 @@ export function writeSlot(slot, gs) {
 // Stop every gameplay scene and restart the game from a save snapshot (nothing is carried over,
 // so NPCs, vehicles, missions and items are rebuilt once and never duplicated).
 export function loadGameInto(scene, data) {
+  resetRound();                       // a casino round is never carried over a load
   loadProfile(data.profile);
   scene.registry.set('appearance', data.appearance || scene.registry.get('appearance'));
   scene.registry.set('mapMarkers', (data.markers || []).map((m) => ({ ...m })));
-  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Game', 'Menu', 'Character'].forEach((k) => {
+  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Arms', 'Wise', 'Casino', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Game', 'Menu', 'Character'].forEach((k) => {
     try { scene.scene.stop(k); } catch (e) { /* not running */ }
   });
   scene.scene.start('Game', { load: data });

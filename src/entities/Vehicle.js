@@ -8,6 +8,7 @@ export const VEHICLES = {
   van: { name: 'Van', variants: 3, max: 210, acc: 140, brake: 470, steer: 1.8, hp: 140, len: 62, wid: 28, reverse: 0.35, price: 900 },
   ambulance: { name: 'Ambulance', variants: 1, max: 235, acc: 170, brake: 500, steer: 1.9, hp: 130, len: 62, wid: 28, reverse: 0.35, price: 0 },
   truck: { name: 'Truck', variants: 3, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
+  luxury: { name: 'Luxury Sedan', variants: 3, max: 275, acc: 205, brake: 540, steer: 2.4, hp: 110, len: 54, wid: 24, reverse: 0.4, price: 3500 },
   moto: { name: 'Motorcycle', variants: 2, max: 335, acc: 290, brake: 600, steer: 3.3, hp: 60, len: 34, wid: 14, reverse: 0.25, price: 450 }
 };
 
@@ -36,6 +37,8 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.temp = !!spec.temp; // police response cars etc. are cleaned up when far away
     this.mode = spec.mode || 'parked';
     this.route = spec.route || null;
+    this.homePos = { x: spec.x, y: spec.y };
+    this.pilot = null;
     this.routeIdx = 0;
     this.driver = null; // 'player' | 'ai' | null
     this.wrecked = false;
@@ -62,17 +65,25 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   // Four drawn views (side / front / back). The collision box is an axis-aligned rectangle that matches the
   // car's footprint in the current view, and the sprite is tilted by the leftover angle so turns look smooth.
   refreshView(force = false) {
-    const c = Math.cos(this.heading), s = Math.sin(this.heading);
+    // The PICTURE follows the heading as seen on screen (the camera may be rotated); the collision box is an
+    // axis-aligned footprint in WORLD space. The sprite origin sits on the box centre, so they never drift apart.
+    const rot = this.scene.camRot || 0;
+    const sh = this.heading + rot;
+    const sc_ = Math.cos(sh), ss = Math.sin(sh);
     let view, flip = false, base = 0;
-    if (Math.abs(c) >= Math.abs(s)) { view = 's'; flip = c < 0; base = flip ? Math.PI : 0; }
-    else if (s > 0) { view = 'f'; base = Math.PI / 2; }
+    if (Math.abs(sc_) >= Math.abs(ss)) { view = 's'; flip = sc_ < 0; base = flip ? Math.PI : 0; }
+    else if (ss > 0) { view = 'f'; base = Math.PI / 2; }
     else { view = 'b'; base = -Math.PI / 2; }
     this.setFlipX(flip);
-    this.setRotation(Phaser.Math.Clamp(wrap(this.heading - base), -0.75, 0.75) * 0.85);
-    if (view !== this.view || force) {
+    // a small lean between the three drawn views (kept modest: the ground tilt would shear a big one)
+    this.setRotation(Phaser.Math.Clamp(wrap(sh - base), -0.5, 0.5) * 0.7 - rot);
+    this.setScale(1, this.scene.upY || 1);
+    const horiz = Math.abs(Math.cos(this.heading)) >= Math.abs(Math.sin(this.heading));
+    if (view !== this.view || horiz !== this.bodyHoriz || force) {
       this.view = view;
+      this.bodyHoriz = horiz;
       this.setTexture(this.key + view);
-      const horiz = view === 's';
+      this.setOrigin(0.5, 0.78);
       const w = horiz ? this.cfg.len : this.cfg.wid;
       const h = horiz ? this.cfg.wid : this.cfg.len;
       this.body.setSize(w, h);
@@ -93,6 +104,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
 
   wreck(silent = false) {
     this.wrecked = true;
+    this.wreckedAt = this.scene.gt;
     this.speed = 0;
     this.thr = 0;
     this.setVelocity(0, 0);
@@ -117,7 +129,12 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       const impact = Math.abs(this.speed) - Math.abs(act);
       this.speed = act * 0.3;
       if (impact > 40) {
-        this.takeDamage(impact * 0.1);
+        if (this.pilot) { (this.pilot.hitT = this.pilot.hitT || []).push(this.scene.gt); }
+        if (this.pilot) { const P = this.pilot, f0 = P.obs && P.obs.front; (P.stats.crashes = P.stats.crashes || []).push({ at: [Math.round(this.x), Math.round(this.y)], impact: Math.round(impact), spd: Math.round(this.speed), hd: +this.heading.toFixed(2), front: f0 && [f0.kind, Math.round(f0.d)], wp: P.wp[0] && [Math.round(P.wp[0].x), Math.round(P.wp[0].y), P.wp[0].node], rec: !!P.rec, mode: this.mode, cmd: this.cmd && [+this.cmd.throttle.toFixed(2), +this.cmd.steer.toFixed(2)] }); if (P.stats.crashes.length > 5) P.stats.crashes.shift(); }
+        // NPC drivers bump into each other all the time: that dents them but never wrecks them (a wreck would block the lane for good) - unless the player is right there smashing into them
+        const pv = this.scene.player.vehicle;
+        const pnear = pv && pv !== this && Math.hypot(pv.x - this.x, pv.y - this.y) < 140;
+        this.takeDamage(this.driver === 'ai' && !pnear ? Math.min(impact * 0.1, Math.max(0, this.hp - this.maxHp * 0.25)) : impact * 0.1);
         sfx.crash(Math.min(1, impact / 220));
         if (this.driver === 'player') {
           this.scene.cameras.main.shake(140, Math.min(0.01, impact / 30000));
@@ -162,45 +179,270 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.refreshView();
   }
 
-  // Steering / throttle for computer-driven vehicles (patrol routes, traffic, police chase)
+  /* ------------------------------------------------------------------ AI driver
+     Road-aware: wandering traffic / patrols follow the one-way road grid, police chasing route over the road graph
+     (any direction) to the last known position, steer toward upcoming waypoints, slow for corners, brake for cars
+     and people ahead, and run a stop / reverse / turn / replan / reposition recovery when they stop making progress. */
+  beginChase() {
+    if (this.mode === 'chase' || this.wrecked) return;
+    this.baseMode = this.mode;
+    this.mode = 'chase';
+    this.driver = this.driver || 'ai';
+    this.sirenOn = true;
+    this.unloaded = false;
+    this.body.setImmovable(false);
+    if (this.pilot) { this.pilot.wp = []; this.pilot.node = -1; this.pilot.rec = null; }
+  }
+
+  // pursuit is over: go back to patrolling from wherever we are
+  endChase() {
+    if (this.mode !== 'chase') return;
+    this.sirenOn = false;
+    this.mode = 'patrol';
+    this.baseMode = null;
+    this.unloaded = false;
+    this.homePos = { x: this.x, y: this.y };
+    if (this.pilot) { this.pilot.wp = []; this.pilot.node = -1; this.pilot.rec = null; this.pilot.sweep = false; }
+  }
+
+  get cx() { return this.body ? this.body.center.x : this.x; }
+  get cy() { return this.body ? this.body.center.y : this.y; }
+
+  pilotState() {
+    return this.pilot || (this.pilot = {
+      wp: [], goal: null, node: -1, prev: -1, nextPlan: 0, prog: { x: this.cx, y: this.cy, t: -1 }, rec: null, fails: 0,
+      obs: null, obsT: 0, blockT: 0, waitT: 0, avoid: new Set(), avoidUntil: 0, sweep: false, lastFailPos: { x: this.cx, y: this.cy }, stats: { recoveries: 0, repositions: 0 }
+    });
+  }
+
+  // look ahead along the heading for walls, vehicles and people (re-evaluated ~10x / second)
+  probeAhead(now) {
+    const P = this.pilot;
+    if (P.obs && now < P.obsT) return P.obs;
+    P.obsT = now + 90;
+    const sc = this.scene, nav = sc.nav;
+    const c = Math.cos(this.heading), s = Math.sin(this.heading);
+    const look = Math.min(190, 60 + Math.abs(this.speed) * 0.6);
+    const half = Math.max(this.cfg.wid * 0.5, 12) + 1;
+    const hl = this.cfg.len * 0.5;
+    const lane = (lat) => {
+      let best = { d: Infinity, kind: null, ref: null };
+      for (const off of [6, 30, 60, 95, 135, 180]) {
+        if (off > look + 24) break;
+        const d = hl + off;
+        const px = this.cx + c * d - s * lat, py = this.cy + s * d + c * lat;
+        if (sc.solidAt(px, py)) { best = { d: off, kind: 'wall', ref: null }; break; }
+        const a = nav.actorAt(px, py, this, 2);
+        if (a) { best = { d: off, kind: a.kind, ref: a.ref }; break; }
+      }
+      return best;
+    };
+    const front = lane(0);
+    const bw = this.body.width / 2 + 3, bh = this.body.height / 2 + 3;
+    for (const t of [8, 26, 50, 80, 115]) {
+      if (t > look) break;
+      const px = this.cx + c * t, py = this.cy + s * t;
+      if (sc.solidAt(px - bw, py - bh) || sc.solidAt(px + bw, py - bh) || sc.solidAt(px - bw, py + bh) || sc.solidAt(px + bw, py + bh) || sc.solidAt(px, py - bh) || sc.solidAt(px, py + bh) || sc.solidAt(px - bw, py) || sc.solidAt(px + bw, py)) {
+        if (t < front.d + hl) { front.d = Math.max(0, t - 4); front.kind = 'wall'; front.ref = null; }
+        break;
+      }
+    }
+    P.obs = { front, left: lane(-half), right: lane(half) };
+    return P.obs;
+  }
+
+  // wandering traffic / patrols: keep ~3 intersections of path queued on the road grid
+  planWander(now, opt) {
+    const P = this.pilot, nav = this.scene.nav;
+    if (!P.wp.length && P.node < 0) {
+      const A = nav.snapRoad(this.cx, this.cy);
+      const fwdEnd = A.idx % 2 === 0 ? A.b : A.a;
+      const end = fwdEnd >= 0 ? fwdEnd : (A.a >= 0 ? A.a : A.b);
+      P.node = end;
+      P.prev = -1;
+      const n = nav.nodes[end];
+      P.wp.push({ x: n.x, y: n.y, node: end });
+    }
+    if (!P.wp.length) { // after a chase / recovery: pick up the grid again from where we are
+      const n = nav.nearestNode(this.cx, this.cy);
+      P.node = n.id; P.prev = -1;
+      P.wp.push({ x: n.x, y: n.y, node: n.id });
+    }
+    while (P.wp.length < 3) {
+      const last = P.wp[P.wp.length - 1].node;
+      const before = P.wp.length > 1 ? P.wp[P.wp.length - 2].node : P.prev;
+      const nx = nav.nextNode(last, before, opt);
+      const n = nav.nodes[nx];
+      P.wp.push({ x: n.x, y: n.y, node: nx });
+    }
+  }
+
+  planChase(now, pt) {
+    const P = this.pilot, sc = this.scene, nav = sc.nav;
+    P.goal = { x: pt.x, y: pt.y };
+    P.nextPlan = now + (pt.seen ? 1100 : 2400) + Math.random() * 300;
+    const avoid = new Set(P.avoid);
+    sc.otherChaseGoals(this).forEach((id) => avoid.add(id));
+    let wps = nav.route({ x: this.cx, y: this.cy }, pt, { oneWay: false, heading: this.heading, avoid, avoidCost: 420 });
+    if (!wps) wps = [{ x: pt.x, y: pt.y, node: -1 }];
+    P.wp = wps;
+    this.goalNode = wps.goalNode ?? -1;
+  }
+
+  startRecovery(now) {
+    const P = this.pilot, o = P.obs || { left: { d: 99 }, right: { d: 99 } };
+    P.fails++;
+    P.stats.recoveries++;
+    const fo = P.obs && P.obs.front;
+    P.stats.last = { at: [Math.round(this.cx), Math.round(this.cy)], hd: +this.heading.toFixed(2), sp: Math.round(this.speed), front: fo ? [fo.kind, Math.round(fo.d), fo.ref && fo.ref.mode, fo.ref && Math.round(fo.ref.speed || 0)] : null, left: P.obs && [P.obs.left.kind, Math.round(P.obs.left.d)], right: P.obs && [P.obs.right.kind, Math.round(P.obs.right.d)], blockT: Math.round(P.blockT), waitT: Math.round(P.waitT), wp: P.wp[0] && [Math.round(P.wp[0].x), Math.round(P.wp[0].y)], mode: this.mode };
+    (P.stats.log = P.stats.log || []).push(P.stats.last); if (P.stats.log.length > 6) P.stats.log.shift();
+    const side = (o.right.d > o.left.d) ? 1 : (o.right.d < o.left.d ? -1 : (Math.random() < 0.5 ? 1 : -1));
+    P.rec = { phase: 'back', until: now + 800 + Math.min(900, P.fails * 220), fs: side };
+    P.blockT = 0; P.waitT = 0;
+    P.wp = [];                 // force a fresh route afterwards
+    P.nextPlan = 0;
+    if (P.fails >= 3) { // this way keeps failing: steer the next plan away from it for a while
+      const here = this.scene.nav.nearestNode(this.cx, this.cy);
+      P.avoid.add(here.id); P.avoidUntil = now + 20000;
+    }
+    if (P.fails >= 5) this.scene.repositionVehicle(this);
+  }
+
   aiThink(now, dt) {
-    const sc = this.scene;
-    let target = null, cruise = 0.5;
+    const sc = this.scene, nav = sc.nav;
+    if (!nav) { this.cmd = { throttle: 0, steer: 0, handbrake: true }; return; }
+    const P = this.pilotState();
+    if (P.avoid.size && now > P.avoidUntil) P.avoid.clear();
+    let cruise = 0.5, finalTarget = null, wander = false;
+
+    // ---- off the road (after a spin, a bump or a recovery): drive back to the road along a car-sized A* path first
+    if (now >= (P.offT || 0)) {
+      P.offT = now + 650;
+      const A = nav.snapRoad(this.cx, this.cy);
+      const wasLocked = P.locked;
+      if (A.d > 66 && !this.scene.nav.inLot(this.cx, this.cy)) {
+        if (!P.locked || now > (P.offReplan || 0)) {
+          const path = nav.findPath(this.cx, this.cy, A.point.x, A.point.y, 2200, { veh: true });
+          P.offReplan = now + 2200;
+          if (path && path.length) { P.wp = path.map((p) => ({ x: p.x, y: p.y, node: -1 })); P.locked = true; P.noPath = 0; }
+          else { P.noPath = (P.noPath || 0) + 1; P.locked = false; if (P.noPath >= 3 && !P.rec) this.startRecovery(now); }
+        }
+      } else if (A.d < 44) P.locked = false;
+      if (wasLocked && !P.locked) { P.wp = []; P.node = -1; P.goal = null; }
+    }
+
     if (this.mode === 'patrol' || this.mode === 'traffic') {
-      target = this.route[this.routeIdx];
-      if (Math.hypot(target.x - this.x, target.y - this.y) < 80) { this.routeIdx = (this.routeIdx + 1) % this.route.length; target = this.route[this.routeIdx]; }
       cruise = this.mode === 'patrol' ? 0.5 : 0.42;
+      wander = true;
     } else if (this.mode === 'chase') {
-      target = sc.chaseTarget();
       cruise = 0.95;
-      const d = Math.hypot(target.x - this.x, target.y - this.y);
-      if (d < 150 && !this.unloaded) { this.unloaded = true; sc.unloadOfficers(this); }
-      if (this.unloaded && d < 220) { this.cmd = { throttle: -0.3, steer: 0, handbrake: true }; return; }
+      const pt = sc.pursuitTarget(this);
+      const d = Math.hypot(pt.x - this.cx, pt.y - this.cy);
+      if (d < 150 && !this.unloaded && pt.seen) { this.unloaded = true; sc.unloadOfficers(this); }
+      if (this.unloaded && d < 220 && pt.seen) { this.cmd = { throttle: -0.3, steer: 0, handbrake: true }; return; }
+      const wasSweep = P.sweep;
+      P.sweep = !pt.seen && d < 200;           // arrived but cannot see the suspect: cruise the nearby streets
+      if (wasSweep !== P.sweep) { P.wp = []; P.node = -1; }
+      if (P.sweep) { wander = true; cruise = 0.5; }
+      else {
+        finalTarget = pt;
+        const goalMoved = !P.goal || Math.hypot(P.goal.x - pt.x, P.goal.y - pt.y) > 170;
+        if (!P.locked && (!P.wp.length || now > P.nextPlan || goalMoved)) this.planChase(now, pt);
+        // close and clear: drive straight at the target instead of the road centre line
+        if (!P.locked && d < 260 && !P.rec && nav.clearLine(this.cx, this.cy, pt.x, pt.y, 14) && sc.hasLOS(this.cx, this.cy, pt.x, pt.y)) P.wp = [{ x: pt.x, y: pt.y, node: -1 }];
+      }
     } else { this.cmd = { throttle: 0, steer: 0, handbrake: true }; return; }
 
-    const want = Math.atan2(target.y - this.y, target.x - this.x);
-    const diff = wrap(want - this.heading);
-    let steer = Phaser.Math.Clamp(diff * 2.4, -1, 1);
-    const turnSlow = Phaser.Math.Clamp(1 - Math.abs(diff) / 1.6, 0.3, 1);
-    let throttle = this.speed < this.cfg.max * cruise * turnSlow ? 1 : (this.speed > this.cfg.max * cruise * turnSlow + 30 ? -0.4 : 0);
-
-    // look ahead for walls / other vehicles / pedestrians
-    const look = 50 + Math.abs(this.speed) * 0.3;
-    const ahead = (a, d) => ({ x: this.x + Math.cos(this.heading + a) * d, y: this.y + Math.sin(this.heading + a) * d });
-    const blocked = (p) => sc.solidAt(p.x, p.y) || sc.blockedByActor(p.x, p.y, this);
-    if (blocked(ahead(0, look))) {
-      const left = blocked(ahead(-0.7, look)), right = blocked(ahead(0.7, look));
-      steer = left && !right ? 1 : right && !left ? -1 : (diff >= 0 ? 1 : -1);
-      throttle = this.speed > 60 ? -0.7 : 0.25;
+    if (wander && !P.locked) {
+      this.planWander(now, this.mode === 'chase' ? { oneWay: false, home: sc.wanted.lastKnown, homeRadius: 700 } : { oneWay: true, home: this.mode === 'patrol' ? this.homePos : null, homeRadius: 1800 });
     }
-    if (blocked(ahead(0, 30))) throttle = -0.6;
 
-    // stuck? back up for a moment
-    if (now < this.reverseUntil) { throttle = -0.8; steer = -steer || 1; }
-    else if (Math.abs(this.speed) < 8 && throttle > 0) {
-      this.stuckT += dt;
-      if (this.stuckT > 1800) { this.reverseUntil = now + 900; this.stuckT = 0; }
-    } else this.stuckT = 0;
+    // ---- recovery sequence (stop -> reverse -> turn away -> replan)
+    if (P.rec) {
+      const r = P.rec;
+      if (now < r.until && r.phase === 'back') { this.cmd = { throttle: -0.85, steer: -r.fs, handbrake: false }; return; }
+      P.rec = null;
+      P.prog = { x: this.cx, y: this.cy, t: now };
+      if (Math.hypot(this.cx - P.lastFailPos.x, this.cy - P.lastFailPos.y) > 320) P.fails = Math.max(0, P.fails - 1);
+      P.lastFailPos = { x: this.cx, y: this.cy };
+    }
+
+    // ---- repeated collisions (pinned against something the probes cannot see): stop pushing and back out
+    if (P.hitT && P.hitT.length) {
+      P.hitT = P.hitT.filter((t) => now - t < 1600);
+      if (P.hitT.length >= 2) { P.hitT.length = 0; this.startRecovery(now); this.cmd = { throttle: -0.85, steer: 0, handbrake: false }; return; }
+    }
+
+    // ---- waypoint following
+    let wp = P.wp[0];
+    if (!wp) { this.cmd = { throttle: 0, steer: 0, handbrake: false }; return; }
+    const sp = Math.abs(this.speed);
+    const fx = Math.cos(this.heading), fy = Math.sin(this.heading);
+    let dist = Math.hypot(wp.x - this.cx, wp.y - this.cy);
+    for (let guard = 0; guard < 4; guard++) {
+      const reach = wp.node >= 0 ? 52 + sp * 0.14 : 34;
+      const passed = (wp.x - this.cx) * fx + (wp.y - this.cy) * fy < 0 && dist < 120;
+      if (!(dist < reach || passed)) break;
+      if (P.wp.length <= 1 && (!wander || P.locked)) break;       // keep the last waypoint until a new plan replaces it
+      P.prev = wp.node >= 0 ? wp.node : P.prev;
+      P.wp.shift();
+      if (!P.wp.length) break;
+      wp = P.wp[0];
+      dist = Math.hypot(wp.x - this.cx, wp.y - this.cy);
+    }
+    if (!P.wp.length) { this.cmd = { throttle: -0.2, steer: 0, handbrake: false }; return; }
+
+    const want = Math.atan2(wp.y - this.cy, wp.x - this.cx);
+    const diff = wrap(want - this.heading);
+    let steer = Phaser.Math.Clamp(diff * 2.2, -1, 1);
+
+    // slow for the upcoming corner and for sharp heading errors
+    let limit = Phaser.Math.Clamp(1 - Math.abs(diff) / 1.7, 0.3, 1);
+    if (P.wp.length > 1) {
+      const nx = P.wp[1];
+      const ang = Math.abs(wrap(Math.atan2(nx.y - wp.y, nx.x - wp.x) - Math.atan2(wp.y - this.cy, wp.x - this.cx)));
+      limit = Math.min(limit, 1 - 0.62 * Math.min(1, ang / 1.2) * Phaser.Math.Clamp(1.4 - dist / 220, 0, 1));
+    }
+    let target = this.cfg.max * cruise * limit;
+    if (finalTarget && dist < 120 && P.wp.length === 1) target = Math.min(target, 130);
+
+    // ---- obstacles ahead
+    const o = this.probeAhead(now);
+    const f = o.front;
+    let blockedStill = false;
+    if (f.d < Infinity) {
+      const close = Phaser.Math.Clamp(1 - f.d / (70 + sp * 0.5), 0, 1);
+      const mover = f.kind === 'veh' && f.ref && Math.abs(f.ref.speed) > 18 && Math.cos(f.ref.heading - this.heading) > 0.3;
+      if (mover) target = Math.min(target, Math.max(0, Math.abs(f.ref.speed) * 0.92 - (f.d < 40 ? 40 : 0)));
+      else if (f.kind === 'ped' || f.kind === 'player') { target = Math.min(target, f.d < 50 ? 0 : 60 * (1 - close)); blockedStill = f.d < 45; }
+      else {
+        // a wall or a parked / stopped vehicle: swing around it when there is room, otherwise slow right down
+        const room = Math.max(o.left.d, o.right.d);
+        if (room > f.d + 40) { steer = Phaser.Math.Clamp(steer * (1 - close) + (o.left.d > o.right.d ? -1 : 1) * close * 1.1, -1, 1); target = Math.min(target, 95 + 70 * (1 - close)); }
+        else { target = Math.min(target, f.d < 36 ? 0 : 55); blockedStill = f.d < 60; }
+      }
+    }
+    // hugging a wall / vehicle on one side: nudge away
+    if (o.left.d < 22 && o.right.d >= 22) steer = Math.min(1, steer + 0.35);
+    if (o.right.d < 22 && o.left.d >= 22) steer = Math.max(-1, steer - 0.35);
+
+    let throttle = Phaser.Math.Clamp((target - this.speed) / 55, -0.8, 1);
+    if (target < 8 && sp < 10) throttle = 0;
+
+    // ---- progress / stuck detection
+    if (P.prog.t < 0 || now - P.prog.t > 1600) P.prog = { x: this.cx, y: this.cy, t: now };   // first look, or just woke up after a long pause
+    if (now - P.prog.t > 450) {
+      const span = now - P.prog.t;
+      const moved = Math.hypot(this.cx - P.prog.x, this.cy - P.prog.y);
+      if (target > 25 && moved < 7) P.blockT += span;
+      else if (blockedStill && sp < 6) {
+        P.waitT += span;
+        if (f.kind !== 'ped' && f.kind !== 'player' && P.waitT > 1500) P.blockT = 9999;   // a parked car / wall will not move
+        if (P.waitT > 7000) P.blockT = 9999;                                              // nor will a person who stands there forever
+      } else { P.blockT = Math.max(0, P.blockT - 500); P.waitT = 0; }
+      P.prog = { x: this.cx, y: this.cy, t: now };
+    }
+    if (P.blockT > 1100) { this.startRecovery(now); this.cmd = { throttle: -0.85, steer: 0, handbrake: false }; return; }
 
     this.cmd = { throttle, steer, handbrake: false };
   }
@@ -210,19 +452,19 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     if (this.driver || this.mode === 'chase') this.drive(dt);
     else if (this.mode === 'parked' && this.speed !== 0) { this.speed = 0; this.setVelocity(0, 0); }
 
-    const depth = 100 + this.y;
-    if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
+    const depth = this.scene.depthOf(this.x, this.y);
+    if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
     if (!this.wrecked) {
       const f = this.hp / this.maxHp;
       if (f < 0.75) { const c = Math.round(110 + 145 * f); this.setTint(Phaser.Display.Color.GetColor(c, c, c)); } else this.clearTint();
     }
-    if (this.hp < this.maxHp * 0.4 && this.scene.cameras.main.worldView.contains(this.x, this.y)) {
+    if (this.hp < this.maxHp * 0.4 && this.scene.viewRect(60).contains(this.x, this.y)) {
       this.smokeT -= dt;
       if (this.smokeT <= 0) {
         this.smokeT = this.wrecked ? 70 : 140;
         const sc = this.scene;
-        sc.fxSmoke.emitParticleAt(this.x + Phaser.Math.Between(-6, 6), this.y - 22, 1);
-        if (this.wrecked || this.hp < this.maxHp * 0.2) sc.fxFire.emitParticleAt(this.x + Phaser.Math.Between(-5, 5), this.y - 18, 1);
+        sc.emitUp(sc.fxSmoke, this.x + Phaser.Math.Between(-6, 6), this.y + Phaser.Math.Between(-6, 6), 34, 1);
+        if (this.wrecked || this.hp < this.maxHp * 0.2) sc.emitUp(sc.fxFire, this.x + Phaser.Math.Between(-5, 5), this.y + Phaser.Math.Between(-5, 5), 30, 1);
       }
     }
     this.drawLamps();
@@ -231,8 +473,9 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       this.lightR.setVisible(on); this.lightB.setVisible(on);
       if (on) {
         const t = Math.floor(now / 180) % 2;
-        this.lightR.setPosition(this.x - 6, this.y - 33).setAlpha(t ? 1 : 0.2).setDepth(this.depth + 1);
-        this.lightB.setPosition(this.x + 6, this.y - 33).setAlpha(t ? 0.2 : 1).setDepth(this.depth + 1);
+        const sc = this.scene, ro = sc.fromScreen(-6, -45), bo = sc.fromScreen(6, -45);
+        this.lightR.setPosition(this.x + ro.x, this.y + ro.y).setRotation(-sc.camRot).setScale(1, sc.upY).setAlpha(t ? 1 : 0.2).setDepth(this.depth + 0.5);
+        this.lightB.setPosition(this.x + bo.x, this.y + bo.y).setRotation(-sc.camRot).setScale(1, sc.upY).setAlpha(t ? 0.2 : 1).setDepth(this.depth + 0.5);
       }
     }
   }
@@ -240,14 +483,15 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   // brake / reverse lights always, headlights + tail glow in the dark (drawn into one shared graphics)
   drawLamps() {
     const sc = this.scene, gl = sc.lampGfx;
-    if (!gl || this.wrecked || !sc.cameras.main.worldView.contains(this.x, this.y)) return;
+    if (!gl || this.wrecked || !sc.viewRect(60).contains(this.x, this.y)) return;
     const c = Math.cos(this.heading), s = Math.sin(this.heading);
-    const L = this.cfg.len / 2 - 2, Wd = this.cfg.wid * 0.3, lift = this.view === 's' ? 12 : 14;
+    const L = this.cfg.len / 2 - 2, Wd = this.cfg.wid * 0.3, lift = (this.view === 's' ? 12 : 14) + 12;
     const moving = !!this.driver || this.mode === 'chase';
     const braking = moving && ((this.cmd.throttle < 0 && this.speed > 12) || this.cmd.handbrake || (this.cmd.throttle === 0 && Math.abs(this.speed) < 3 && this.driver === 'player'));
     const reversing = moving && this.speed < -8;
     const dark = sc.night || 0;
-    const pt = (along, side) => ({ x: this.x + c * along - s * side, y: this.y + s * along + c * side - lift });
+    const eo = sc.elev(lift);
+    const pt = (along, side) => ({ x: this.x + c * along - s * side + eo.x, y: this.y + s * along + c * side + eo.y });
     const lamp = (p, col, r, a) => { gl.fillStyle(col, a * 0.28).fillCircle(p.x, p.y, r * 2.6); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
     for (const side of [-Wd, Wd]) {
       const rear = pt(-L, side);

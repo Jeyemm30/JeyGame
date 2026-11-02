@@ -3,7 +3,7 @@ import { settings } from './Settings.js';
 // Shared touch-control state. UIScene writes it, GameScene reads it.
 export const touch = {
   detected: false,
-  moveX: 0, moveY: 0,
+  moveX: 0, moveY: 0, rotate: 0,
   aiming: false, aimAngle: 0, firing: false,
   sprint: false, interactHeld: false, refuel: false,
   actions: new Set()
@@ -29,7 +29,7 @@ export function consumeAction(name) {
 }
 
 export function resetTouch() {
-  touch.moveX = touch.moveY = 0;
+  touch.moveX = touch.moveY = 0; touch.rotate = 0;
   touch.aiming = touch.firing = touch.sprint = touch.interactHeld = touch.refuel = false;
   touch.actions.clear();
 }

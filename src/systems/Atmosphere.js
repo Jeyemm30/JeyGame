@@ -36,9 +36,10 @@ export default class Atmosphere {
     this.ov = scene.add.rectangle(640, 360, 7000, 7000, 0xffffff).setScrollFactor(0).setDepth(4995).setBlendMode(Phaser.BlendModes.MULTIPLY);
     this.fogRect = scene.add.rectangle(640, 360, 7000, 7000, 0xcfd6da, 0).setScrollFactor(0).setDepth(4996);
     this.glow = scene.add.graphics().setDepth(4997).setBlendMode(Phaser.BlendModes.ADD);
-    this.rainG = scene.add.graphics().setScrollFactor(0).setDepth(4998);
+    this.rainG = scene.add.graphics().setScrollFactor(0).setDepth(4998).setPosition(640, 360);
     this.drops = Array.from({ length: 170 }, () => ({ x: Math.random() * 1280, y: Math.random() * 720, s: 0.7 + Math.random() * 0.6 }));
     this.lamps = (scene.wd.props || []).filter((p) => p.kind === 'lamp');
+    this.hideLights = [...((scene.wd.hideout && scene.wd.hideout.lights) || []), ...((scene.wd.wise && scene.wd.wise.lights) || []), ...((scene.wd.casino && scene.wd.casino.lights) || [])].map((l, i) => ({ ...l, ph: i * 1.7 }));
     this.flash = 0;
     // puddles on road tiles, drawn only while it is (or just was) raining
     this.puddleG = scene.add.graphics().setDepth(3.1);
@@ -95,7 +96,7 @@ export default class Atmosphere {
     const g = this.puddleG;
     g.clear();
     if (this.wet < 0.05) return;
-    const v = this.scene.cameras.main.worldView;
+    const v = this.scene.viewRect(60);
     for (const p of this.puddles) {
       if (p.x < v.x - 40 || p.x > v.right + 40 || p.y < v.y - 20 || p.y > v.bottom + 20) continue;
       g.fillStyle(0x6a8aa8, 0.32 * this.wet).fillEllipse(p.x, p.y, p.w, p.w * 0.4);
@@ -107,10 +108,25 @@ export default class Atmosphere {
   drawGlow() {
     const g = this.glow;
     g.clear();
+    // the hideout's bare bulbs, neon and fire barrel flicker day and night
+    if (this.hideLights.length) {
+      const vv = this.scene.viewRect(260);
+      const nt = this.scene.night || 0;
+      for (const L of this.hideLights) {
+        if (!vv.contains(L.x, L.y)) continue;
+        const k = this.clock;
+        const on = L.fire || L.steady ? 1 : (Math.sin(k / 130 + L.ph) * Math.sin(k / 47 + L.ph * 2) > -0.6 ? 1 : 0.25);   // sputtering bulbs
+        const s = (L.steady ? 0.35 + 0.65 * nt : 0.55 + 0.45 * nt) * on * (L.fire ? 0.85 + 0.15 * Math.sin(k / 60 + L.ph) : 1);
+        const col = L.col || (L.neon ? 0xff4a8a : L.fire ? 0xff8a30 : 0xffc870);
+        g.fillStyle(col, 0.07 * s).fillEllipse(L.x, L.y, 210, 130);
+        g.fillStyle(col, 0.11 * s).fillEllipse(L.x, L.y, 120, 74);
+        g.fillStyle(col, 0.17 * s).fillEllipse(L.x, L.y, 52, 32);
+      }
+    }
     const night = this.scene.night || 0;
     if (night < 0.12) return;
-    const cam = this.scene.cameras.main, v = cam.worldView;
-    const x0 = v.x - 90, x1 = v.right + 90, y0 = v.y - 40, y1 = v.bottom + 130;
+    const v = this.scene.viewRect(120);
+    const x0 = v.x, x1 = v.right, y0 = v.y, y1 = v.bottom;
     const flick = 0.92 + 0.08 * Math.sin(this.clock / 90);
     for (const p of this.lamps) {
       if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
@@ -118,21 +134,24 @@ export default class Atmosphere {
       g.fillStyle(0xffd27a, 0.07 * a).fillEllipse(p.x, p.y - 4, 190, 120);
       g.fillStyle(0xffd27a, 0.10 * a).fillEllipse(p.x, p.y - 4, 120, 76);
       g.fillStyle(0xffe6a8, 0.16 * a).fillEllipse(p.x, p.y - 4, 56, 36);
-      g.fillStyle(0xfff2c8, 0.9 * a).fillCircle(p.x + 4, p.y - 42, 3);
-      g.fillStyle(0xffd27a, 0.25 * a).fillCircle(p.x + 4, p.y - 42, 9);
+      const ho = this.scene.fromScreen(4, -42);
+      g.fillStyle(0xfff2c8, 0.9 * a).fillCircle(p.x + ho.x, p.y + ho.y, 3);
+      g.fillStyle(0xffd27a, 0.25 * a).fillCircle(p.x + ho.x, p.y + ho.y, 9);
     }
     // soft light around the player so they stay readable in the dark
     const p = this.scene.player;
     if (p && !p.dead) {
       const f = night * (p.vehicle ? 0.5 : 1);
-      g.fillStyle(0xcfe0ff, 0.05 * f).fillEllipse(p.x, p.y - 12, 220, 150);
-      g.fillStyle(0xcfe0ff, 0.06 * f).fillEllipse(p.x, p.y - 12, 120, 80);
+      const po = this.scene.elev(12);
+      g.fillStyle(0xcfe0ff, 0.05 * f).fillEllipse(p.x + po.x, p.y + po.y, 220, 150);
+      g.fillStyle(0xcfe0ff, 0.06 * f).fillEllipse(p.x + po.x, p.y + po.y, 120, 80);
     }
   }
 
   drawRain(dt) {
     const g = this.rainG;
     g.clear();
+    g.setRotation(-this.scene.camRot).setScale(1 / this.scene.cameras.main.zoom, 1 / (this.scene.cameras.main.zoom * (this.scene.TILT || 1)));
     if (this.rain < 0.05) return;
     g.lineStyle(1, 0xc8d6ea, 0.45 * this.rain);
     const n = Math.floor(this.drops.length * this.rain);
@@ -143,7 +162,7 @@ export default class Atmosphere {
       d.y += sp * d.s; d.x -= sp * 0.18 * d.s;
       if (d.y > 740) { d.y = -20; d.x = Math.random() * 1400; }
       if (d.x < -20) d.x += 1300;
-      g.moveTo(d.x, d.y); g.lineTo(d.x - 3, d.y + 11 * d.s);
+      g.moveTo(d.x - 640, d.y - 360); g.lineTo(d.x - 643, d.y - 360 + 11 * d.s);
     }
     g.strokePath();
   }

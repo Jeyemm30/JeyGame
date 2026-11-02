@@ -3,7 +3,7 @@ import { CHAR_FRAMES as F } from '../assets/textures.js';
 /* Pick a sheet frame number for a humanoid.
    s: { moving, speed (px/s), sprint, crouch, hurt, sit, panic, pickup, t (ms walk clock), now (ms) } */
 export function poseFrame(s) {
-  if (s.sit) return F.sit;
+  if (s.sit) return s.cheer ? F.panic : s.lift ? F.pickup : F.sit;      // seated casino guests can still cheer or reach for chips
   if (s.hurt) return F.hurt;
   if (s.pickup) return F.pickup;
   if (s.lean && !s.moving) return F.pickup;

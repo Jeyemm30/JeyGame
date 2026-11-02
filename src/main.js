@@ -10,6 +10,9 @@ import MapScene from './scenes/MapScene.js';
 import DialogueScene from './scenes/DialogueScene.js';
 import MissionsScene from './scenes/MissionsScene.js';
 import ShopScene from './scenes/ShopScene.js';
+import ArmsScene from './scenes/ArmsScene.js';
+import WiseScene from './scenes/WiseScene.js';
+import CasinoScene from './scenes/CasinoScene.js';
 import SaveLoadScene from './scenes/SaveLoadScene.js';
 import CreditsScene from './scenes/CreditsScene.js';
 import EndingScene from './scenes/EndingScene.js';
@@ -34,7 +37,7 @@ const config = {
   fps: { target: 60, smoothStep: true },
   input: { activePointers: 4 },
   // Order matters: later scenes render on top of earlier ones.
-  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene]
+  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene]
 };
 
 window.__game = new Phaser.Game(config);

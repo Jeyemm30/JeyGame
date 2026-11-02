@@ -2,12 +2,21 @@
 // weapons, map icons, roof patterns and street props. Everything is generated in code.
 import { T, R, shade, disc, ellipse, makeCanvas, generateCharacter, randomAppearance } from './textures.js';
 import { mulberry32 } from '../systems/Rng.js';
+import { drawArms, drawGraffitiTiles } from './armsArt.js';
+import { drawWiseArt } from './wiseArt.js';
+import { drawCasinoArt } from './casinoArt.js';
 
 /* ------------------------------------------------------------- outfits */
 // indexes into the option / colour lists in textures.js
 export const ROLE_LOOKS = {
   police: { skin: 1, hair: 2, hairColor: 1, hat: 1, hatColor: 0, shirt: 1, shirtColor: 0, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#d4a017' },
   swat: { skin: 1, hair: 0, hairColor: 0, hat: 3, hatColor: 4, shirt: 3, shirtColor: 4, pants: 2, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 1, backpackColor: 4, armband: '#e8e8e8' },
+  dealer: { skin: 1, hair: 6, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
+  bartender: { skin: 3, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 6, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, necklace: 0 },
+  cashier: { skin: 0, hair: 4, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
+  valet: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 14, shirt: 1, shirtColor: 14, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
+  casino_guard: { skin: 2, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, necklace: 0, backpack: 0, backpackColor: 4, armband: '#c9a227' },
+  casino_guard2: { skin: 3, hair: 0, hairColor: 0, hat: 0, hatColor: 4, shirt: 1, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4, armband: '#c9a227' },
   guard: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 4, shirt: 1, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#e8e8e8' },
   gang: { skin: 3, hair: 2, hairColor: 0, hat: 2, hatColor: 1, shirt: 2, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 4, backpack: 0, backpackColor: 4, armband: '#c0392b' },
   criminal: { skin: 0, hair: 5, hairColor: 2, hat: 0, hatColor: 4, shirt: 2, shirtColor: 3, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 0, backpack: 1, backpackColor: 4, armband: null },
@@ -16,6 +25,9 @@ export const ROLE_LOOKS = {
   msniper: { skin: 1, hair: 2, hairColor: 2, hat: 3, hatColor: 2, shirt: 3, shirtColor: 2, pants: 2, pantsColor: 2, shoes: 1, shoeColor: 5, backpack: 2, backpackColor: 2, armband: '#b02a2a' },
   worker: { skin: 2, hair: 1, hairColor: 1, hat: 3, hatColor: 6, shirt: 0, shirtColor: 6, pants: 1, pantsColor: 7, shoes: 1, shoeColor: 2, backpack: 0, backpackColor: 7, armband: null },
   medic: { skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 5, shirt: 0, shirtColor: 5, pants: 1, pantsColor: 5, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, armband: '#c0392b' },
+  gang2: { skin: 1, hair: 5, hairColor: 2, hat: 0, hatColor: 4, shirt: 1, shirtColor: 1, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#c0392b' },
+  gang3: { skin: 4, hair: 0, hairColor: 0, hat: 1, hatColor: 9, shirt: 2, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 1, backpack: 1, backpackColor: 4, armband: '#c0392b' },
+  gang4: { skin: 2, hair: 3, hairColor: 6, hat: 2, hatColor: 5, shirt: 0, shirtColor: 4, pants: 2, pantsColor: 3, shoes: 1, shoeColor: 4, backpack: 0, backpackColor: 4, armband: '#c0392b' },
   shopkeeper: { skin: 2, hair: 1, hairColor: 4, hat: 0, hatColor: 5, shirt: 0, shirtColor: 1, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, armband: null }
 };
 export const CIV_VARIANTS = 22;
@@ -32,6 +44,10 @@ export const STORY_LOOKS = {
   vance: { skin: 0, hair: 1, hairColor: 4, hat: 0, hatColor: 4, shirt: 1, shirtColor: 4, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#6a6a80' },
   shade: { skin: 4, hair: 0, hairColor: 0, hat: 2, hatColor: 3, shirt: 2, shirtColor: 3, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 0, backpack: 1, backpackColor: 4 },
   brick: { skin: 3, hair: 2, hairColor: 0, hat: 0, hatColor: 0, shirt: 2, shirtColor: 0, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 4, armband: '#2a4a8a' },
+  ezekiel: { skin: 3, hair: 5, hairColor: 6, hat: 0, hatColor: 4, shirt: 4, shirtColor: 10, pants: 5, pantsColor: 18, shoes: 2, shoeColor: 6, shoeAccent: 1, glasses: 3, necklace: 1, watch: 2, backpack: 0, backpackColor: 5, build: 'chubby' },
+  sean: { skin: 1, hair: 6, hairColor: 4, hat: 0, hatColor: 4, shirt: 5, shirtColor: 4, pants: 4, pantsColor: 4, shoes: 2, shoeColor: 1, shoeAccent: 11, glasses: 0, watch: 2, necklace: 2, backpack: 0, backpackColor: 5, build: 'slim', pierceBrow: true, pierceNose: true, pierceLip: true, earring: 1, rings: 1 },
+  jiro: { skin: 0, hair: 3, hairColor: 0, hat: 0, hatColor: 4, shirt: 8, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 0, watch: 3, necklace: 1, backpack: 0, backpackColor: 4, build: 'big', earring: 3, rings: 2 },
+  kenny: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 6, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, build: 'chubby', glasses: true },
   fare: { skin: 1, hair: 1, hairColor: 3, hat: 0, hatColor: 5, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 3, backpack: 2, backpackColor: 9 }
 };
 
@@ -254,6 +270,11 @@ function drawVehicles(scene) {
     mk(`veh_sedan${i}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true));
     mk(`veh_sedan${i}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false));
   });
+  ['#0c0c12', '#d8c8a0', '#5a0f1c'].forEach((col, i) => {     // the casino's valet cars
+    mk(`veh_luxury${i}_s`, 64, 44, (c) => sedanSide(c, col));
+    mk(`veh_luxury${i}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true));
+    mk(`veh_luxury${i}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false));
+  });
   mk('veh_police0_s', 64, 44, (c) => sedanSide(c, '#2a3a5a', true));
   mk('veh_police0_f', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', true, { police: true }));
   mk('veh_police0_b', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', false, { police: true }));
@@ -319,7 +340,7 @@ function drawProps(scene) {
   mk('siren_b', 10, 10, (c) => { disc(c, 5, 5, 5, 'rgba(60,110,255,0.8)'); });
 }
 
-export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'player', 'marker'];
+export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'player', 'marker'];
 function drawIcons(scene) {
   const n = MAP_ICON_NAMES.length;
   const tex = makeCanvas(scene, 'mapicons', 18 * n, 18, (c) => {
@@ -337,6 +358,12 @@ function drawIcons(scene) {
     i = MAP_ICON_NAMES.indexOf('house'); badge(i, '#8a8d92'); R(c, o(i) + 5, 9, 8, 5, '#ffffff'); c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(o(i) + 3, 9); c.lineTo(o(i) + 9, 3); c.lineTo(o(i) + 15, 9); c.closePath(); c.fill();
     i = MAP_ICON_NAMES.indexOf('industrial'); badge(i, '#7a4aa8'); disc(c, o(i) + 9, 9, 4, '#ffffff'); disc(c, o(i) + 9, 9, 2, '#7a4aa8'); R(c, o(i) + 8, 3, 2, 3, '#ffffff'); R(c, o(i) + 8, 12, 2, 3, '#ffffff'); R(c, o(i) + 3, 8, 3, 2, '#ffffff'); R(c, o(i) + 12, 8, 3, 2, '#ffffff');
     i = MAP_ICON_NAMES.indexOf('parking'); badge(i, '#2a6ac8'); R(c, o(i) + 6, 4, 2, 10, '#ffffff'); R(c, o(i) + 6, 4, 6, 2, '#ffffff'); R(c, o(i) + 11, 5, 2, 4, '#ffffff'); R(c, o(i) + 6, 8, 6, 2, '#ffffff');
+    i = MAP_ICON_NAMES.indexOf('kenny'); badge(i, '#e0762a');
+    R(c, o(i) + 3, 7, 11, 3, '#ffffff'); R(c, o(i) + 3, 7, 11, 1, '#ffe8c8'); R(c, o(i) + 4, 10, 3, 4, '#ffffff'); R(c, o(i) + 12, 6, 2, 2, '#ffffff'); R(c, o(i) + 8, 10, 2, 1, '#ffffff');
+    i = MAP_ICON_NAMES.indexOf('wise'); badge(i, '#d83a8a');
+    R(c, o(i) + 4, 8, 9, 5, '#ffffff'); R(c, o(i) + 3, 11, 12, 3, '#ffffff'); R(c, o(i) + 11, 7, 3, 3, '#ffffff'); R(c, o(i) + 3, 13, 12, 1, '#7a1a4a'); R(c, o(i) + 6, 9, 1, 2, '#d83a8a');
+    i = MAP_ICON_NAMES.indexOf('casino'); badge(i, '#8a1a8a');
+    R(c, o(i) + 4, 5, 10, 8, '#ffffff'); R(c, o(i) + 5, 6, 8, 6, '#8a1a8a'); R(c, o(i) + 6, 7, 2, 2, '#ffffff'); R(c, o(i) + 10, 7, 2, 2, '#ffffff'); R(c, o(i) + 8, 9, 2, 2, '#ffffff'); R(c, o(i) + 6, 10, 2, 1, '#ffffff'); R(c, o(i) + 10, 10, 2, 1, '#ffffff');
     i = MAP_ICON_NAMES.indexOf('tower'); badge(i, '#2a9aa8'); R(c, o(i) + 6, 3, 6, 12, '#ffffff'); for (let k = 0; k < 4; k++) R(c, o(i) + 7, 4 + k * 3, 1, 1, '#2a9aa8'), R(c, o(i) + 10, 4 + k * 3, 1, 1, '#2a9aa8');
     i = MAP_ICON_NAMES.indexOf('player'); c.fillStyle = '#101410'; c.beginPath(); c.moveTo(o(i) + 9, 1); c.lineTo(o(i) + 16, 16); c.lineTo(o(i) + 9, 12); c.lineTo(o(i) + 2, 16); c.closePath(); c.fill();
     c.fillStyle = '#40ff70'; c.beginPath(); c.moveTo(o(i) + 9, 3); c.lineTo(o(i) + 14, 14); c.lineTo(o(i) + 9, 11); c.lineTo(o(i) + 4, 14); c.closePath(); c.fill();
@@ -446,6 +473,10 @@ export function generateCityArt(scene) {
   drawProps(scene);
   drawIcons(scene);
   drawRoofPatterns(scene);
+  drawGraffitiTiles(scene);
+  drawArms(scene);
+  drawWiseArt(scene);
+  drawCasinoArt(scene);
   drawQuestIcons(scene);
   Object.keys(STORY_LOOKS).forEach((k) => generateCharacter(scene, 'story_' + k, STORY_LOOKS[k]));
   Object.keys(ROLE_LOOKS).forEach((k) => generateCharacter(scene, 'npc_' + k, ROLE_LOOKS[k]));

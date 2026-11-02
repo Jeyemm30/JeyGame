@@ -3,12 +3,13 @@ import { TILE, MAP_W as W, MAP_H as H } from '../config.js';
 import { button, label } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
 import { touchEnabled } from '../systems/Touch.js';
+import { profile } from '../systems/Profile.js';
 
 const MS = 4; // world-map texture pixels per tile (matches GameScene.buildMapTextures)
 const WORLD_TO_MAP = MS / TILE;
 const LEGEND = [
   ['police', 'Police'], ['hospital', 'Hospital'], ['shop', 'Shops'], ['restaurant', 'Restaurants'], ['gas', 'Gas stations'],
-  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking']
+  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking'], ['wise', 'WISE SOLE'], ['casino', 'Casino']
 ];
 
 // Full-screen world map. It is drawn from the real world data (tiles, buildings, POIs, zones),
@@ -124,10 +125,11 @@ export default class MapScene extends Phaser.Scene {
     this.tipBg = this.add.rectangle(0, 0, 10, 10, 0x000000, 0.8).setOrigin(0, 1).setDepth(D + 4).setVisible(false);
 
     // legend with toggles
-    this.add.rectangle(110, 360, 200, LEGEND.length * 34 + 52, 0x0e151c, 0.88).setStrokeStyle(2, 0x44603c).setDepth(D);
-    label(this, 110, 360 - (LEGEND.length * 34) / 2 - 12, 'LEGEND', 15, '#f2e08a', 0.5, 0.5).setDepth(D + 1);
-    this.legendRows = LEGEND.map(([type, name], i) => {
-      const y = 360 - (LEGEND.length * 34) / 2 + 20 + i * 34;
+    const LG = profile.flags.kennyFound ? LEGEND.concat([['kenny', "Kenny's Arms"]]) : LEGEND;
+    this.add.rectangle(110, 360, 200, LG.length * 34 + 52, 0x0e151c, 0.88).setStrokeStyle(2, 0x44603c).setDepth(D);
+    label(this, 110, 360 - (LG.length * 34) / 2 - 12, 'LEGEND', 15, '#f2e08a', 0.5, 0.5).setDepth(D + 1);
+    this.legendRows = LG.map(([type, name], i) => {
+      const y = 360 - (LG.length * 34) / 2 + 20 + i * 34;
       const count = this.wd.pois.filter((p) => p.type === type).length;
       const icon = this.add.image(32, y, 'mapicons', type).setDepth(D + 1);
       const t = label(this, 52, y, `${name} (${count})`, 14, '#ffffff', 0, 0.5).setDepth(D + 1);
@@ -272,9 +274,11 @@ export default class MapScene extends Phaser.Scene {
     this.playerImg.setRotation(aim + Math.PI / 2);
     const pulse = 1 + 0.12 * Math.sin(time / 180);
     this.playerImg.setScale((pulse * 1.3) / this.zoom);
-    const wv = this.gs.cameras.main.worldView;
+    // what the (possibly rotated) game camera currently sees, as a tilted box on the north-up map
+    const gc = this.gs.cameras.main, gmx = gc.scrollX + gc.width / 2, gmy = gc.scrollY + gc.height / 2, hw = gc.width / 2 / gc.zoom, hh = gc.height / 2 / gc.zoom;
+    const quad = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([sx, sy]) => { const w = this.gs.fromScreen(sx, sy); return { x: (gmx + w.x) * WORLD_TO_MAP, y: (gmy + w.y) * WORLD_TO_MAP }; });
     const fg = this.frameGfx.clear();
-    fg.lineStyle(1.5 / this.zoom, 0xffffff, 0.6).strokeRect(wv.x * WORLD_TO_MAP, wv.y * WORLD_TO_MAP, wv.width * WORLD_TO_MAP, wv.height * WORLD_TO_MAP);
+    fg.lineStyle(1.5 / this.zoom, 0xffffff, 0.6).strokePoints(quad, true);
     const sz = 7 / this.zoom;
     this.gs.waypoints().forEach((w) => {
       const col = w.kind === 'giver' ? 0x66ccff : w.kind === 'event' ? 0xff9a3a : 0xffd23a;

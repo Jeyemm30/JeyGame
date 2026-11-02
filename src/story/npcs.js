@@ -22,6 +22,10 @@ export const STORY_NPCS = {
     name: 'Victor Vance', title: 'Harbor Syndicate boss', color: '#a0a0b8',
     where: (s) => (s.active === 'm10' ? { place: 'yard2', off: [40, 0] } : s.active === 'm11' ? { place: 'park', off: [-90, 50] } : null)
   },
+  kenny: { name: 'Kenny Aquiles', title: 'Weapon dealer', color: '#ffb060', where: () => ({ place: 'kenny', off: [0, 0] }) },
+  ezekiel: { name: 'Ezekiel Blackwell', title: 'WISE SOLE owner', color: '#ffe27a', where: () => ({ place: 'wise', off: [0, 0] }) },
+  sean: { name: 'Sean Whitlock', title: 'Casino host', color: '#8affd8', where: () => ({ place: 'sean', off: [0, 0] }) },
+  jiro: { name: 'Jiro Kurogane', title: 'Card room dealer', color: '#c8a8ff', where: () => ({ place: 'jiro', off: [0, 0] }) },
   shade: { name: 'Shade', title: 'Unknown watcher', color: '#8a8aa0', where: () => null } // spawned by mission 12
 };
 

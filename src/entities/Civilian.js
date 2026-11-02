@@ -18,7 +18,7 @@ const SHOP_TALK = ['Welcome! Take a look around.', 'Do not touch the shelves unl
 export default class Civilian extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const kind = spec.kind;
-    const tex = kind === 'story' ? 'story_' + spec.npcId : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
+    const tex = kind === 'story' ? 'story_' + spec.npcId : kind === 'patron' && spec.role ? 'npc_' + spec.role : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
     super(scene, spec.x, spec.y, tex, 'd0');
     this.kind = kind;
     this.npcId = spec.npcId || null;
@@ -35,6 +35,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.face = Math.random() * Math.PI * 2;
     this.faceGoal = this.face;
     this.state = kind === 'ped' ? 'walk' : kind === 'sit' ? 'sit' : 'idle';
+    // casino guests / staff: a station to keep (act), a seat or post (face), an optional walking route
+    this.act = spec.act || null; this.seated = !!spec.sit; this.sitFace = spec.face; this.seed = spec.seed || 0; this.vip = !!spec.vip; this.poseNow = null;
+    this.route = spec.route || null; this.routeI = 0; this.pChk = 0; this.pPos = { x: spec.x, y: spec.y };
+    if (this.act) { this.state = this.seated ? 'sit' : 'idle'; if (spec.face !== undefined) { this.face = spec.face; this.faceGoal = spec.face; } }
     this.node = spec.node ?? -1;
     this.prevNode = -1;
     this.waitUntil = Math.random() * 3000;
@@ -102,7 +106,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
   takeDamage(n, time, fromPlayer = true) {
     if (this.dead) return;
-    if (this.kind === 'story') return; // named characters cannot be hurt
+    if (this.kind === 'story') { if (this.npcId === 'kenny') this.scene.provokeHideout(this, 340); return; } // named characters cannot be hurt
     this.hp -= n;
     this.hurtUntil = time + 200;
     this.hurtByPlayer = this.hurtByPlayer || fromPlayer;
@@ -163,9 +167,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.moveAngle = a;
     if (time > this.nextStuck) {
       if (Math.hypot(this.x - this.lastPos.x, this.y - this.lastPos.y) < 4 && Math.hypot(dx, dy) > 24) {
+        this.stuckN = (this.stuckN || 0) + 1;
         this.unstickUntil = time + 450;
-        this.unstickAngle = Math.random() * Math.PI * 2;
-      }
+        this.unstickAngle = this.stuckN % 2 ? a + this.avoidSign * (1.2 + Math.random() * 0.8) : Math.random() * Math.PI * 2;
+      } else this.stuckN = 0;
       this.lastPos = { x: this.x, y: this.y };
       this.nextStuck = time + 600;
     }
@@ -195,6 +200,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     if (time < this.knockUntil) { this.setVelocity(this.kvx, this.kvy); this.sync(time, dt); return; }
 
     if (this.kind === 'story') { this.updateStory(time, dt, dist); return; }
+    if (this.act) { this.updatePatron(time, dt, dist); return; }
 
     // scan the player every ~300ms
     if (time > this.nextScan) {
@@ -207,11 +213,65 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       case 'toDoor': this.doToDoor(time, dt); break;
       case 'inside': this.doInside(time); return;
       case 'idle': this.doIdle(time, dt); break;
-      case 'sit': this.stop(); this.turn(Math.PI / 2, 2, dt); break;
+      case 'sit': this.stop(); this.turn(this.sitFace ?? Math.PI / 2, 2, dt); break;
       case 'flee': this.doFlee(time, dt); break;
       case 'phone': this.doPhone(time, dt); break;
       default: this.stop();
     }
+    this.sync(time, dt);
+  }
+
+  /* Casino guests and staff. Each one keeps to an activity at its own station (the reaction beats are staggered by a per-person
+     seed so the room never moves in lockstep), flees like any civilian when a gun or a fight shows up, then goes back to its seat. */
+  updatePatron(time, dt, dist) {
+    if (time > this.nextScan) { this.nextScan = time + 250 + Math.random() * 100; this.scan(time, dist); }
+    if (this.state === 'flee') { this.doFlee(time, dt); this.sync(time, dt); return; }
+    if (this.state === 'phone') { this.doPhone(time, dt); this.sync(time, dt); return; }
+    this.poseNow = null;
+    if (this.act === 'walk' && this.route) { this.patronWalk(time, dt); return; }
+    const away = Math.hypot(this.home.x - this.x, this.home.y - this.y);
+    if (away > 22 && this.state !== 'sit') {                                    // after a scare: walk back to the post
+      this.moveToward(this.home.x, this.home.y, this.walk, time); this.turn(this.moveAngle, 6, dt); this.sync(time, dt); return;
+    }
+    if (this.state === 'idle' && this.seated && away <= 22) { this.state = 'sit'; this.setPosition(this.home.x, this.home.y); }
+    this.stop();
+    const goal = this.sitFace ?? this.face;
+    // somebody close and talking to the hosts / the player: glance at them
+    if (dist < 90 && this.state !== 'sit' && !['slots', 'dealer', 'bartend', 'cashier'].includes(this.act)) this.turn(Math.atan2(this.scene.player.y - this.y, this.scene.player.x - this.x), 2.5, dt);
+    else this.turn(goal, 3, dt);
+    const ph = ((time / 1000) + this.seed * 3.7) % 12, within = (a, b) => ph >= a && ph < b;
+    const odd = this.seed % 2 === 1, third = this.seed % 3;
+    switch (this.act) {
+      case 'slots': if (within(3, 3.7)) this.poseNow = { pickup: true }; else if (within(8, 8.9) && third === 0) this.poseNow = { panic: true }; break;       // pull the lever / cheer
+      case 'cards': if (within(4, 4.7)) this.poseNow = { lift: true }; else if (within(9, 9.9) && odd) this.poseNow = { cheer: true }; break;
+      case 'dice': if (within(2, 2.8)) this.poseNow = { lift: true }; else if (within(7, 7.9) && !odd) this.poseNow = { cheer: true }; break;
+      case 'dealer': if (within(5, 5.8) || within(9, 9.6)) this.poseNow = { pickup: true }; else if (within(0, 4)) this.poseNow = { talk: true }; break;
+      case 'bar': if (within(6, 7)) this.poseNow = { lift: true }; else if (within(0, 4)) this.poseNow = { talk: true }; break;
+      case 'bartend': if (within(4, 5.2)) this.poseNow = { pickup: true }; else if (within(8, 11)) this.poseNow = { talk: true }; break;
+      case 'cashier': if (within(5, 6.2)) this.poseNow = { pickup: true }; break;
+      case 'lounge': case 'chat': if (within(0, 7)) this.poseNow = { talk: true }; break;
+      case 'smoke': if (within(3, 4.2)) this.poseNow = { lift: true }; break;
+      case 'valet': if (within(4, 5)) this.poseNow = { pickup: true }; else if (within(8, 11)) this.poseNow = { talk: true }; break;
+      default: break;
+    }
+    this.sync(time, dt);
+  }
+
+  // walkers go in and out of the front doors and wander the floor along a fixed list of waypoints
+  patronWalk(time, dt) {
+    const r = this.route;
+    if (time < this.waitUntil) { this.stop(); this.turn(this.faceGoal, 3, dt); this.sync(time, dt); return; }
+    const t = r[this.routeI];
+    if (Math.hypot(t.x - this.x, t.y - this.y) < 22) {
+      this.routeI = (this.routeI + 1) % r.length; this.pChk = time;
+      if (Math.random() < 0.45) { this.waitUntil = time + rand(1500, 4500); this.faceGoal = this.face + rand(-1.5, 1.5); }
+      this.sync(time, dt); return;
+    }
+    if (time > this.pChk + 1800) {                                                   // stuck behind something: give up on this waypoint
+      if (Math.hypot(this.pPos.x - this.x, this.pPos.y - this.y) < 8) this.routeI = (this.routeI + 1) % r.length;
+      this.pPos = { x: this.x, y: this.y }; this.pChk = time;
+    }
+    this.moveToward(t.x, t.y, this.walk, time); this.turn(this.moveAngle, 6, dt);
     this.sync(time, dt);
   }
 
@@ -232,10 +292,32 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.sync(time, dt);
   }
 
+  // step out of the way of any vehicle that is heading straight at us
+  dodgeVehicles(time) {
+    const nav = this.scene.nav;
+    if (!nav) return false;
+    for (const v of nav.vehiclesNear(this.x, this.y, 170)) {
+      if (!v.active || Math.abs(v.speed) < 70) continue;
+      const hx = Math.cos(v.heading), hy = Math.sin(v.heading);
+      const rx = this.x - v.x, ry = this.y - v.y;
+      const ahead = rx * hx + ry * hy;
+      const lateral = rx * -hy + ry * hx;
+      if (ahead < 15 || ahead > 165 || Math.abs(lateral) > 46) continue;
+      this.threat = { x: v.x, y: v.y };
+      this.beginFlee(time, 2200);
+      const side = lateral >= 0 ? 1 : -1;
+      this.fleeAng = Math.atan2(hx * side, -hy * side);  // perpendicular to the car's path, away from it
+      this.fleeAngUntil = time + 1300;
+      return true;
+    }
+    return false;
+  }
+
   scan(time, dist) {
     const sc = this.scene;
     const p = sc.player;
     if (this.state === 'flee' || this.state === 'phone' || this.state === 'inside') return;
+    if (this.dodgeVehicles(time)) return;          // any vehicle bearing down on us, whether or not the player is around
     const sees = dist < 200 && sc.hasLOS(this.x, this.y, p.x, p.y);
     if (!sees) return;
     if (dist < 170 && p.weaponDrawn) { this.threat = { x: p.x, y: p.y }; this.beginFlee(time, rand(5000, 8000)); return; }
@@ -267,6 +349,16 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       this.node = next;
       this.target = null;
       if (Math.random() < 0.28) { this.waitUntil = time + rand(1500, 6000); this.faceGoal = this.face + rand(-1.5, 1.5); }
+      return;
+    }
+    // blocked by something (another person, a car, a corner): try another way instead of pushing into it
+    if ((this.stuckN || 0) >= 3) {
+      this.stuckN = 0;
+      const links = nodes[this.node].links;
+      const alt = links.filter((l) => l !== this.node);
+      if (alt.length) { const other = pickOne(alt); this.prevNode = this.node; this.node = other; }
+      this.target = null;
+      this.waitUntil = time + 400;
       return;
     }
     // wait for traffic before stepping onto a road
@@ -339,7 +431,8 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       this.waitUntil = time + rand(1000, 3000);
       return;
     }
-    const away = Math.atan2(this.y - th.y, this.x - th.x) + Math.sin(time / 900 + this.x) * 0.5;
+    let away = Math.atan2(this.y - th.y, this.x - th.x) + Math.sin(time / 900 + this.x) * 0.5;
+    if (this.fleeAng !== undefined && time < this.fleeAngUntil) away = this.fleeAng;
     this.moveToward(this.x + Math.cos(away) * 200, this.y + Math.sin(away) * 200, this.run, time);
     this.turn(this.moveAngle, 8, dt);
   }
@@ -357,25 +450,32 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
   /* -------------------------------------------------------------- display */
   sync(time, dt) {
-    const dir = dirFromAngle(this.face);
+    const sc = this.scene, rot = sc.camRot || 0;
+    const dir = dirFromAngle(this.face + rot);
     const key = dir === 'l' ? 'r' : dir;
     this.setFlipX(dir === 'l');
+    const bg = this.npcId === 'jiro' ? 1.12 : 1;                      // Jiro is noticeably bigger and taller than everybody else
+    this.setRotation(-rot).setScale(bg, sc.upY * bg);
     if (this.moveSpeed > 0) this.animT += dt * (this.moveSpeed / 60);
     this.setFrame(key + poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
-      sit: this.state === 'sit', panic: this.state === 'flee', hurt: time < this.hurtUntil,
-      talk: this.scene.gt < (this.stareUntil || 0),
-      lean: this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44
+      sit: this.state === 'sit', hurt: time < this.hurtUntil,
+      talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
+      pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6)) && this.moveSpeed === 0,
+      panic: this.state === 'flee' || (this.npcId === 'sean' && this.moveSpeed === 0 && Math.floor(time / 1000) % 11 === 2 && time % 1000 < 700) || (this.npcId === 'ezekiel' && this.moveSpeed === 0 && Math.floor(time / 1000) % 9 === 2 && time % 1000 < 650),   // Ezekiel throws his arms up when he is excited about a sneaker       // Kenny counts his cash / reaches under the counter
+      lean: (this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 10 === 8),
+      ...(this.poseNow || {})
     }));
     if (this.kind === 'worker' && this.state !== 'sit') {
       if (!this.carryImg) this.carryImg = this.scene.add.image(0, 0, 'carrybox');
       const sideF = dir === 'r' || dir === 'l';
-      this.carryImg.setVisible(this.visible).setPosition(this.x + (sideF ? (dir === 'r' ? 9 : -9) : 0), this.y - 20 + (Math.floor(this.animT / 120) % 2));
-      this.carryImg.setDepth(100 + this.y + (dir === 'u' ? -1 : 1));
+      const co = sc.fromScreen(sideF ? (dir === 'r' ? 9 : -9) : 0, -20 + (Math.floor(this.animT / 120) % 2));
+      this.carryImg.setVisible(this.visible).setPosition(this.x + co.x, this.y + co.y).setRotation(-rot).setScale(1, sc.upY);
+      this.carryImg.setDepth(sc.depthOf(this.x, this.y, dir === 'u' ? -1 : 1));
     }
-    const depth = 100 + this.y + (this.state === 'sit' ? 14 : 0);
-    if (Math.abs(depth - this.lastDepth) > 0.5) { this.setDepth(depth); this.lastDepth = depth; }
-    this.shadow.setPosition(this.x, this.y + 2);
+    const depth = sc.depthOf(this.x, this.y, this.state === 'sit' ? 14 : 0);
+    if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
+    this.shadow.setPosition(this.x, this.y + 2).setScale(bg);
     if (this.state === 'phone') { this.setTint(0xd8f0ff); this.phoneTint = true; } else if (this.phoneTint) { this.clearTint(); this.phoneTint = false; }
   }
 }
