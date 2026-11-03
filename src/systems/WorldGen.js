@@ -5,6 +5,7 @@
 import { T, SOLID, WALL_FAMILY } from '../assets/textures.js';
 import { MAP_W as W, MAP_H as H, TILE } from '../config.js';
 import { mulberry32 } from './Rng.js';
+import { GANGS, GANG_IDS, BOSSES, memberRole, bossRole, weaponFor } from '../story/gangs.js';
 
 const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 219], [223, 259], [263, 299], [303, 339], [343, 379]];
 const ROWS = [[0, 19], [23, 55], [59, 91], [95, 127], [131, 163], [167, 199], [203, 235], [239, 271]];
@@ -45,7 +46,7 @@ const DISTRICTS = [
 ];
 
 export function generateWorld(seed = 20240) {
-  const rng = mulberry32(seed);
+  let rng = mulberry32(seed);          // (let: the gang hideouts are built at the very end with their own stream, see below)
   const ri = (a, b) => a + Math.floor(rng() * (b - a + 1));
   const pick = (arr) => arr[Math.floor(rng() * arr.length)];
   const ground = Array.from({ length: H }, () => new Array(W).fill(T.grass1));
@@ -55,7 +56,7 @@ export function generateWorld(seed = 20240) {
   const out = {
     ground, obj, crates: [], containers: [], enemies: [], civilians: [], vehicles: [], doors: [], hidden: [], camps: [],
     zones: [], buildings: [], props: [], trees: [], decor: [], items: [], pois: [], nodes: [], districts: [], publicDoors: [],
-    benches: [], houseDoors: [], lots: [], spawn: null
+    benches: [], houseDoors: [], lots: [], rugs: [], spawn: null
   };
 
   const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
@@ -152,11 +153,12 @@ export function generateWorld(seed = 20240) {
 
   /* ------------------------------------------------------------- helpers */
   let buildingId = 0;
+  const homeJobs = [], keepClear = new Set();
   const addPoi = (type, name, x, y, w, h) => out.pois.push({ type, name, x: (x + w / 2) * TILE, y: (y + h / 2) * TILE, tx: x, ty: y, w, h });
   const registerBuilding = (x, y, w, h, style, extra = {}) => {
     const b = {
       id: buildingId++, x, y, w, h, style, colorIdx: extra.colorIdx ?? ri(0, 5), broken: !!extra.abandoned,
-      lift: extra.lift || 0, kind: extra.kind || 'house'
+      lift: extra.lift || 0, kind: extra.kind || 'house', tall: !!extra.tall
     };
     out.buildings.push(b);
     return b;
@@ -244,6 +246,212 @@ export function generateWorld(seed = 20240) {
     }
     registerBuilding(x, y, w, h, o.roof || 'metal', { abandoned: o.abandoned, kind: o.kind || 'warehouse' });
     return { x, y, w, h, free, doors };
+  }
+
+
+  /* ---- house interiors: every house gets a theme (its own furniture styles, colours, floors and decorations). The ORIGINAL furniture
+          placement (and its loot containers) is kept; it is converted into detailed furniture, then decorations are added around it.
+          This uses its own random stream (seeded by the house position), so the rest of the world generates exactly as before. ---- */
+  const HOME_THEMES = {
+    modern: { pal: [0, 0, 1], floor: { living: T.wood, bedroom: T.wood, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [0, 2], plants: 2, art: 3, photos: 0.1, clock: 1, rug: ['hc_rug2', 'hc_rug'], curtain: 0.55, mess: 0.1, pc: 0.8, kc: 1, fr: 1, st: 1, ba: 1, pend: 1, extra: ['aquarium'], kids: false, bath: 'tub' },
+    family: { pal: [1, 1, 5], floor: { living: T.wood, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 0, lamp: [0], plants: 1, art: 2, photos: 0.9, clock: 0, rug: ['hc_rug2'], curtain: 0.7, mess: 0.35, pc: 0.3, kc: 0, fr: 0, st: 0, ba: 0, pend: 0, extra: [], kids: true, bath: 'shower' },
+    luxury: { pal: [2], floor: { living: T.tileFloor, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [2], plants: 3, art: 3, photos: 0.2, clock: 1, rug: ['hc_rug'], curtain: 0.9, mess: 0, pc: 0.5, kc: 2, fr: 1, st: 1, ba: 1, pend: 2, extra: ['piano', 'aquarium'], kids: false, bath: 'tub', palm: true, armchair: true },
+    old: { pal: [3], floor: { living: T.wood, bedroom: T.wood, kitchen: T.wood, bathroom: T.tileFloor }, tv: 1, lamp: [1], plants: 1, art: 2, photos: 0.6, clock: 0, rug: ['hc_rugr', 'hc_rug2'], curtain: 0.85, mess: 0.2, pc: 0, kc: 0, fr: 2, st: 0, ba: 0, pend: 0, extra: ['fireplace'], kids: false, bath: 'tub', armchair: true, shelf: true },
+    poor: { pal: [4], floor: { living: T.wood, bedroom: T.concrete, kitchen: T.concrete, bathroom: T.concrete }, tv: 1, lamp: [], plants: 0, art: 1, photos: 0.2, clock: 0, rug: [], curtain: 0.15, mess: 0.85, pc: 0, kc: 0, fr: 0, st: 0, ba: 0, pend: -1, extra: [], kids: false, bath: 'shower', stain: true, shelf: true },
+    cozy: { pal: [5], floor: { living: T.wood, bedroom: T.carpet, kitchen: T.wood, bathroom: T.tileFloor }, tv: 0, lamp: [0, 2], plants: 3, art: 3, photos: 0.8, clock: 0, rug: ['hc_rugr', 'hc_rug'], curtain: 0.9, mess: 0.25, pc: 0.3, kc: 0, fr: 2, st: 0, ba: 0, pend: 0, extra: [], kids: false, bath: 'tub', armchair: true, shelf: true },
+    large: { pal: [0, 1, 5, 2], floor: { living: T.wood, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [0, 2], plants: 3, art: 3, photos: 0.8, clock: 1, rug: ['hc_rug', 'hc_rug2'], curtain: 0.8, mess: 0.15, pc: 0.8, kc: 1, fr: 1, st: 1, ba: 1, pend: 1, extra: ['piano', 'fireplace'], kids: true, bath: 'tub', armchair: true, shelf: true },
+    apartment: { pal: [0, 1, 5], floor: { living: T.wood, bedroom: T.wood, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 0, lamp: [0], plants: 1, art: 2, photos: 0.4, clock: 1, rug: ['hc_rug2'], curtain: 0.6, mess: 0.3, pc: 0.7, kc: 1, fr: 1, st: 1, ba: 0, pend: 1, extra: [], kids: false, bath: 'shower' },
+    abandoned: { pal: [4], floor: {}, plants: 0, art: 0, photos: 0, clock: 0, rug: [], curtain: 0, mess: 1, pc: 0, kc: 0, fr: 0, st: 0, ba: 0, pend: -1, extra: [], kids: false, bath: 'shower', stain: true }
+  };
+  function decorateHome(c) {
+    const { x, y, w, h, ab, rooms, doorList, entry, o } = c;
+    const hr = mulberry32(((seed * 31 + x * 7919 + y * 104729) >>> 0) || 1);
+    const pickH = (a) => a[Math.floor(hr() * a.length)];
+    let theme;
+    if (ab) theme = 'abandoned';
+    else if (o.wall === T.wall2) theme = 'apartment';
+    else {
+      const r = hr();
+      theme = r < 0.15 ? 'modern' : r < 0.34 ? 'family' : r < 0.44 ? 'luxury' : r < 0.6 ? 'old' : r < 0.7 ? 'poor' : r < 0.86 ? 'cozy' : 'large';
+      if (theme === 'large' && w < 11) theme = 'family';
+    }
+    const TH = HOME_THEMES[theme], p = pickH(TH.pal), messy = hr() < TH.mess;
+    c.theme = theme;
+    const nearDoor = (tx, ty) => doorList.some((d) => cheb(d, { x: tx, y: ty }) <= 1);
+    const inFoot = (tx, ty) => tx >= x && ty >= y && tx < x + w && ty < y + h;
+    const used = new Set(), wallUsed = new Set();
+    const free = (tx, ty) => inFoot(tx, ty) && obj[ty][tx] === -1 && !used.has(ty * W + tx) && !nearDoor(tx, ty) && !keepClear.has(ty * W + tx);
+    const reachN = () => {
+      const seen = new Set([entry.y * W + entry.x]), st = [[entry.x, entry.y]];
+      while (st.length) {
+        const [cx, cy] = st.pop();
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!inFoot(nx, ny) || seen.has(ny * W + nx)) continue;
+          const v = obj[ny][nx];
+          if (SOLID.has(v) && v !== T.doorClosed) continue;
+          seen.add(ny * W + nx); st.push([nx, ny]);
+        }
+      }
+      return seen;
+    };
+    // every loot container in this house must keep at least one reachable side (the world filter would otherwise drop it)
+    const conts = out.containers.filter((q) => inFoot(q.tx, q.ty));
+    const contsOk = (seen) => conts.every((q) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => seen.has((q.ty + dy) * W + q.tx + dx)));
+    let base = reachN().size;
+    const dec = (kind, tx, ty, dx = 0, dy = 32) => out.decor.push({ kind, x: px(tx) + dx, y: ty * TILE + dy });
+    // a solid decoration on one tile: refused if it would cut a room off from the front door
+    // tall furniture (wardrobes, bookshelves, cabinets, fridges, shelves) keeps blocking line of sight like the original tiles did
+    const tallKind = (k) => /^(wardrobe_|bookshelf_|kcab_|storage_shelf_|bcab)/.test(k || '');
+    const solid = (tx, ty, kind, dx = 0, dy = 32) => {
+      if (!free(tx, ty)) return false;
+      obj[ty][tx] = tallKind(kind) ? T.propHigh : T.prop;
+      const sn = reachN();
+      if (sn.size !== base - 1 || !contsOk(sn)) { obj[ty][tx] = -1; return false; }
+      base = sn.size; used.add(ty * W + tx);
+      if (kind) dec(kind, tx, ty, dx, dy);
+      return true;
+    };
+    const solid2 = (tx, ty, kind, dy = 34) => {
+      if (!free(tx, ty) || !free(tx + 1, ty)) return false;
+      obj[ty][tx] = T.prop; obj[ty][tx + 1] = T.prop;
+      const sn = reachN();
+      if (sn.size !== base - 2 || !contsOk(sn)) { obj[ty][tx] = -1; obj[ty][tx + 1] = -1; return false; }
+      base = sn.size; used.add(ty * W + tx); used.add(ty * W + tx + 1);
+      out.decor.push({ kind, x: (tx + 1) * TILE, y: ty * TILE + dy });
+      return true;
+    };
+    const floorItem = (tx, ty, kind, dx = 0, dy = 26) => { if (!free(tx, ty)) return false; used.add(ty * W + tx); dec(kind, tx, ty, dx, dy); return true; };
+    const wallDeco = (tx, ty, kind, dy = 26) => {
+      const k = ty * W + tx, wt = obj[ty - 1] && obj[ty - 1][tx];
+      if (wallUsed.has(k) || (wt !== T.wall && wt !== T.wall2)) return false;
+      wallUsed.add(k); dec(kind, tx, ty, 0, dy); return true;
+    };
+    const rug = (key, cxp, cyp) => out.rugs.push({ key, x: cxp, y: cyp });
+    const tilesOf = (r) => { const a = []; for (let ty = r.y0; ty <= r.y1; ty++) for (let tx = r.x0; tx <= r.x1; tx++) a.push([tx, ty]); return a; };
+    const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(hr() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const edge = (r) => shuf(tilesOf(r).filter(([tx, ty]) => (tx === r.x0 || tx === r.x1 || ty === r.y0) && free(tx, ty)));
+    const topRow = (r) => shuf(tilesOf(r).filter(([tx, ty]) => ty === r.y0 && free(tx, ty) && WALL_FAMILY.has(obj[ty - 1][tx])));
+
+    // floors for the theme
+    if (!ab) rooms.forEach((r) => { const f = TH.floor[r.type]; if (f !== undefined) tilesOf(r).forEach(([tx, ty]) => { ground[ty][tx] = f; }); });
+    const beds = rooms.filter((r) => r.type === 'bedroom');
+    if (TH.kids && beds.length >= 2) beds[beds.length - 1].kid = true;
+
+    /* 1. convert the original tile furniture into detailed, themed furniture (same tiles, same containers) */
+    rooms.forEach((r) => {
+      tilesOf(r).forEach(([tx, ty]) => {
+        const v = obj[ty][tx], k = ty * W + tx;
+        if (used.has(k)) return;
+        const keep = () => { obj[ty][tx] = (v === T.fridge || v === T.shelf || v === T.cabinet) ? T.propHigh : T.prop; used.add(k); };
+        switch (v) {
+          case T.sofa:
+            if (obj[ty][tx + 1] === T.sofa && !used.has(k + 1) && tx + 1 <= r.x1) { keep(); obj[ty][tx + 1] = T.prop; used.add(k + 1); out.decor.push({ kind: ab ? 'sofa_wreck' : 'sofa_' + p, x: (tx + 1) * TILE, y: ty * TILE + 34 }); }
+            else { keep(); dec(ab ? 'chair_wreck' : 'loveseat_' + p, tx, ty, 0, 34); }
+            break;
+          case T.bedHead:
+            if (obj[ty + 1] && obj[ty + 1][tx] === T.bedFoot) { keep(); obj[ty + 1][tx] = T.prop; used.add(k + W); r.bed = { tx, ty }; out.decor.push({ kind: ab ? 'bed_wreck' : r.kid ? 'bedk' : 'bed_' + p, x: px(tx), y: (ty + 1) * TILE + 36 }); }
+            break;
+          case T.table:
+            keep(); dec(ab ? 'debris' : 'dining_' + p, tx, ty, 0, 34);
+            [-1, 1].forEach((d) => { if (obj[ty][tx + d] === T.chair && inFoot(tx + d, ty)) { obj[ty][tx + d] = -1; used.add(k + d); dec(ab ? 'chair_wreck' : 'dchair_' + p, tx + d, ty, 0, 30); } });
+            break;
+          case T.cabinet: keep(); dec(r.type === 'kitchen' ? 'kcab_' + TH.kc : r.type === 'bathroom' ? 'bcab' : 'dresser_' + p, tx, ty, 0, 34); break;
+          case T.fridge: keep(); dec(ab ? 'fridge_open' : 'fridge_' + TH.fr, tx, ty, 0, 34); break;
+          case T.stove: keep(); dec('stove_' + TH.st, tx, ty, 0, 34); break;
+          case T.sink: keep(); if (r.type === 'bathroom') { dec('bsink_' + TH.ba, tx, ty, 0, 34); r.sinkTx = tx; } else dec('ksink', tx, ty, 0, 34); break;
+          case T.toilet: keep(); dec('toilet_' + TH.ba, tx, ty, 0, 34); break;
+          case T.dresser: keep(); dec('dresser_' + p, tx, ty, 0, 34); break;
+          case T.shelf: keep(); dec(r.type === 'storage' ? 'storage_shelf_' + (tx % 2) : 'bookshelf_' + p, tx, ty, 0, 34); break;
+          default: break;
+        }
+      });
+    });
+
+    /* 2. abandoned houses: wrecked, dusty, cobwebs */
+    if (ab) {
+      rooms.forEach((r) => {
+        shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 3).forEach(([tx, ty], i) => floorItem(tx, ty, i % 2 ? 'debris' : 'clutter_' + (i % 3)));
+        topRow(r).slice(0, 2).forEach(([tx, ty], i) => { if (!wallDeco(tx, ty, i ? 'wd_stain' : 'wd_cobweb')) return; });
+        if (r.type === 'kitchen') solid(r.x1, r.y1, 'trash_bin', 0, 30);
+      });
+      return;
+    }
+
+    /* 3. per-room decoration */
+    const living = rooms.find((r) => r.type === 'living');
+    rooms.forEach((r) => {
+      const cxr = Math.floor((r.x0 + r.x1) / 2), cyr = Math.floor((r.y0 + r.y1) / 2), rw = r.x1 - r.x0 + 1, rh = r.y1 - r.y0 + 1;
+      const rugKey = () => (TH.rug.length ? pickH(TH.rug) + '_' + p : null);
+      if (r.type === 'living') {
+        const top = topRow(r);
+        if (top.length) { const [tx, ty] = top.pop(); solid(tx, ty, 'tv_' + TH.tv, 0, 34); }
+        if (top.length) { const [tx, ty] = top.pop(); solid(tx, ty, 'floorlamp_' + pickH(TH.lamp.length ? TH.lamp : [0]), 0, 34); }
+        if (TH.lamp.length === 0) { /* poor: no lamp */ }
+        TH.extra.forEach((e) => {
+          if (e === 'piano') { if (rw >= 6 && hr() < 0.55) { const t2 = topRow(r).find(([tx, ty]) => free(tx + 1, ty)); if (t2) solid2(t2[0], t2[1], 'piano', 36); } }
+          else if (e === 'fireplace') { if (hr() < 0.7) { const t2 = topRow(r); if (t2.length) solid(t2[0][0], t2[0][1], 'fireplace', 0, 36); } }
+          else if (e === 'aquarium') { if (hr() < 0.6) { const t2 = topRow(r); if (t2.length) solid(t2[0][0], t2[0][1], 'aquarium', 0, 34); } }
+        });
+        if (TH.shelf || hr() < 0.5) { const t2 = topRow(r); if (t2.length) solid(t2[0][0], t2[0][1], 'bookshelf_' + p, 0, 34); }
+        if (TH.armchair) { const e = edge(r).filter(([tx, ty]) => ty > r.y0); if (e.length) solid(e[0][0], e[0][1], 'hc_armchair_' + p, 0, 34); }
+        if (rw >= 4 && rh >= 3) solid(cxr, cyr, hr() < 0.5 ? 'coffee_0' : 'coffee_1', 0, 30);
+        for (let i = 0; i < TH.plants; i++) { const e = edge(r); if (e.length) solid(e[0][0], e[0][1], TH.palm ? 'palm_pot' : 'plant_' + Math.floor(hr() * 4), 0, 32); }
+        const rk = rugKey(); if (rk && rw >= 4 && rh >= 3) rug(rk, (cxr + 0.5) * TILE, (cyr + 0.5) * TILE);
+        if (TH.pend >= 0 && rw >= 4) dec('pendant_' + TH.pend, cxr, cyr, 0, 14);
+        if (messy) { shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 2 + Math.floor(hr() * 2)).forEach(([tx, ty]) => floorItem(tx, ty, hr() < 0.4 ? 'toys_' + Math.floor(hr() * 2) : 'clutter_' + Math.floor(hr() * 3))); }
+      } else if (r.type === 'kitchen') {
+        const top = topRow(r);
+        for (let i = 0; i < 2 && top.length; i++) { const [tx, ty] = top.pop(); solid(tx, ty, 'kcab_' + TH.kc, 0, 34); }
+        if (hr() < 0.8) { const e = edge(r).filter(([tx, ty]) => ty > r.y0); if (e.length) solid(e[0][0], e[0][1], 'trash_bin', 0, 30); }
+        if (TH.plants && hr() < 0.5) { const e = edge(r); if (e.length) solid(e[0][0], e[0][1], 'plant_' + Math.floor(hr() * 4), 0, 32); }
+        if (TH.pend >= 0) dec('pendant_' + TH.pend, cxr, cyr, 0, 14);
+        const rk = TH.rug.length && hr() < 0.35 ? 'hc_rug2_' + p : null; if (rk && rw >= 4 && rh >= 3) rug(rk, (cxr + 0.5) * TILE, (cyr + 0.5) * TILE);
+        if (messy) shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 2).forEach(([tx, ty]) => floorItem(tx, ty, 'clutter_' + Math.floor(hr() * 3)));
+      } else if (r.type === 'bedroom') {
+        if (r.bed) {
+          const side = [r.bed.tx - 1, r.bed.tx + 1].filter((tx) => tx >= r.x0 && tx <= r.x1);
+          for (const tx of side) { if (solid(tx, r.bed.ty, r.kid ? 'toybox' : 'nightstand', 0, 34)) break; }
+          const rk = !r.kid && TH.rug.length ? 'hc_rug2_' + p : null;
+          if (rk && rh >= 4 && rw >= 4) rug(rk, (r.bed.tx + (r.bed.tx <= cxr ? 1.8 : -0.8)) * TILE, (r.bed.ty + 1.6) * TILE);
+        }
+        const top = topRow(r);
+        if (top.length) { const [tx, ty] = top.pop(); solid(tx, ty, r.kid ? 'bookshelf_' + p : 'wardrobe_' + p, 0, 34); }
+        if (!r.kid && hr() < TH.pc) { const e = edge(r).filter(([tx, ty]) => ty > r.y0 + 0); if (e.length) { const [tx, ty] = e[0]; if (solid(tx, ty, 'desk_pc_' + Math.floor(hr() * 2), 0, 34)) { [[tx, ty + 1], [tx + (tx === r.x0 ? 1 : -1), ty]].some(([qx, qy]) => floorItem(qx, qy, 'deskchair', 0, 28)); } } }
+        if (r.kid) { shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 3).forEach(([tx, ty], i) => floorItem(tx, ty, 'toys_' + (i % 2))); }
+        if (TH.plants && hr() < 0.6) { const e = edge(r); if (e.length) solid(e[0][0], e[0][1], 'plant_' + Math.floor(hr() * 4), 0, 32); }
+        if (messy) shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 2 + Math.floor(hr() * 2)).forEach(([tx, ty]) => floorItem(tx, ty, 'clutter_' + Math.floor(hr() * 3)));
+        if (TH.armchair && rw >= 5 && hr() < 0.5) { const e = edge(r).filter(([tx, ty]) => ty > r.y0); if (e.length) solid(e[0][0], e[0][1], 'hc_armchair_' + p, 0, 34); }
+      } else if (r.type === 'bathroom') {
+        const top = topRow(r);
+        if (TH.bath === 'tub') { const t2 = top.find(([tx, ty]) => free(tx + 1, ty) && obj[ty - 1][tx + 1] && WALL_FAMILY.has(obj[ty - 1][tx + 1])); if (t2) solid2(t2[0], t2[1], 'bathtub', 36); else if (top.length) solid(top[0][0], top[0][1], 'shower', 0, 36); }
+        else if (top.length) solid(top[0][0], top[0][1], 'shower', 0, 36);
+        topRow(r).slice(0, 1).forEach(([tx, ty]) => wallDeco(tx, ty, 'wd_towel'));
+      } else if (r.type === 'storage') {
+        edge(r).slice(0, 2).forEach(([tx, ty], i) => solid(tx, ty, i ? 'boxes' : 'storage_shelf_' + (tx % 2), 0, 34));
+        shuf(tilesOf(r).filter(([tx, ty]) => free(tx, ty))).slice(0, 1).forEach(([tx, ty]) => floorItem(tx, ty, 'clutter_1'));
+      }
+      // wall pictures, clocks, photographs and shelves above the furniture on the north wall of the room
+      if (r.type !== 'bathroom' && r.type !== 'storage') {
+        const walls = shuf(tilesOf(r).filter(([tx, ty]) => ty === r.y0));
+        let art = Math.min(TH.art, Math.floor(rw / 2));
+        walls.forEach(([tx, ty]) => {
+          if (art > 0 && wallDeco(tx, ty, 'wd_art' + Math.floor(hr() * 3) + '_' + p)) { art--; return; }
+        });
+        if (TH.clock && hr() < 0.6) walls.some(([tx, ty]) => wallDeco(tx, ty, 'wd_clock_' + Math.floor(hr() * 2)));
+        if (hr() < TH.photos) walls.some(([tx, ty]) => wallDeco(tx, ty, 'wd_photos_' + Math.floor(hr() * 2)));
+        if (TH.stain && hr() < 0.5) walls.some(([tx, ty]) => wallDeco(tx, ty, 'wd_stain'));
+        if (TH.shelf && hr() < 0.5) walls.some(([tx, ty]) => wallDeco(tx, ty, 'wd_shelf'));
+      } else if (r.type === 'bathroom' && hr() < 0.6) topRow(r).slice(0, 1).forEach(([tx, ty]) => wallDeco(tx, ty, 'wd_mirror_' + Math.floor(hr() * 2)));
+    });
+
+    /* 4. curtains on the north-wall windows, shoes + coat rack at the front door */
+    for (let tx = x + 1; tx < x + w - 1; tx++) {
+      if (obj[y][tx] === T.window && !used.has((y + 1) * W + tx) && hr() < TH.curtain) out.decor.push({ kind: 'curtain_' + p, x: px(tx), y: (y + 1) * TILE + 10 });
+    }
+    const ey = entry.y;
+    [[entry.x - 2, 'shoes_rack'], [entry.x + 2, 'coat_rack']].forEach(([tx, k]) => { if (hr() < (theme === 'poor' ? 0.5 : 0.85)) solid(tx, ey, k, 0, 30); });
+    if (living && hr() < 0.5) { const t = shuf(tilesOf(living).filter(([tx, ty]) => ty >= living.y1 - 1 && free(tx, ty))); if (t.length) solid(t[0][0], t[0][1], 'trash_bin', 0, 30); }
   }
 
   /* ---- BSP houses and office buildings ---- */
@@ -377,6 +585,8 @@ export function generateWorld(seed = 20240) {
         if (obj[row][xx] === T.wall && !nearDoor(xx, row) && !(row === y + h - 1 && Math.abs(xx - fdx) <= 1)) { obj[row][xx] = -1; ground[row][xx] = T.dirt; }
       }
     }
+
+    if (!o.office) homeJobs.push({ x, y, w, h, ab, rooms, doorList, entry, o });      // decorated at the very end (see below)
 
     // reachability repair for containers
     const seen = new Uint8Array(W * H);
@@ -610,36 +820,81 @@ export function generateWorld(seed = 20240) {
     }
   }
 
-  /* ---- WISE SOLE streetwear boutique (Ezekiel Blackwell): glass front, sneaker wall, racks, mannequins, fitting corner, counter ---- */
+  /* ---- WISE SOLE streetwear boutique (Ezekiel Blackwell), 14 x 13: entrance + welcome area, sneaker wall + shoe islands + limited-edition
+          cases, try-on benches, clothing racks + folded shelves, accessories wall, mannequins, checkout counter, fitting room, backroom ---- */
   function wiseSole(x, y, w, h) {
     fillBuildingShell(x, y, w, h, T.wall2, T.tileFloor);
-    const dx = x + Math.floor(w / 2) - 1, fy = y + h - 1;
-    addDoorTile(dx, fy); addDoorTile(dx + 1, fy);
+    const dx = x + 6, fy = y + h - 1;
+    addDoorTile(dx, fy, true); addDoorTile(dx + 1, fy, true);                       // automatic-style double door, open so customers walk in and out
     placeWindows(x, y, w, h, { windowChance: 1 });
-    for (let yy = y + 2; yy < fy; yy++) for (let xx = x + 1; xx <= x + 4; xx++) ground[yy][xx] = T.carpet;          // fitting corner
-    const put = (tx, ty, idx) => { if (obj[ty][tx] === -1) { obj[ty][tx] = idx; return true; } return false; };
-    for (let xx = x + 1; xx <= x + w - 2; xx++) put(xx, y + 1, T.shopShelf);                                            // sneaker wall
-    const deco = (tx, ty, kind, oy = 30) => { if (put(tx, ty, T.prop)) out.decor.push({ kind, x: px(tx), y: ty * TILE + oy }); };
-    deco(x + 2, y + 2, 'mirror', 34); deco(x + 4, y + 2, 'mirror', 34); deco(x + 4, y + 7, 'curtain', 36);              // mirrors + changing curtain
-    put(x + 2, y + 6, T.bench); put(x + 3, y + 6, T.bench);                                                              // try-on benches
-    deco(x + 7, y + 3, 'clothes_rack', 36); deco(x + 9, y + 3, 'clothes_rack', 36); deco(x + 11, y + 3, 'clothes_rack', 36);
-    deco(x + 6, y + 5, 'mannequin0', 36); deco(x + 8, y + 5, 'mannequin1', 36); deco(x + 5, y + 7, 'mannequin2', 36); deco(x + 11, y + 6, 'mannequin3', 36);
-    deco(x + w - 2, y + 4, 'sneaker_case', 36);                                                                          // premium display
-    deco(x + 1, y + 4, 'poster_board1', 34); deco(x + w - 2, y + 7, 'poster_board2', 34); deco(x + 1, y + 8, 'poster_board0', 34);
-    const cx = x + w - 4;                                                                                                // cashier counter with a gap for the owner
-    put(cx - 2, y + 6, T.counter); put(cx - 1, y + 6, T.counter); put(cx + 1, y + 6, T.counter);
+    const L = (lx) => x + lx, M = (ly) => y + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    const put = (lx, ly, idx) => { if (obj[M(ly)][L(lx)] === -1) { obj[M(ly)][L(lx)] = idx; return true; } return false; };
+    const decor = (kind, xx, yy) => out.decor.push({ kind, x: xx, y: yy });
+    const prop = (lx, ly, kind, dx = 0, dy = 32) => { if (put(lx, ly, T.prop)) decor(kind, cx(lx) + dx, M(ly) * TILE + dy); };
+    const flat = (kind, xx, yy) => out.rugs.push({ key: kind, x: xx, y: yy });
+    // floors: modern tile, carpet in the fitting room and the clothing zone, concrete in the backroom
+    for (let ly = 1; ly <= 11; ly++) for (let lx = 1; lx <= 12; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
+    for (let ly = 5; ly <= 9; ly++) for (let lx = 6; lx <= 11; lx++) ground[M(ly)][L(lx)] = T.carpet;
+    // backroom (top right) behind a door, with stock shelves
+    for (let ly = 1; ly <= 4; ly++) obj[M(ly)][L(8)] = T.wall2;
+    for (let lx = 8; lx <= 12; lx++) obj[M(4)][L(lx)] = T.wall2;
+    obj[M(4)][L(10)] = T.doorClosed; out.doors.push({ x: L(10), y: M(4) });
+    for (let ly = 1; ly <= 3; ly++) for (let lx = 9; lx <= 12; lx++) ground[M(ly)][L(lx)] = T.concrete;
+    [9, 10, 11, 12].forEach((lx) => prop(lx, 1, 'stock_shelf', 0, 34));
+    prop(9, 3, 'box_stack', 0, 34); prop(12, 3, 'box_stack', 0, 34);
+    // fitting room (bottom left): walls, a curtained doorway, mirrors
+    for (let lx = 1; lx <= 4; lx++) obj[M(7)][L(lx)] = T.wall2;
+    for (let ly = 7; ly <= 11; ly++) if (ly !== 9) obj[M(ly)][L(4)] = T.wall2;
+    for (let ly = 8; ly <= 11; ly++) for (let lx = 1; lx <= 3; lx++) ground[M(ly)][L(lx)] = T.carpet;
+    decor('curtain_fit', L(4) * TILE + 16, M(9) * TILE + 30);
+    prop(1, 8, 'mirror_full', 0, 32); prop(3, 8, 'mirror_full', 0, 32);
+    decor('pouf', cx(2), M(10) * TILE + 28); decor('pouf', cx(3), M(11) * TILE + 20);
+    // sneaker wall (back wall) + limited-edition unit
+    prop(1, 1, 'wise_shoewall_0', 32, 34); put(2, 1, T.prop); put(3, 1, T.prop);
+    prop(4, 1, 'wise_shoewall_1', 32, 34); put(5, 1, T.prop); put(6, 1, T.prop);
+    prop(7, 1, 'wise_shoewall_lim', 0, 34);
+    // shoe islands, limited-edition glass plinths, try-on benches
+    const island = (lx, kind) => { if (put(lx, 3, T.prop) && put(lx + 1, 3, T.prop)) decor(kind, L(lx + 1) * TILE, M(3) * TILE + 34); };
+    island(2, 'shoe_island_0'); island(5, 'shoe_island_1');
+    prop(7, 3, 'plinth_0', 0, 34); prop(7, 5, 'plinth_1', 0, 34);
+    decor('shoe_bench', L(3) * TILE, M(5) * TILE + 30); decor('shoe_bench', L(6) * TILE, M(5) * TILE + 30);
+    // accessories along the east wall
+    prop(12, 5, 'acc_caps', 0, 34); prop(12, 6, 'acc_beanies', 0, 34); prop(12, 7, 'acc_case', 0, 34); prop(12, 8, 'acc_bags', 0, 34); prop(12, 9, 'acc_sun', 0, 34);
+    prop(1, 5, 'shelf_folded_0', 0, 34); prop(1, 6, 'shelf_folded_1', 0, 34);
+    // clothing racks + mannequins
+    prop(9, 6, 'rack_hoodies', 0, 34); prop(11, 6, 'rack_jackets', 0, 34); prop(9, 8, 'rack_jeans', 0, 34); prop(11, 8, 'rack_tees', 0, 34);
+    prop(7, 7, 'mannequin4', 0, 34); prop(5, 8, 'mannequin5', 0, 34); prop(8, 10 - 1, 'mannequin6', 0, 34);
+    // checkout: counter with register + monitor + bags, owner at the east end
+    for (let lx = 8; lx <= 10; lx++) put(lx, 10, T.prop);
+    decor('wise_counter', L(9) * TILE + 16, M(10) * TILE + 36);
+    decor('shop_bags', cx(11) + 6, M(10) * TILE + 30);
+    // decor: logo + posters on the backroom wall, plants, armchair-style poufs, rug, ceiling track lights
+    decor('wise_logo_wall', L(10) * TILE + 16, M(5) * TILE + 38);
+    decor('ad_poster_0', cx(8) - 2, M(5) * TILE + 26); decor('ad_poster_1', cx(12) + 2, M(5) * TILE + 26);
+    prop(5, 6, 'palm_pot', 0, 34); prop(12, 11, 'palm_pot', 0, 34);
+    decor('pouf', cx(5) + 6, M(11) * TILE + 24);
+    flat('wise_rug', L(8) * TILE + 16, M(7) * TILE + 16);
+    [[4, 4], [9, 7], [9, 10], [3, 9]].forEach(([lx, ly]) => decor('pend_track', L(lx) * TILE + 16, M(ly) * TILE + 6));
     registerBuilding(x, y, w, h, 'shingle', { kind: 'shop' });
     addPoi('wise', 'WISE SOLE', x, y, w, h);
     publicDoor(dx, fy, 'shop', 'WISE SOLE');
-    // street dressing: planters, poster boards, a bench
     [[dx - 3, y + h + 1, 'poster_board0'], [dx + 4, y + h + 1, 'poster_board1'], [x + 1, y + h + 1, 'planter'], [x + w - 2, y + h + 1, 'planter'], [dx + 6, y + h + 1, 'poster_board2']].forEach(([tx, ty, k]) => { if (inb(tx, ty) && obj[ty][tx] === -1) out.decor.push({ kind: k, x: px(tx), y: ty * TILE + 30 }); });
+    // customers: browsing, trying shoes on, at the racks, paying, walking in and out
+    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, ...extra });
+    pat(2, 4, 'shoe', { face: -Math.PI / 2, seed: 1 }); pat(6, 4, 'shoe', { face: -Math.PI / 2, seed: 4 });
+    pat(3, 5, 'tryon', { sit: true, face: -Math.PI / 2, seed: 2 }); pat(5, 5, 'tryon', { sit: true, face: -Math.PI / 2, seed: 5 });
+    pat(10, 7, 'clothes', { face: -Math.PI / 2, seed: 3 }); pat(8, 6, 'clothes', { face: 0, seed: 6 });
+    pat(9, 11, 'pay', { face: -Math.PI / 2, seed: 7 });
+    const door = { x: (dx + 1) * TILE, y: (fy + 1) * TILE };
+    out.civilians.push({ x: cx(10), y: cy(7), kind: 'patron', act: 'walk', seed: 1, route: [{ x: cx(8), y: cy(7) }, { x: cx(7), y: cy(4) }, { x: cx(10), y: cy(7) }, { x: cx(7), y: cy(9) }] });
+    out.civilians.push({ x: door.x, y: door.y + 70, kind: 'patron', act: 'walk', seed: 2, route: [{ x: door.x, y: door.y + 70 }, { x: door.x, y: door.y }, { x: cx(7), y: cy(8) }, { x: cx(4), y: cy(4) }, { x: cx(9), y: cy(7) }, { x: door.x, y: door.y - 4 }, { x: door.x, y: door.y + 70 }] });
+    const lt = (xx, yy, col, extra = {}) => ({ x: xx, y: yy, steady: true, col, ...extra });
     out.wise = {
       door: { x: (dx + 1) * TILE, y: (fy + 1) * TILE },
-      owner: { x: px(cx), y: px(y + 5) },
-      lights: [{ x: px(x + 4), y: px(y + 3), steady: true, col: 0xffd0f0 }, { x: px(x + 9), y: px(y + 3), steady: true, col: 0xffe8c0 }, { x: px(x + 6), y: px(y + 8), steady: true, col: 0xc8e8ff }, { x: px(x + w - 2), y: px(y + 4), steady: true, col: 0xffd870 }, { x: px(dx), y: (fy + 1) * TILE + 6, steady: true, col: 0xff5aa0, neon: true }]
+      owner: { x: cx(11), y: cy(10) },
+      lights: [lt(cx(3), cy(3), 0xffd0f0), lt(cx(6), cy(3), 0xc8e8ff), lt(cx(7), cy(3), 0xffd870, { neon: true }), lt(cx(10), cy(7), 0xffe8c0), lt(cx(9), cy(10), 0xffe0f0), lt(cx(11), cy(2), 0xfff0d0), lt(cx(2), cy(10), 0xffa8d8), lt(cx(12), cy(7), 0xffd870), lt(cx(8), cy(5), 0xff5aa0, { neon: true }), lt(dx * TILE + 32, (fy + 1) * TILE + 6, 0xff5aa0, { neon: true })]
     };
   }
-
 
   /* ---- THE CASINO: a landmark east of the river. Glass front + neon sign, valet plaza with luxury cars, and a full interior:
           reception, gambling floor (slots, blackjack, poker dice), lounge, bar, cashier, VIP room, security office, restrooms ---- */
@@ -781,7 +1036,7 @@ export function generateWorld(seed = 20240) {
     const bottoms = [iy0 + 9, iy1 - 2];
     bottoms.forEach((bottom, rowI) => {
       let x = ix0;
-      if (b.c === 2 && b.r === 3 && rowI === 1) { wiseSole(x, bottom - 9, 14, 10); x += 15; }     // WISE SOLE opens at the west end of Market Street
+      if (b.c === 2 && b.r === 3 && rowI === 1) { wiseSole(x, bottom - 12, 14, 13); x += 15; }     // WISE SOLE opens at the west end of Market Street
       while (x + 9 <= ix1) {
         const w = Math.min(ri(9, 12), ix1 - x + 1);
         if (w < 9) break;
@@ -1194,6 +1449,12 @@ export function generateWorld(seed = 20240) {
       default: break;
     }
   });
+  // house interiors are decorated LAST (own random streams, nothing else in the world generation depends on it), and never on
+  // a tile that holds a pickup, crate, container or NPC spawn
+  const clearTile = (px0, py0) => keepClear.add(Math.floor(py0 / TILE) * W + Math.floor(px0 / TILE));
+  out.items.forEach((i) => clearTile(i.x, i.y)); out.crates.forEach((c2) => clearTile(c2.x, c2.y)); out.containers.forEach((c2) => keepClear.add(c2.ty * W + c2.tx));
+  out.civilians.forEach((c2) => clearTile(c2.x, c2.y)); out.enemies.forEach((e2) => clearTile(e2.x, e2.y));
+  homeJobs.forEach((job) => decorateHome(job));
   // scattered trees on remaining grass inside residential blocks' margins and along roads
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     if (!occ[y][x] && obj[y][x] === -1 && isGrass(ground[y][x]) && rng() < 0.012) obj[y][x] = T.tree;
@@ -1268,6 +1529,7 @@ export function generateWorld(seed = 20240) {
   const roadLaneRows = [];
   HR.forEach((y) => { roadLaneRows.push(y, y + 2); });
   let parked = 0;
+  const laneStart = out.vehicles.length;        // (these are moved out of the driving lanes into roadside bays further down)
   for (let tries = 0; tries < 3000 && parked < 140; tries++) {
     const lane = pick(roadLaneRows), x = ri(2, W - 10);
     if (ground[lane][x] === T.bridge || ground[lane][x + 1] === T.bridge || ground[lane][x + 2] === T.bridge) continue;
@@ -1278,6 +1540,7 @@ export function generateWorld(seed = 20240) {
     vehicle(type, type === 'sedan' ? ri(0, 5) : ri(0, type === 'van' ? 2 : 1), (x + 1) * TILE, px(lane), lane === roadLaneRows[0] || (lane % 2 === 0) ? 0 : Math.PI, 'parked');
     parked++;
   }
+  const laneEnd = out.vehicles.length;
   // parking lots
   out.lots.forEach((lot) => {
     let cars = 0;
@@ -1345,6 +1608,299 @@ export function generateWorld(seed = 20240) {
   out.items.push({ x: out.spawn.x + 60, y: out.spawn.y + 30, id: 'm_bat' });
   out.items.push({ x: out.spawn.x - 70, y: out.spawn.y + 30, id: 'm_knife' });
   out.items.push({ x: out.spawn.x + 20, y: out.spawn.y + 70, id: 'medkit' });
+
+
+
+  /* ================================================================ roadside parking bays. Cars used to be dropped into the DRIVING LANES;
+     now they stand in marked bays on the sidewalk strip beside the road (own random stream: nothing else in the world shifts). Roads,
+     intersections and crossings stay clear; the empty bays are also where wrecked / abandoned cars get towed to. */
+  {
+    const brng = mulberry32((seed * 13 + 41) >>> 0);
+    const bshuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(brng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const nearV = (x0, x1) => { for (let xx = x0; xx <= x1; xx++) if (inV(xx)) return true; return false; };
+    const doorNear = (tx, ty) => out.doors.some((d) => Math.abs(d.x - tx) <= 3 && Math.abs(d.y - ty) <= 3) || out.publicDoors.some((d) => Math.abs(Math.floor(d.x / TILE) - tx) <= 3 && Math.abs(Math.floor(d.y / TILE) - ty) <= 3) || out.houseDoors.some((d) => Math.abs(Math.floor(d.x / TILE) - tx) <= 3 && Math.abs(Math.floor(d.y / TILE) - ty) <= 3);
+    const cand = [];
+    HR.forEach((ry) => {
+      [[ry - 1, ry, Math.PI], [ry + 3, ry + 2, 0]].forEach(([row, roadRow, heading]) => {
+        for (let x = 6; x < W - 10; x++) {
+          if (nearV(x - 3, x + 6)) continue;
+          let ok = true;
+          for (let xx = x; xx < x + 4 && ok; xx++) ok = ground[row][xx] === T.sidewalk && obj[row][xx] === -1 && (ground[roadRow][xx] === T.road || ground[roadRow][xx] === T.roadCrack) && ground[row === ry - 1 ? row - 1 : row + 1][xx] !== T.sidewalk + 999;
+          if (!ok || doorNear(x + 1, row) || doorNear(x + 2, row)) continue;
+          const cxp = (x + 2) * TILE, cyp = row * TILE + 16;
+          if (out.decor.some((d) => Math.abs(d.x - cxp) < 78 && Math.abs(d.y - (row * TILE + 28)) < 40) || out.props.some((p2) => Math.abs(p2.x - cxp) < 78 && Math.abs(p2.y - (row * TILE + 28)) < 40)) continue;
+          cand.push({ x: cxp, y: cyp, heading, tx: x, row });
+        }
+      });
+    });
+    bshuf(cand);
+    const bays = [];
+    cand.forEach((c) => { if (bays.length < 330 && !bays.some((b) => b.row === c.row && Math.abs(b.tx - c.tx) < 9)) bays.push({ ...c, used: false }); });
+    const lane = out.vehicles.slice(laneStart, laneEnd), keep = [];
+    lane.forEach((v) => {
+      let best = null, bd = 1e9;
+      bays.forEach((b) => { if (b.used) return; const d = Math.hypot(b.x - v.x, b.y - v.y); if (d < bd) { bd = d; best = b; } });
+      if (best && bd < 45 * TILE) { best.used = true; v.x = best.x; v.y = best.y; v.heading = best.heading; v.mode = 'parked'; keep.push(v); }
+    });
+    out.vehicles.splice(laneStart, laneEnd - laneStart, ...keep);
+    // paint the bays (used + some empty ones) as parking asphalt so they read as designated spots
+    bays.forEach((b, i) => { if (b.used || i % 3 === 0) for (let xx = b.tx; xx < b.tx + 4; xx++) ground[b.row][xx] = T.parking; else b.free = true; });
+    out.bays = bays.filter((b) => b.used || ground[b.row][b.tx] === T.parking).map((b) => ({ x: b.x, y: b.y, heading: b.heading }));
+  }
+
+  /* ================================================================ THE FOUR GANGS (built last, with their own random stream, so
+     the rest of the city generates exactly as it did before). Red Dogs = Kenny's existing hideout (southwest). New hideouts sit in the
+     three empty forest corners of the map: Cobalt Wolves (NE warehouse yard), Violet Vultures (SE garage), Emerald Vipers (NW compound). */
+  {
+    const mainRng = rng;
+    rng = mulberry32((seed * 131 + 7919) >>> 0);
+    const drng = mulberry32((seed * 17 + 99) >>> 0);
+    out.gangs = {};
+    const specs = [];
+    let vcount = 0;
+    const gx = (t) => px(t);
+    const cleared = [];
+    const loopIdx = (arr, v) => { let r = 0; for (let i = 0; i < arr.length - 1; i++) if (v >= arr[i]) r = i; return Math.min(r, arr.length - 2); };      // which road loop is nearest
+    const gClear = (x0, y0, x1, y1, gr) => { cleared.push([x0, y0, x1, y1]); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { if (!inb(x, y)) continue; obj[y][x] = -1; ground[y][x] = gr; } mark(x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0); };
+    const gPut = (tx, ty, idx) => { if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = idx; return true; } return false; };
+    const gDec = (kind, tx, ty, dx = 0, dy = 30) => out.decor.push({ kind, x: px(tx) + dx, y: ty * TILE + dy });
+    const gFence = (x0, y0, x1, y1, gapA, gapB) => {
+      for (let x = x0; x <= x1; x++) { if (!(gapA !== undefined && x >= gapA && x <= gapB)) gPut(x, y1, T.fence); gPut(x, y0, T.fence); }
+      for (let y = y0; y <= y1; y++) { gPut(x0, y, T.fence); gPut(x1, y, T.fence); }
+    };
+    const gBuilding = (x, y, w, h, o = {}) => {
+      fillBuildingShell(x, y, w, h, T.wall2, T.concrete);
+      (o.doors || []).forEach((dx) => { obj[y + h - 1][dx] = T.doorOpen; obj[y + h - 1][dx + 1] = T.doorOpen; });
+      placeWindows(x, y, w, h, { windowChance: 0.12 });
+      registerBuilding(x, y, w, h, o.roof || 'metal', { kind: 'warehouse', tall: true });       // tall: a second brick course under a raised roof, so the front wall reads as a wall
+      // gang graffiti painted on the front wall + the tag board
+      for (let tx = x + 2; tx < x + w - 2; tx += 5) if (obj[y + h - 1][tx] === T.wall2 && obj[y + h - 1][tx + 1] === T.wall2) obj[y + h - 1][tx] = T.graf1 + (tx % 3);
+    };
+    const gTable = (g, tx, ty) => { if (!gPut(tx, ty, T.prop)) return []; gDec('gang_table_' + g, tx, ty, 0, 34); const ch = []; [-1, 1].forEach((d) => { if (gPut(tx + d, ty, T.chair)) ch.push([tx + d, ty, d < 0 ? 0 : Math.PI]); }); return ch; };
+    const gCouch = (g, tx, ty) => { gPut(tx, ty, T.prop); gPut(tx + 1, ty, T.prop); out.decor.push({ kind: 'gang_couch_' + g, x: (tx + 1) * TILE, y: ty * TILE + 36 }); };
+    const gBarrel = (g, tx, ty) => { if (gPut(tx, ty, T.prop)) gDec('gang_barrel_' + g, tx, ty, 0, 32); };
+    const gCrate = (tx, ty) => { if (inb(tx, ty) && obj[ty][tx] === -1) { out.crates.push({ x: px(tx), y: px(ty), tier: 'crate' }); taken.add(ty * W + tx); } };
+    const gRug = (g, tx, ty) => out.rugs.push({ key: 'gang_mat_' + g, x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE });
+    const gWall = (g, tx, ty) => gDec('gang_wall_' + g, tx, ty, 0, 26);
+    const gContainer = (tx, ty) => { if (obj[ty][tx] === -1 && obj[ty][tx + 1] === -1) { obj[ty][tx] = T.prop; obj[ty][tx + 1] = T.prop; out.props.push({ kind: 'container', variant: ri(0, 2), x: (tx + 1) * TILE, y: ty * TILE + 34 }); } };
+    const member = (g, tx, ty, o = {}) => specs.push({ x: px(tx), y: px(ty), role: memberRole(g, vcount++), gang: g, weapon: weaponFor(g, o.rank || 0, drng), type: 'pistol', mode: o.route ? 'patrol' : 'guard', radius: o.route ? 0 : 34, route: o.route || null, hideout: true, crew: g, fixedFace: o.face, sit: o.sit, wait: o.route ? [1500, 3800] : undefined, territory: o.territory });
+    const boss = (g, id, tx, ty) => specs.push({ x: px(tx), y: px(ty), role: bossRole(id), boss: id, bossName: BOSSES[id].name, gang: g, weapon: BOSSES[id].weapon, hp: BOSSES[id].hp, type: 'rifle', mode: 'guard', radius: 44, route: null, hideout: true, crew: g });
+    const gLight = (g, tx, ty, o = {}) => ({ x: px(tx), y: ty * TILE + 8, steady: true, col: GANGS[g].hex, neon: true, ...o });
+    const finish = (g, base, bossPos, gate, lights, members) => {
+      const G = GANGS[g];
+      out.gangs[g] = { name: G.name, base: { x: px(base[0]), y: px(base[1]) }, boss: { x: px(bossPos[0]), y: px(bossPos[1]) }, gate: { x: px(gate[0]), y: px(gate[1]) }, turf: 1400, lights, members,
+        poi: { type: 'gang_' + g, name: G.name + ' hideout', x: px(base[0]), y: px(base[1]), tx: base[0], ty: base[1], w: 8, h: 8 } };
+      // street patrols: a ring of pedestrian-path nodes around the base
+      const bx = px(base[0]), by = px(base[1]);
+      const near = out.nodes.filter((n) => Math.hypot(n.x - bx, n.y - by) < 1000 && Math.hypot(n.x - bx, n.y - by) > 260).sort((a, b) => Math.atan2(a.y - by, a.x - bx) - Math.atan2(b.y - by, b.x - bx));
+      if (near.length >= 3) {
+        const step = Math.max(1, Math.floor(near.length / 4));
+        const pts = near.filter((_, i) => i % step === 0).slice(0, 5).map((n) => ({ x: n.x, y: n.y }));
+        for (let k = 0; k < 3; k++) { const rot = pts.slice(k).concat(pts.slice(0, k)); const t0 = rot[0]; specs.push({ x: t0.x, y: t0.y, role: memberRole(g, vcount++), gang: g, weapon: weaponFor(g, 0, drng), type: 'pistol', mode: 'patrol', radius: 0, route: rot, hideout: true, crew: g, wait: [2500, 6000], territory: true }); }
+      }
+      // gang-coloured traffic: two cars cruise the road loop next to the base
+      const ci = loopIdx(VR, base[0]), ri2 = loopIdx(HR, base[1]);
+      const rt = [{ x: px(VR[ci] + 2), y: px(HR[ri2] + 2) }, { x: px(VR[ci + 1]), y: px(HR[ri2] + 2) }, { x: px(VR[ci + 1]), y: px(HR[ri2 + 1]) }, { x: px(VR[ci] + 2), y: px(HR[ri2 + 1]) }];
+      for (let k = 0; k < 2; k++) vehicle('gangcar', GANG_IDS.indexOf(g), rt[1].x - 140 - k * 260, rt[1].y, 0, 'traffic', rt.slice(1).concat(rt.slice(0, 1)));
+      // territory graffiti on the walls of buildings around the base
+      let tags = 0;
+      out.buildings.filter((b) => b.kind !== 'warehouse' || Math.hypot(px(b.x) - bx, px(b.y) - by) > 300).sort((a, b) => Math.hypot(px(a.x) - bx, px(a.y) - by) - Math.hypot(px(b.x) - bx, px(b.y) - by)).forEach((b) => {
+        if (tags >= 9 || Math.hypot(px(b.x) - bx, px(b.y) - by) > 1300 || Math.hypot(px(b.x) - bx, px(b.y) - by) < 330) return;
+        const tx = b.x + 2 + Math.floor(drng() * Math.max(1, b.w - 4)), ty = b.y + b.h;
+        const wt = obj[b.y + b.h - 1] && obj[b.y + b.h - 1][tx];
+        if ((wt !== T.wall && wt !== T.wall2) || obj[ty][tx] !== -1 || out.decor.some((d) => Math.abs(d.x - px(tx)) < 40 && Math.abs(d.y - (ty * TILE + 10)) < 24)) return;
+        out.decor.push({ kind: 'gang_wall_' + g, x: px(tx), y: ty * TILE + 12 }); tags++;
+      });
+    };
+
+    // ---- interior helpers: walls, doors (real doors that the crew opens), room floors, beds, desks, room records
+    const gWallH = (x0, x1, y) => { for (let x = x0; x <= x1; x++) obj[y][x] = T.wall2; };
+    const gWallV = (x, y0, y1) => { for (let y = y0; y <= y1; y++) obj[y][x] = T.wall2; };
+    const gDoorC = (x, y) => { obj[y][x] = T.doorClosed; out.doors.push({ x, y }); };
+    const gDoorO = (x, y) => { obj[y][x] = T.doorOpen; };
+    const gFloorR = (x0, y0, x1, y1, t) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) ground[y][x] = t; };
+    const gBed = (tx, ty) => { if (obj[ty][tx] === -1 && obj[ty + 1][tx] === -1) { obj[ty][tx] = T.prop; obj[ty + 1][tx] = T.prop; out.decor.push({ kind: 'bed_4', x: px(tx), y: (ty + 1) * TILE + 36 }); } };
+    const gDesk = (tx, ty, kind = 'desk_pc_1') => { if (gPut(tx, ty, T.prop)) gDec(kind, tx, ty, 0, 34); };
+    const gRack = (tx, ty) => { if (gPut(tx, ty, T.prop)) gDec('weaponrack', tx, ty, 0, 34); };
+    const gRoom = (list, name, x0, y0, x1, y1, priv = false) => list.push({ name, priv, x0: x0 * TILE, y0: y0 * TILE, x1: (x1 + 1) * TILE, y1: (y1 + 1) * TILE });
+    const bossAt = (g, id, tx, ty, room, spots, esc) => {
+      boss(g, id, tx, ty);
+      const sp = specs[specs.length - 1];
+      sp.radius = 0; sp.room = room;                                                     // the boss lives in this room: x0,y0,x1,y1 in tiles
+      sp.spots = spots.map(([sx, sy, act, face]) => ({ x: px(sx), y: px(sy), act, face }));
+      sp.escape = { x: px(esc[0]), y: px(esc[1]) };
+    };
+    // the named entrance guard stands outside the one official gate; the gate gap (px rect) is closed by a barrier until the crew trusts the player
+    const guardAt = (g, tx, ty, face) => specs.push({ x: px(tx), y: px(ty), role: 'guard_' + g, guard: g, gang: g, crew: g, weapon: 'pistol', hp: 400, type: 'pistol', mode: 'guard', radius: 0, route: null, hideout: false, fixedFace: face });
+    const gateAt = (g, x0, x1, y, yard) => { out.gangs[g].gateRect = { x0: x0 * TILE, y0: y * TILE, x1: (x1 + 1) * TILE, y1: (y + 1) * TILE }; out.gangs[g].yard = { x0: yard[0] * TILE, y0: yard[1] * TILE, x1: (yard[2] + 1) * TILE, y1: (yard[3] + 1) * TILE }; };      // yard = the fenced interior (tiles): only a cleared player may be inside it
+
+    /* ---------------- BLUE: Cobalt Wolves - a warehouse yard (NE). Rooms: entrance + meeting hall, boss office (own door, inner door to the
+       weapon store, which has a back door), weapon storage, guard room, sleeping room. */
+    {
+      const g = 'blue', R = [];
+      gClear(345, 1, 377, 18, T.concrete);
+      gFence(345, 1, 377, 16, 360, 362);
+      gBuilding(347, 2, 22, 10, { doors: [354, 359] });
+      gWallV(352, 3, 10); gWallH(348, 352, 7); gDoorO(352, 5); gDoorO(352, 9);                    // west: sleeping room (N) + guard room (S)
+      gWallV(363, 3, 10); gWallH(364, 367, 7); gDoorC(363, 5); gDoorC(363, 9); gDoorC(365, 7);     // east: boss office (N) + weapon store (S), inner escape door
+      gDoorC(366, 11);                                                                          // weapon store back door
+      gFloorR(348, 3, 351, 6, T.wood); gFloorR(348, 8, 351, 10, T.tileFloor); gFloorR(364, 3, 367, 6, T.carpet);
+      gRoom(R, 'sleeping room', 348, 3, 351, 6); gRoom(R, 'guard room', 348, 8, 351, 10); gRoom(R, 'meeting hall', 353, 3, 362, 10);
+      gRoom(R, 'boss office', 364, 3, 367, 6, true); gRoom(R, 'weapon storage', 364, 8, 367, 10, true);
+      // sleeping room
+      gBed(349, 3); gBed(351, 3); gDec('gang_wall_' + g, 350, 3, 0, 26);
+      // guard room
+      const guardSeats = gTable(g, 350, 9); gDec('gang_neon_' + g, 349, 8, 0, 18);
+      // meeting hall
+      [355, 358, 361].forEach((tx) => gWall(g, tx, 3));
+      const hallSeats = [...gTable(g, 356, 6), ...gTable(g, 359, 9)];
+      gCrate(354, 4); gCrate(361, 4); gCrate(361, 10); gBarrel(g, 353, 10); gBarrel(g, 362, 3);
+      // boss office
+      gCouch(g, 364, 3); gRug(g, 365, 5); gDesk(367, 3, 'desk_pc_1'); gDec('gang_neon_' + g, 366, 3, 0, 18); gPut(366, 3, T.prop);
+      gDec('palm_pot', 367, 6, 0, 34); gPut(367, 6, T.prop);
+      // weapon storage
+      gRack(364, 8); gRack(366, 8); gCrate(367, 9); gCrate(364, 10); gCrate(367, 10);
+      // yard
+      gContainer(370, 12); gContainer(373, 12); gContainer(370, 14); gContainer(373, 14);
+      gDec('gang_flag_' + g, 359, 15, 0, 32); gDec('gang_flag_' + g, 363, 15, 0, 32); gDec('barrel_fire', 368, 13, 0, 32); gPut(368, 13, T.prop);
+      gBarrel(g, 348, 13); gBarrel(g, 376, 11); gDec('gang_wall_' + g, 355, 12, 0, 12); gDec('gang_wall_' + g, 365, 12, 0, 12);
+      vehicle('gangcar', 1, px(351), px(14), Math.PI, 'parked'); vehicle('gangcar', 1, px(355), px(14), Math.PI, 'parked'); vehicle('van', 0, px(373), px(15), Math.PI, 'parked'); vehicle('moto', 0, px(366), px(14), -Math.PI / 2, 'parked');
+      // people: the boss stays in his office; guards and members have rooms and doors
+      bossAt(g, 'dante', 365, 5, [364, 3, 367, 6], [[365, 5, 'stand', Math.PI / 2], [365, 4, 'sit', Math.PI / 2], [366, 4, 'desk', -Math.PI / 2], [366, 5, 'talk', 0]], [365, 9]);
+      member(g, 366, 6, { rank: 1, face: Math.PI });                                           // inside the office
+      member(g, 361, 5, { rank: 1, face: 0 });                                                  // outside the office door
+      member(g, 360, 15, { face: Math.PI / 2 }); member(g, 362, 15, { face: Math.PI / 2 }); member(g, 357, 10, { face: Math.PI / 2 });
+      guardSeats.slice(0, 2).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 350, 5, { face: Math.PI / 2 });                                                 // sleeping room
+      hallSeats.slice(0, 3).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 366, 9, { face: -Math.PI / 2 });                                                // weapon storage
+      member(g, 357, 4, { route: [{ x: gx(354), y: gx(4) }, { x: gx(361), y: gx(4) }, { x: gx(361), y: gx(9) }, { x: gx(354), y: gx(9) }] });          // hall patrol
+      member(g, 372, 13, { route: [{ x: gx(347), y: gx(14) }, { x: gx(375), y: gx(14) }] });                                                            // yard patrol
+      finish(g, [360, 13], [365, 5], [361, 16], [gLight(g, 357, 6), gLight(g, 365, 5), gLight(g, 350, 5), gLight(g, 350, 9), gLight(g, 365, 9), gLight(g, 361, 13), gLight(g, 361, 16), { x: gx(368), y: 13 * TILE + 8, steady: true, fire: true }], 15);
+      out.gangs[g].rooms = R; gateAt(g, 360, 362, 16, [346, 2, 376, 15]); guardAt(g, 357, 17, Math.PI / 2);
+    }
+
+    /* ---------------- PURPLE: Violet Vultures - an open-bay garage (SE). Rooms: garage floor with two cars (entrance bays), VIP lounge (boss),
+       weapon storage with a back door, guard room, rest room with a side door. */
+    {
+      const g = 'purple', R = [];
+      gClear(344, 240, 378, 271, T.concrete);
+      gFence(345, 240, 377, 266, 360, 362);                                                    // the garage yard is fenced now: one gate on the south side
+      gBuilding(349, 244, 24, 11, { doors: [356, 361] });
+      gWallV(354, 245, 253); gWallH(350, 354, 249); gDoorO(354, 247); gDoorO(354, 252); gDoorO(352, 254);   // west: guard room (N) + rest room (S, with a side door)
+      gWallV(366, 245, 253); gWallH(367, 371, 250); gDoorC(366, 247); gDoorC(366, 252); gDoorC(369, 250); gDoorC(369, 254);   // east: lounge (N) + storage (S), inner door, back door
+      gFloorR(350, 245, 353, 248, T.tileFloor); gFloorR(350, 250, 353, 253, T.wood); gFloorR(367, 245, 371, 249, T.carpet);
+      gRoom(R, 'guard room', 350, 245, 353, 248); gRoom(R, 'rest room', 350, 250, 353, 253); gRoom(R, 'garage floor', 355, 245, 365, 253);
+      gRoom(R, 'boss lounge', 367, 245, 371, 249, true); gRoom(R, 'weapon storage', 367, 251, 371, 253, true);
+      // garage floor: workbenches, two parked cars, a table
+      for (let tx = 356; tx <= 358; tx++) gPut(tx, 245, T.counter);
+      for (let tx = 362; tx <= 364; tx++) gPut(tx, 245, T.counter);
+      for (let tx = 356; tx <= 364; tx += 4) gWall(g, tx, 245);
+      const hallSeats = gTable(g, 359, 251);
+      gBarrel(g, 355, 253); gBarrel(g, 365, 253); gCrate(355, 246); gCrate(365, 246);
+      vehicle('gangcar', 2, px(358), px(248), Math.PI / 2, 'parked'); vehicle('gangcar', 2, px(362), px(248), Math.PI / 2, 'parked');
+      // guard room + rest room
+      const guardSeats = gTable(g, 351, 247); gDec('gang_neon_' + g, 352, 245, 0, 18);
+      gBed(351, 250); gBed(353, 250); gDec('gang_wall_' + g, 352, 250, 0, 26);
+      // lounge
+      gCouch(g, 367, 245); gRug(g, 369, 247); gDesk(371, 245, 'desk_pc_0'); gDec('gang_neon_' + g, 370, 245, 0, 18); gPut(370, 245, T.prop);
+      gDec('palm_pot', 371, 249, 0, 34); gPut(371, 249, T.prop);
+      // storage
+      gRack(368, 251); gRack(370, 251); gCrate(367, 253); gCrate(371, 253); gCrate(369, 253);
+      vehicle('sedan', 5, px(375), px(258), Math.PI, 'parked'); vehicle('moto', 1, px(347), px(258), 0, 'parked');
+      [[356, 257], [361, 257], [366, 257]].forEach(([tx, ty]) => gDec('gang_flag_' + g, tx + 2, ty, 0, 32));
+      gDec('barrel_fire', 355, 258, 0, 32); gPut(355, 258, T.prop); gBarrel(g, 369, 257); gBarrel(g, 346, 256);
+      gDec('gang_wall_' + g, 360, 255, 0, 12); gDec('gang_wall_' + g, 367, 255, 0, 12);
+      bossAt(g, 'vex', 369, 247, [367, 245, 371, 249], [[369, 247, 'stand', Math.PI / 2], [368, 246, 'sit', Math.PI / 2], [370, 246, 'desk', -Math.PI / 2], [369, 248, 'talk', 0]], [369, 252]);
+      member(g, 370, 248, { rank: 1, face: Math.PI }); member(g, 365, 247, { rank: 1, face: 0 });
+      [[357, 256], [362, 256]].forEach(([tx, ty]) => member(g, tx, ty, { face: Math.PI / 2 })); member(g, 360, 253, { face: Math.PI / 2 });
+      guardSeats.slice(0, 2).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 352, 252, { face: -Math.PI / 2 });                                              // rest room
+      hallSeats.slice(0, 2).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 369, 252, { face: -Math.PI / 2 });                                              // weapon storage
+      member(g, 357, 250, { route: [{ x: gx(356), y: gx(247) }, { x: gx(364), y: gx(247) }, { x: gx(364), y: gx(252) }, { x: gx(356), y: gx(252) }] });
+      member(g, 368, 258, { route: [{ x: gx(346), y: gx(259) }, { x: gx(376), y: gx(259) }] });
+      finish(g, [361, 257], [369, 247], [361, 266], [gLight(g, 359, 247), gLight(g, 369, 247), gLight(g, 351, 247), gLight(g, 351, 252), gLight(g, 369, 252), gLight(g, 357, 256), gLight(g, 365, 256), { x: gx(355), y: 258 * TILE + 8, steady: true, fire: true }], 15);
+      out.gangs[g].rooms = R; gateAt(g, 360, 362, 266, [346, 241, 376, 265]); guardAt(g, 357, 268, Math.PI / 2);
+      gDec('gang_flag_' + g, 359, 266, 0, 34); gDec('gang_flag_' + g, 363, 266, 0, 34);
+    }
+
+    /* ---------------- GREEN: Emerald Vipers - a fenced shack compound (NW). Rooms: hall with the entrance, boss room, weapon store (back door
+       to the yard), guard room, sleeping room. */
+    {
+      const g = 'green', R = [];
+      gClear(2, 2, 17, 18, T.dirt);
+      for (let y = 3; y <= 16; y++) for (let x = 3; x <= 16; x++) ground[y][x] = (x + y) % 5 === 0 ? T.dirt : T.concrete;
+      gFence(2, 3, 17, 16, 8, 9);
+      gBuilding(3, 4, 14, 9, { doors: [8], roof: 'shingle' });
+      gFloorR(4, 5, 15, 11, T.wood);
+      gWallV(7, 5, 11); gWallH(4, 7, 8); gDoorO(7, 6); gDoorO(7, 10);                              // west: sleeping room (N) + guard room (S)
+      gWallV(12, 5, 11); gWallH(13, 15, 9); gDoorC(12, 6); gDoorC(12, 10); gDoorC(14, 9); gDoorC(14, 12);   // east: boss room (N) + storage (S), inner escape door, back door
+      gFloorR(4, 9, 6, 11, T.tileFloor); gFloorR(13, 5, 15, 8, T.carpet); gFloorR(13, 10, 15, 11, T.concrete);
+      gRoom(R, 'sleeping room', 4, 5, 6, 7); gRoom(R, 'guard room', 4, 9, 6, 11); gRoom(R, 'meeting hall', 8, 5, 11, 11);
+      gRoom(R, 'boss room', 13, 5, 15, 8, true); gRoom(R, 'weapon storage', 13, 10, 15, 11, true);
+      gBed(5, 5); gDec('gang_wall_' + g, 6, 5, 0, 26);
+      const guardSeats = gTable(g, 5, 10); gDec('gang_neon_' + g, 5, 9, 0, 18);
+      [8, 10].forEach((tx) => gWall(g, tx, 5));
+      const hallSeats = gTable(g, 9, 7); gCrate(11, 5); gBarrel(g, 11, 11); gBarrel(g, 8, 10);
+      gCouch(g, 13, 5); gRug(g, 14, 7); gDesk(15, 5, 'desk_pc_1'); gDec('gang_neon_' + g, 15, 6, 0, 18); gPut(15, 6, T.prop);
+      gRack(13, 10); gRack(15, 10); gCrate(13, 11); gCrate(15, 11);
+      gCouch(g, 3, 13); gDec('barrel_fire', 14, 14, 0, 32); gPut(14, 14, T.prop); gDec('barrel_fire', 4, 15, 0, 32); gPut(4, 15, T.prop);
+      gDec('gang_flag_' + g, 7, 15, 0, 32); gDec('gang_flag_' + g, 11, 15, 0, 32); gBarrel(g, 16, 12); gBarrel(g, 3, 6); gCrate(16, 6);
+      gDec('gang_wall_' + g, 6, 12, 0, 12); gDec('gang_wall_' + g, 11, 12, 0, 12);
+      vehicle('gangcar', 3, px(12), px(14), 0, 'parked'); vehicle('gangcar', 3, px(15), px(14), 0, 'parked'); vehicle('moto', 0, px(6), px(14), Math.PI / 2, 'parked');
+      bossAt(g, 'moss', 14, 7, [13, 5, 15, 8], [[14, 7, 'stand', Math.PI / 2], [14, 6, 'sit', Math.PI / 2], [15, 7, 'desk', -Math.PI / 2], [13, 7, 'talk', 0]], [14, 10]);
+      member(g, 15, 8, { rank: 1, face: Math.PI }); member(g, 11, 8, { rank: 1, face: 0 });
+      member(g, 8, 15, { face: Math.PI / 2 }); member(g, 9, 15, { face: Math.PI / 2 }); member(g, 10, 10, { face: Math.PI / 2 });
+      guardSeats.slice(0, 2).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 5, 7, { face: Math.PI / 2 });                                                   // sleeping room
+      hallSeats.slice(0, 2).forEach((c) => member(g, c[0], c[1], { sit: true, face: c[2] }));
+      member(g, 14, 11, { face: -Math.PI / 2 });                                                // weapon storage
+      member(g, 9, 9, { route: [{ x: gx(8), y: gx(6) }, { x: gx(11), y: gx(6) }, { x: gx(11), y: gx(10) }, { x: gx(8), y: gx(10) }] });
+      member(g, 9, 13, { route: [{ x: gx(4), y: gx(13) }, { x: gx(15), y: gx(13) }, { x: gx(15), y: gx(15) }, { x: gx(4), y: gx(15) }] });
+      finish(g, [9, 13], [14, 7], [9, 16], [gLight(g, 9, 8), gLight(g, 14, 7), gLight(g, 5, 6), gLight(g, 5, 10), gLight(g, 14, 11), gLight(g, 9, 14), gLight(g, 9, 16), { x: gx(14), y: 14 * TILE + 8, steady: true, fire: true }, { x: gx(4), y: 15 * TILE + 8, steady: true, fire: true }], 14);
+      out.gangs[g].rooms = R; gateAt(g, 8, 9, 16, [3, 4, 16, 15]); guardAt(g, 6, 17, Math.PI / 2);
+      gDec('gang_flag_' + g, 7, 16, 0, 34); gDec('gang_flag_' + g, 10, 16, 0, 34);
+    }
+
+    /* ---------------- RED: Kenny's existing crew becomes the Red Dogs (red looks, red weapon pool), same alley, same shop */
+    if (out.hideout) {
+      const z = out.hideout.zone, kp = out.hideout.kenny;
+      let k = 0;
+      out.enemies.forEach((e) => {
+        if (!e.hideout || e.gang || !/^gang[234]?$/.test(e.role) || e.x < z.x - 80 || e.x > z.x + z.w + 80 || e.y < z.y - 80 || e.y > z.y + z.h + 160) return;
+        const rank = k >= 2 && k <= 3 ? 1 : 0;
+        e.gang = 'red'; e.crew = 'red'; e.role = memberRole('red', k++); e.weapon = weaponFor('red', rank, drng);
+      });
+      out.gangs.red = { name: GANGS.red.name, base: { x: kp.x, y: kp.y + 120 }, boss: { x: kp.x, y: kp.y }, gate: { x: kp.x, y: z.y + z.h - 40 }, turf: 1400, lights: [], members: 8,
+        poi: null };
+      {                                                                                         // Kenny's alley gets a named gatekeeper too (no barrier: the weapon shop stays open to everyone)
+        const gx0 = Math.floor(kp.x / TILE), gy0 = Math.floor((z.y + z.h - 40) / TILE);
+        let placed = false;
+        for (let dy = 1; dy <= 4 && !placed; dy++) for (const dx of [2, -2, 3, -3, 1, -1, 4, -4]) { const tx = gx0 + dx, ty = gy0 + dy; if (inb(tx, ty) && obj[ty][tx] === -1) { guardAt('red', tx, ty, Math.PI / 2); placed = true; break; } }
+      }
+      const bx = kp.x, by = kp.y + 120;
+      const near = out.nodes.filter((n) => Math.hypot(n.x - bx, n.y - by) < 1000 && Math.hypot(n.x - bx, n.y - by) > 300).sort((a, b) => Math.atan2(a.y - by, a.x - bx) - Math.atan2(b.y - by, b.x - bx));
+      if (near.length >= 3) {
+        const step = Math.max(1, Math.floor(near.length / 4)), pts = near.filter((_, i) => i % step === 0).slice(0, 5).map((n) => ({ x: n.x, y: n.y }));
+        for (let q = 0; q < 3; q++) { const rot = pts.slice(q).concat(pts.slice(0, q)); specs.push({ x: rot[0].x, y: rot[0].y, role: memberRole('red', vcount++), gang: 'red', weapon: weaponFor('red', 0, drng), type: 'pistol', mode: 'patrol', radius: 0, route: rot, hideout: true, crew: 'red', wait: [2500, 6000], territory: true }); }
+      }
+      const cj = loopIdx(VR, Math.floor(bx / TILE)), rj = loopIdx(HR, Math.floor(by / TILE));
+      const rt = [{ x: px(VR[cj] + 2), y: px(HR[rj] + 2) }, { x: px(VR[cj + 1]), y: px(HR[rj] + 2) }, { x: px(VR[cj + 1]), y: px(HR[rj + 1]) }, { x: px(VR[cj] + 2), y: px(HR[rj + 1]) }];
+      for (let q = 0; q < 2; q++) vehicle('gangcar', 0, rt[1].x - 140 - q * 260, rt[1].y, 0, 'traffic', rt.slice(1).concat(rt.slice(0, 1)));
+      let tags = 0;
+      out.buildings.sort((a, b) => Math.hypot(px(a.x) - bx, px(a.y) - by) - Math.hypot(px(b.x) - bx, px(b.y) - by)).forEach((b) => {
+        const d = Math.hypot(px(b.x) - bx, px(b.y) - by);
+        if (tags >= 9 || d > 1300 || d < 330) return;
+        const tx = b.x + 2 + Math.floor(drng() * Math.max(1, b.w - 4)), ty = b.y + b.h, wt = obj[b.y + b.h - 1] && obj[b.y + b.h - 1][tx];
+        if ((wt !== T.wall && wt !== T.wall2) || obj[ty][tx] !== -1) return;
+        out.decor.push({ kind: 'gang_wall_red', x: px(tx), y: ty * TILE + 12 }); tags++;
+      });
+    }
+    out.trees = out.trees.filter((t) => !cleared.some(([x0, y0, x1, y1]) => t.x / TILE >= x0 && t.x / TILE < x1 + 1 && (t.y - 26) / TILE >= y0 && (t.y - 26) / TILE < y1 + 1));      // the tree sprites were already made: drop the ones inside the compounds
+    out.enemies.push(...specs);
+    rng = mainRng;
+  }
 
   /* ------------------------------------------------ wall faces vs. cap tiles */
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {

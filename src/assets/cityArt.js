@@ -5,6 +5,9 @@ import { mulberry32 } from '../systems/Rng.js';
 import { drawArms, drawGraffitiTiles } from './armsArt.js';
 import { drawWiseArt } from './wiseArt.js';
 import { drawCasinoArt } from './casinoArt.js';
+import { drawHomeArt } from './homeArt.js';
+import { drawGangArt } from './gangArt.js';
+import { drawWiseStoreArt } from './wiseStoreArt.js';
 
 /* ------------------------------------------------------------- outfits */
 // indexes into the option / colour lists in textures.js
@@ -275,6 +278,11 @@ function drawVehicles(scene) {
     mk(`veh_luxury${i}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true));
     mk(`veh_luxury${i}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false));
   });
+  [['#b02a2a', '#f0f0f0'], ['#2a56b8', '#d8dce8'], ['#7a3ab8', '#e8c860'], ['#2a8a4a', '#14141a']].forEach(([col, stripe], i) => {     // gang cars: gang paint + a stripe
+    mk(`veh_gangcar${i}_s`, 64, 44, (c) => { sedanSide(c, col); R(c, 3, 23, 58, 2, stripe); R(c, 16, 7, 30, 1, stripe); });
+    mk(`veh_gangcar${i}_f`, 36, 52, (c) => { carFB(c, 36, 52, col, true); R(c, 16, 3, 4, 46, stripe); });
+    mk(`veh_gangcar${i}_b`, 36, 52, (c) => { carFB(c, 36, 52, col, false); R(c, 16, 3, 4, 46, stripe); });
+  });
   mk('veh_police0_s', 64, 44, (c) => sedanSide(c, '#2a3a5a', true));
   mk('veh_police0_f', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', true, { police: true }));
   mk('veh_police0_b', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', false, { police: true }));
@@ -340,7 +348,7 @@ function drawProps(scene) {
   mk('siren_b', 10, 10, (c) => { disc(c, 5, 5, 5, 'rgba(60,110,255,0.8)'); });
 }
 
-export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'player', 'marker'];
+export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker'];
 function drawIcons(scene) {
   const n = MAP_ICON_NAMES.length;
   const tex = makeCanvas(scene, 'mapicons', 18 * n, 18, (c) => {
@@ -364,6 +372,9 @@ function drawIcons(scene) {
     R(c, o(i) + 4, 8, 9, 5, '#ffffff'); R(c, o(i) + 3, 11, 12, 3, '#ffffff'); R(c, o(i) + 11, 7, 3, 3, '#ffffff'); R(c, o(i) + 3, 13, 12, 1, '#7a1a4a'); R(c, o(i) + 6, 9, 1, 2, '#d83a8a');
     i = MAP_ICON_NAMES.indexOf('casino'); badge(i, '#8a1a8a');
     R(c, o(i) + 4, 5, 10, 8, '#ffffff'); R(c, o(i) + 5, 6, 8, 6, '#8a1a8a'); R(c, o(i) + 6, 7, 2, 2, '#ffffff'); R(c, o(i) + 10, 7, 2, 2, '#ffffff'); R(c, o(i) + 8, 9, 2, 2, '#ffffff'); R(c, o(i) + 6, 10, 2, 1, '#ffffff'); R(c, o(i) + 10, 10, 2, 1, '#ffffff');
+    [['gang_red', '#d83a3a', 'R'], ['gang_blue', '#3a6ad8', 'B'], ['gang_purple', '#8a4ae0', 'V'], ['gang_green', '#2aa850', 'E']].forEach(([nm, colr, ch]) => {
+      const k = MAP_ICON_NAMES.indexOf(nm); badge(k, colr); c.font = 'bold 11px "Courier New", monospace'; c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(ch, o(k) + 9, 10);
+    });
     i = MAP_ICON_NAMES.indexOf('tower'); badge(i, '#2a9aa8'); R(c, o(i) + 6, 3, 6, 12, '#ffffff'); for (let k = 0; k < 4; k++) R(c, o(i) + 7, 4 + k * 3, 1, 1, '#2a9aa8'), R(c, o(i) + 10, 4 + k * 3, 1, 1, '#2a9aa8');
     i = MAP_ICON_NAMES.indexOf('player'); c.fillStyle = '#101410'; c.beginPath(); c.moveTo(o(i) + 9, 1); c.lineTo(o(i) + 16, 16); c.lineTo(o(i) + 9, 12); c.lineTo(o(i) + 2, 16); c.closePath(); c.fill();
     c.fillStyle = '#40ff70'; c.beginPath(); c.moveTo(o(i) + 9, 3); c.lineTo(o(i) + 14, 14); c.lineTo(o(i) + 9, 11); c.lineTo(o(i) + 4, 14); c.closePath(); c.fill();
@@ -477,6 +488,9 @@ export function generateCityArt(scene) {
   drawArms(scene);
   drawWiseArt(scene);
   drawCasinoArt(scene);
+  drawHomeArt(scene);
+  drawGangArt(scene);
+  drawWiseStoreArt(scene);
   drawQuestIcons(scene);
   Object.keys(STORY_LOOKS).forEach((k) => generateCharacter(scene, 'story_' + k, STORY_LOOKS[k]));
   Object.keys(ROLE_LOOKS).forEach((k) => generateCharacter(scene, 'npc_' + k, ROLE_LOOKS[k]));

@@ -24,6 +24,7 @@ export default class Wanted {
     this.lastPoliceSight = -99999;
     this.lastKnown = null;
     this.flashUntil = 0;
+    this.epoch = 0;          // bumps whenever the level drops or is cleared: crime reports from before that moment are stale and ignored
   }
 
   levelFor(heat) {
@@ -63,6 +64,7 @@ export default class Wanted {
       this.heat = Math.max(0, this.heat - (2.2 + (6 - this.level) * 0.3) * dt / 1000);
       this.level = this.levelFor(this.heat);
       if (this.level < before) {
+        this.epoch++;
         this.scene.events.emit('wanted', this.level, before);
         this.scene.events.emit('toast', this.level === 0 ? 'You lost the police. Wanted level cleared.' : `Wanted level dropped to ${this.level}`);
       }
@@ -71,6 +73,7 @@ export default class Wanted {
 
   clear() {
     const before = this.level;
+    this.epoch++;
     this.heat = 0;
     this.level = 0;
     if (before) this.scene.events.emit('wanted', 0, before);

@@ -1,3 +1,4 @@
+import { GUARDS } from './gangs.js';
 // Named story characters. `where(state)` decides when/where each one stands in the city.
 export const STORY_NPCS = {
   marla: {
@@ -26,8 +27,12 @@ export const STORY_NPCS = {
   ezekiel: { name: 'Ezekiel Blackwell', title: 'WISE SOLE owner', color: '#ffe27a', where: () => ({ place: 'wise', off: [0, 0] }) },
   sean: { name: 'Sean Whitlock', title: 'Casino host', color: '#8affd8', where: () => ({ place: 'sean', off: [0, 0] }) },
   jiro: { name: 'Jiro Kurogane', title: 'Card room dealer', color: '#c8a8ff', where: () => ({ place: 'jiro', off: [0, 0] }) },
+  dante: { name: 'Dante "Frost" Reyes', title: 'Cobalt Wolves boss', color: '#8ab8ff', where: () => null },
+  vex: { name: 'Lilith "Madame" Vex', title: 'Violet Vultures boss', color: '#d0a0ff', where: () => null },
+  moss: { name: 'Tomas "Moss" Okafor', title: 'Emerald Vipers boss', color: '#8affb0', where: () => null },
   shade: { name: 'Shade', title: 'Unknown watcher', color: '#8a8aa0', where: () => null } // spawned by mission 12
 };
+Object.values(GUARDS).forEach((G) => { STORY_NPCS[G.id] = { name: G.name, title: G.title, color: G.color, where: () => null }; });      // the named gang gate guards (dialogue portraits)
 
 // Portrait + sprite looks are generated in cityArt.js (STORY_LOOKS) under the texture key story_<id>.
 export const NPC_IDS = Object.keys(STORY_NPCS);

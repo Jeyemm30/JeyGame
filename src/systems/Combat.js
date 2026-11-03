@@ -12,7 +12,7 @@ export default class Combat {
     this.gfx = scene.add.graphics().setDepth(5000);
   }
 
-  fire(owner, x, y, angle, weapon, { spread = 0, damageMul = 1 } = {}) {
+  fire(owner, x, y, angle, weapon, { spread = 0, damageMul = 1, shooter = null } = {}) {
     for (let i = 0; i < weapon.pellets; i++) {
       const a = angle + (Math.random() + Math.random() - 1) * spread * (weapon.pellets > 1 ? 1.6 : 1.4);
       const b = this.bullets.get(x, y, 'bullet');
@@ -24,6 +24,7 @@ export default class Combat {
       const speed = weapon.speed * (weapon.pellets > 1 ? 0.8 + Math.random() * 0.25 : 1);
       b.setVelocity(Math.cos(a) * speed, Math.sin(a) * speed);
       b.owner = owner;
+      b.shooter = shooter;
       b.damage = weapon.damage * damageMul;
       b.startX = x;
       b.startY = y;

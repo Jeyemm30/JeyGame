@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { WEAPONS, ENEMY_DAMAGE_MUL } from '../config.js';
+import { WEAPONS, MELEE, ENEMY_DAMAGE_MUL } from '../config.js';
+import { GangAI, gangCfg } from './GangAI.js';
+import { GANG_IDS, BOSSES, GUARDS, MEMBER_VARIANTS, memberRole, bossRole, repOf, GANGS, GANG_CFG, tierMin } from '../story/gangs.js';
 import { sfx } from '../systems/Audio.js';
 import { dirFromAngle, CHEST } from './Player.js';
 import { touchEnabled } from '../systems/Touch.js';
@@ -36,6 +38,11 @@ export const ROLES = {
   msniper: { tex: 'npc_msniper', hostility: 'zone', preset: 'sniper' }
 };
 
+// gang members (6 looks per gang, hostility decided by reputation + rivalries) and the three new gang bosses
+GANG_IDS.forEach((g) => { for (let v = 0; v < MEMBER_VARIANTS; v++) ROLES[memberRole(g, v)] = { tex: `npc_gm_${g}_${v}`, hostility: 'gang', preset: 'pistol' }; });
+Object.keys(BOSSES).forEach((id) => { ROLES[bossRole(id)] = { tex: 'story_' + id, hostility: 'gang', preset: 'rifle' }; });
+GANG_IDS.forEach((g) => { ROLES['guard_' + g] = { tex: 'story_' + GUARDS[g].id, hostility: 'never', preset: 'pistol' }; });      // the named gate guards: they only talk
+
 const rand = (a, b) => a + Math.random() * (b - a);
 const wrap = Phaser.Math.Angle.Wrap;
 
@@ -43,12 +50,14 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const roleCfg = ROLES[spec.role] || ROLES.criminal;
     const preset = spec.type || roleCfg.preset;
-    const cfg = ENEMY_TYPES[preset];
+    const cfg = spec.weapon ? { ...gangCfg(spec.weapon), ...(spec.hp ? { hp: spec.hp } : {}) } : ENEMY_TYPES[preset];
     super(scene, spec.x, spec.y, roleCfg.tex, 'd0');
     this.cfg = cfg;
     this.kind = preset;
     this.role = spec.role || 'criminal';
     this.hostility = roleCfg.hostility;
+    this.gang = spec.gang || null; this.boss = spec.boss || null; this.bossName = spec.bossName || null; this.crew = spec.crew || spec.gang || null;
+    this.melee = cfg.melee ? MELEE[cfg.melee] : null; this.meleeId = cfg.melee || null; this.foe = null; this.warUntil = 0; this.raidUntil = 0; this.copFoeUntil = 0; this.firedUntil = 0;
     this.isPolice = this.role === 'police' || this.role === 'swat';
     this.angry = false;
     this.angryUntil = 0;
@@ -62,12 +71,15 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
     this.setOrigin(0.5, 0.9);
     this.body.setCircle(9, 7, 34);
+    this.guard = spec.guard || null;                          // a named gate guard: never moves, never takes damage, cannot be pushed
+    if (this.guard) this.body.setImmovable(true);
 
     this.hp = cfg.hp;
     this.maxHp = cfg.hp;
     this.mode = spec.mode;
     this.home = { x: spec.x, y: spec.y };
     this.radius = spec.radius || 0;
+    if (spec.room) { const T = 32, r = spec.room; this.bossSpec = { roomPx: { x0: r[0] * T, y0: r[1] * T, x1: (r[2] + 1) * T, y1: (r[3] + 1) * T }, spots: spec.spots, escape: spec.escape }; }
     this.route = spec.route;
     this.routeIdx = 0;
     this.ai = this.route ? 'patrol' : 'idle';
@@ -91,7 +103,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.nextLos = Math.random() * 200;
     this.face = Math.random() * Math.PI * 2;
     this.faceGoal = this.face;
-    this.sitting = !!spec.sit; this.hideout = !!spec.hideout; this.crew = spec.crew || null; this.fixedFace = spec.fixedFace; this.threatT = 0; this.warned2 = false;
+    this.sitting = !!spec.sit; this.hideout = !!spec.hideout; this.fixedFace = spec.fixedFace; this.threatT = 0; this.warned2 = false;
     if (this.fixedFace !== undefined) { this.face = this.fixedFace; this.faceGoal = this.fixedFace; }
     this.avoidSign = Math.random() < 0.5 ? 1 : -1;
     this.lastPos = { x: spec.x, y: spec.y };
@@ -114,7 +126,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.lastDepth = -1;
 
     this.shadow = scene.add.sprite(spec.x, spec.y, 'shadow').setDepth(3.5);
-    this.gun = scene.add.sprite(spec.x, spec.y, this.weaponCfg.gun).setOrigin(0.15, 0.5);
+    this.gun = scene.add.sprite(spec.x, spec.y, this.melee ? this.melee.tex : this.weaponCfg.gun).setOrigin(0.15, 0.5);
     this.flash = scene.add.sprite(spec.x, spec.y, 'flash').setDepth(5001).setVisible(false);
     this.flashUntil = 0;
     this.icon = null;
@@ -225,18 +237,38 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       case 'wanted': return sc.wanted.level >= 2;
       case 'zone': return sc.inRestricted(p.x, p.y);
       case 'territory': return Math.hypot(p.x - this.home.x, p.y - this.home.y) < 230;
+      case 'gang': return !!this.gang && repOf(this.gang) <= -30 && Math.hypot(p.x - this.home.x, p.y - this.home.y) < 700;     // hostile reputation: shot on sight around their turf
       default: return false;
     }
   }
 
   knock(angle, power, ms = 200) {
+    if (this.guard || this.surrendered) return;
     this.kvx = Math.cos(angle) * power;
     this.kvy = Math.sin(angle) * power;
     this.knockUntil = this.scene.gt + ms;
   }
 
-  takeDamage(n, time) {
+  takeDamage(n, time, by) {
     if (this.dead) return;
+    if (this.guard) { if (!by && time - (this.hitNoteAt || -9e9) > 1500) { this.hitNoteAt = time; this.scene.onGuardHit(this, time); } return; }      // unkillable; hurting him only costs reputation
+    if (this.surrendered) return;
+    if (by && by.accident) {                    // hit by traffic / a non-player explosion: it hurts, but it is NOT the player's attack (no anger, no crime on death)
+      this.hp -= n * (1 - this.cfg.reduce); this.hpShowUntil = time + 2500; this.hurtUntil = time + 200;
+      this.setTintFill(0xffffff); this.scene.time.delayedCall(50, () => { if (!this.dead) this.clearTint(); });
+      if (this.hp <= 0) this.die();
+      return;
+    }
+    if (by && typeof by === 'object') {       // hurt by another faction member / a cop: a fight between NPCs, the player is not involved
+      this.hp -= n * (1 - this.cfg.reduce); this.hpShowUntil = time + 2500; this.hurtUntil = time + 200; this.lastFoe = by;
+      this.setTintFill(0xffffff); this.scene.time.delayedCall(50, () => { if (!this.dead) this.clearTint(); });
+      if (!this.foe && by.active && !by.dead) { this.foe = by; this.foeSeen = time; this.inWar = true; this.warBubble = false; }
+      if (this.gang) this.warUntil = Math.max(this.warUntil || 0, time + 15000);
+      if (this.hp <= 0) this.die();
+      return;
+    }
+    this.playerHitAt = time;                    // the player did this (kill charges, gang reputation and anger all key off it)
+    if (this.gang) this.scene.gangHit(this);
     this.angry = true;
     this.angryUntil = time + 90000;
     if (this.hideout) this.scene.provokeHideout(this, this.crew === 'casino' ? 520 : 210);
@@ -257,6 +289,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   die(silent = false) {
+    if (this.guard) { this.hp = this.maxHp; return; }
+    if (this.boss && !this.surrendered && !silent) { this.surrender(); return; }              // a beaten boss surrenders (see GangAI.surrender) instead of dying
     this.dead = true;
     { const d = dirFromAngle(this.face); spawnCorpse(this.scene, this, d === 'l' ? 'r' : d, d === 'l'); }
     this.scene.onEnemyKilled(this, silent);
@@ -264,6 +298,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.flash.destroy();
     this.shadow.destroy();
     if (this.icon) this.icon.destroy();
+    if (this.sayTxt) this.sayTxt.destroy();
+    if (this.nameTag) this.nameTag.destroy();
     this.destroy();
   }
 
@@ -361,7 +397,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setFrame(key + poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 150, t: this.animT, now: time + this.animOff,
       hurt: time < this.hurtUntil,
-      pickup: time < (this.doorPoseUntil || 0),
+      pickup: time < (this.doorPoseUntil || 0) || time < (this.swingUntil || 0),
+      talk: !!this.boss && this.ai === 'idle' && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 150,
       sit: this.sitting && this.ai === 'idle',
       crouch: this.ai === 'cover' && this.moveSpeed === 0,
       lean: (this.ai === 'suspicious' || this.ai === 'search') && Math.floor(time / 1100) % 2 === 1
@@ -381,6 +418,12 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.gun.setDepth(dir === 'u' ? depth - 0.02 : depth + 0.02);
     }
     if (this.flash.visible && time > this.flashUntil) this.flash.setVisible(false);
+    if (this.sayTxt) this.updateSay(time);
+    if (this.boss) {                                           // bosses wear a name tag
+      if (!this.nameTag) this.nameTag = sc.add.text(0, 0, this.bossName || this.boss, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: GANGS[this.gang].css, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
+      const near = vis && Math.hypot(sc.player.x - this.x, sc.player.y - this.y) < 300, to = sc.elev(60);
+      this.nameTag.setVisible(near).setPosition(this.x + to.x, this.y + to.y).setRotation(-sc.camRot).setScale(1, sc.upY);
+    }
 
     // "?" / "!" indicator
     const showIcon = vis && (this.ai === 'suspicious' || this.ai === 'alert' || this.ai === 'attack' || this.ai === 'search');
@@ -416,6 +459,10 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const pursuing = this.response || (this.isPolice && sc.wanted.level >= 2 && this.ai !== 'patrol' && this.ai !== 'idle');
     if (dist > (pursuing ? 2800 : (touchEnabled() ? 900 : 1200))) {
       this.dormant = true;
+      if (this.hideout && this.gang && this.ai !== 'idle' && this.ai !== 'patrol' && !this.dead && !this.questTag) {       // the player left the area: the crew calms down and goes back to its post
+        this.body.reset(this.home.x, this.home.y); this.angry = false; this.foe = null; this.fleeing = false; this.path = null; this.target = null; this.awareness = 0;
+        this.ai = this.route ? 'patrol' : 'idle'; this.idleUntil = time + 2000; this.spotNow = null;
+      }
       this.stop();
       this.setVisible(false);
       this.syncParts(time, dt);
@@ -429,18 +476,26 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     this.setVisible((this.los && dist < 660) || dist < 56);
 
+    if (this.guard) {                                          // stays on his spot, turns to look at whoever walks up
+      this.ai = 'idle'; this.angry = false; this.hp = this.maxHp; this.stop();
+      if (Math.hypot(this.home.x - this.x, this.home.y - this.y) > 2) this.body.reset(this.home.x, this.home.y);
+      this.turn(dist < 190 && this.los ? Math.atan2(dy, dx) : (this.fixedFace ?? this.face), 4, dt);
+      this.syncParts(time, dt); return;
+    }
+    if (this.surrendered) { this.ai = 'idle'; this.angry = false; this.stop(); this.syncParts(time, dt); return; }
+
     if (p.dead) { this.stop(); this.syncParts(time, dt); return; }
 
     const cfg = this.cfg;
     // the hideout crew only reacts to a real threat: a drawn gun pointed their way for a few seconds (one warning first)
-    if (this.hideout && !this.angry) {
+    if (this.hideout && !this.angry && !(this.gang && repOf(this.gang) >= tierMin(GANG_CFG.needAccess))) {
       if (p.weaponDrawn && dist < 200 && this.los) {
         this.threatT += dt;
         if (!this.warned2 && this.threatT > 900) { this.warned2 = true; sc.events.emit('toast', this.crew === 'casino' ? 'Security: "Sir, put the weapon away. Now."' : '"Put that away or get out of here!"'); }
         if (this.crew === 'casino' && this.warned2 && dist > 64 && this.ai !== 'attack') {     // casino security walks over to the troublemaker
           this.approached = true; this.moveTo(p.x, p.y, cfg.walk * 1.2, time); this.turn(Math.atan2(p.y - this.y, p.x - this.x), 5, dt); this.syncParts(time, dt); return;
         }
-        if (this.threatT > 3200) { this.angry = true; this.angryUntil = time + 60000; sc.provokeHideout(this, 170); }
+        if (this.threatT > (this.gang && sc.gangSecurity(this.gang) ? 1500 : 3200)) { this.angry = true; this.angryUntil = time + 60000; sc.provokeHideout(this, 170); }
       } else { this.threatT = Math.max(0, this.threatT - dt * 1.5); if (this.threatT === 0) { this.warned2 = false; if (this.approached) { this.approached = false; this.returnToPost(time); } } }
     }
     const hostile = this.isHostile(time);
@@ -499,6 +554,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     if (canCuff) { this.stop(); this.turn(toP, 6, dt); this.syncParts(time, dt); return; }
 
+    try { if (this.bossSpec && this.bossRoutine(time, dt)) { this.syncParts(time, dt); return; } } catch (err) { this.fleeing = false; if (!this.bossErr) { this.bossErr = true; console.error('boss routine error (ignored)', err); } }
+    try { if (this.updateWar(time, dt)) return; } catch (err) { this.foe = null; this.retreating = false; this.warUntil = 0; if (!this.warErr) { this.warErr = true; console.error('gang AI error (ignored)', err); } }      // faction fights; an error here must never stop the game loop
     switch (this.ai) {
       case 'return': this.doReturn(time, dt); break;
       case 'idle': this.doIdle(time, dt); break;
@@ -618,6 +675,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   doAttack(time, dt, seen, dist, toP) {
+    if (this.melee) { this.doMeleePlayer(time, dt, seen, dist, toP); return; }
     const cfg = this.cfg;
     this.aimAngle = this.aimAngle ?? toP;
     if (!seen) {
@@ -737,3 +795,5 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
   }
 }
+
+Object.assign(Enemy.prototype, GangAI);

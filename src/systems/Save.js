@@ -73,7 +73,7 @@ export function loadGameInto(scene, data) {
   loadProfile(data.profile);
   scene.registry.set('appearance', data.appearance || scene.registry.get('appearance'));
   scene.registry.set('mapMarkers', (data.markers || []).map((m) => ({ ...m })));
-  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Arms', 'Wise', 'Casino', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Game', 'Menu', 'Character'].forEach((k) => {
+  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Arms', 'Wise', 'Casino', 'Gangs', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Game', 'Menu', 'Character'].forEach((k) => {
     try { scene.scene.stop(k); } catch (e) { /* not running */ }
   });
   scene.scene.start('Game', { load: data });

@@ -23,6 +23,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.kind = kind;
     this.npcId = spec.npcId || null;
     this.shopName = spec.shop || null;
+    this.crew = spec.npcId === 'kenny' ? 'red' : null;           // Kenny's crew reacts when he is threatened
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setOrigin(0.5, 0.9);
@@ -76,13 +77,13 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
   /* ------------------------------------------------------------ reactions */
   // Called by the scene when a crime happens within sight. severity: crime heat.
-  witness(pos, severity, time, callPolice) {
+  witness(pos, severity, time, callPolice, incident) {
     if (this.dead || this.state === 'inside' || this.kind === 'story') return;
     this.threat = { x: pos.x, y: pos.y };
     if (callPolice && this.state !== 'flee') {
       this.state = 'phone';
       this.phoneUntil = time + 3200;
-      this.phoneInfo = { pos: { x: pos.x, y: pos.y }, severity };
+      this.phoneInfo = { pos: { x: pos.x, y: pos.y }, severity, incident: incident || null };
       this.stop();
       this.faceGoal = Math.atan2(pos.y - this.y, pos.x - this.x);
       this.scene.events.emit('phone', this);
@@ -251,6 +252,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       case 'cashier': if (within(5, 6.2)) this.poseNow = { pickup: true }; break;
       case 'lounge': case 'chat': if (within(0, 7)) this.poseNow = { talk: true }; break;
       case 'smoke': if (within(3, 4.2)) this.poseNow = { lift: true }; break;
+      case 'shoe': if (within(2, 4.2)) this.poseNow = { pickup: true }; else if (within(7, 9)) this.poseNow = { talk: true }; break;                 // inspecting a sneaker
+      case 'clothes': if (within(4, 5.2) || within(9, 10)) this.poseNow = { pickup: true }; break;                                              // looking through the racks
+      case 'tryon': if (within(2, 3.4) || within(7, 8.4)) this.poseNow = { lift: true }; break;                                              // trying shoes on
+      case 'pay': if (within(5, 6.4)) this.poseNow = { pickup: true }; else if (within(0, 4)) this.poseNow = { talk: true }; break;         // at the checkout
       case 'valet': if (within(4, 5)) this.poseNow = { pickup: true }; else if (within(8, 11)) this.poseNow = { talk: true }; break;
       default: break;
     }
@@ -443,7 +448,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     if (time >= this.phoneUntil) {
       const info = this.phoneInfo;
       this.phoneInfo = null;
-      if (info) this.scene.civilianCalledPolice(this, info.pos, info.severity);
+      if (info) this.scene.civilianCalledPolice(this, info.pos, info.severity, info.incident);
       this.beginFlee(time, rand(4000, 7000));
     }
   }

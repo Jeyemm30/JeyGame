@@ -8,11 +8,67 @@ export const VEHICLES = {
   van: { name: 'Van', variants: 3, max: 210, acc: 140, brake: 470, steer: 1.8, hp: 140, len: 62, wid: 28, reverse: 0.35, price: 900 },
   ambulance: { name: 'Ambulance', variants: 1, max: 235, acc: 170, brake: 500, steer: 1.9, hp: 130, len: 62, wid: 28, reverse: 0.35, price: 0 },
   truck: { name: 'Truck', variants: 3, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
+  gangcar: { name: 'Gang Car', variants: 4, max: 262, acc: 200, brake: 530, steer: 2.4, hp: 110, len: 54, wid: 24, reverse: 0.4, price: 0 },
   luxury: { name: 'Luxury Sedan', variants: 3, max: 275, acc: 205, brake: 540, steer: 2.4, hp: 110, len: 54, wid: 24, reverse: 0.4, price: 3500 },
   moto: { name: 'Motorcycle', variants: 2, max: 335, acc: 290, brake: 600, steer: 3.3, hp: 60, len: 34, wid: 14, reverse: 0.25, price: 450 }
 };
 
 const wrap = Phaser.Math.Angle.Wrap;
+
+/* ---- collision layer. Driving sets the velocity from heading x speed every frame, so plain Arcade separation made cars
+   stick together. Instead every vehicle carries a "knock" velocity (kv) that collisions add to: it slides the car, decays with
+   friction, and parked cars move with it too. Impulses use mass, closing speed and the impact point (which also spins the cars). */
+export const MASS = { sedan: 1, police: 1.15, gangcar: 1, luxury: 1.1, van: 1.55, ambulance: 1.6, truck: 3, moto: 0.35 };
+let UID = 0;
+
+export function resolveVehicles(scene, a, b) {
+  if (!a.active || !b.active || a === b) return;
+  const A = a.body, B = b.body;
+  const ox = Math.min(A.right, B.right) - Math.max(A.left, B.left), oy = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
+  if (ox <= 0 || oy <= 0) return;
+  const now = scene.gt;
+  // contact normal = the axis with the smaller overlap, pointing from b to a
+  let nx = 0, ny = 0, pen;
+  if (ox < oy) { nx = A.center.x < B.center.x ? -1 : 1; pen = ox; } else { ny = A.center.y < B.center.y ? -1 : 1; pen = oy; }
+  const ma = a.massNow(), mb = b.massNow(), inv = 1 / ma + 1 / mb;
+  // closing speed along the normal (actual velocities, including any knock)
+  const rel = (A.velocity.x - B.velocity.x) * nx + (A.velocity.y - B.velocity.y) * ny;
+  if (rel < -4) {
+    const j = -(1 + 0.22) * rel / inv, impact = -rel;
+    a.knockBy(nx * j / ma, ny * j / ma, now); b.knockBy(-nx * j / mb, -ny * j / mb, now);
+    // the impact point off the centre spins the cars a little (clamped: no cartwheels)
+    const cx = (Math.max(A.left, B.left) + Math.min(A.right, B.right)) / 2, cy = (Math.max(A.top, B.top) + Math.min(A.bottom, B.bottom)) / 2;
+    a.spinFrom(cx, cy, nx * j / ma, ny * j / ma); b.spinFrom(cx, cy, -nx * j / mb, -ny * j / mb);
+    if (impact > 25 && now - Math.max(a.hitAt || 0, b.hitAt || 0) > 220) {
+      a.hitAt = b.hitAt = now;
+      a.crashHit(impact * (mb / (ma + mb)) * 1.6, b); b.crashHit(impact * (ma / (ma + mb)) * 1.6, a);
+      sfx.crash(Math.min(1, impact / 200));
+    }
+  }
+  // positional separation split by mass, so they never stay overlapped (heavier = moves less)
+  const push = Math.min(pen, 14) + 0.5;
+  const fa = mb / (ma + mb), fb = ma / (ma + mb);
+  a.shiftBy(nx * push * fa, ny * push * fa); b.shiftBy(-nx * push * fb, -ny * push * fb);
+  // a driven car pushing into a stationary one is simply blocked: it loses speed instead of bulldozing the other car down the road
+  [[a, 1, B.velocity], [b, -1, A.velocity]].forEach(([v, side]) => {
+    const other = v === a ? b : a;
+    if (!(v.driver || v.mode === 'chase') || other.driver || other.mode === 'chase') return;
+    const vel = v.body.velocity, into = side * -1 * (vel.x * nx + vel.y * ny) * (side === 1 ? 1 : -1);
+    const toward = v === a ? -(vel.x * nx + vel.y * ny) : (vel.x * nx + vel.y * ny);
+    if (toward > 5) { v.speed *= 0.72; v.kv.x *= 0.8; v.kv.y *= 0.8; }
+  });
+  // trapped recovery: still overlapping after a second -> shove harder and let AI drivers back out
+  const key = a.uid < b.uid ? a.uid + ':' + b.uid : b.uid + ':' + a.uid;
+  scene.vehPairs = scene.vehPairs || new Map();
+  const rec = scene.vehPairs.get(key) || { t0: now, last: now };
+  if (now - rec.last > 400) rec.t0 = now;
+  rec.last = now; scene.vehPairs.set(key, rec);
+  if (now - rec.t0 > 900) {
+    a.knockBy(nx * 90 * fa, ny * 90 * fa, now); b.knockBy(-nx * 90 * fb, -ny * 90 * fb, now);
+    [a, b].forEach((v) => { if (v.driver === 'ai' && v.pilot && v.startRecovery) v.startRecovery(now); });
+    rec.t0 = now;
+  }
+}
 
 export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
@@ -50,6 +106,8 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.unloaded = false;
     this.sirenOn = false;
     this.cmd = { throttle: 0, steer: 0, handbrake: false };
+    this.uid = ++UID; this.kv = { x: 0, y: 0 }; this.hitAt = 0; this.noFeedbackUntil = 0; this.lastDriverAt = 0;
+    this.body.pushable = false;                      // people and scenery can never shove a car; only the vehicle collision layer moves cars
     this.refreshView(true);
     this.body.setImmovable(this.mode === 'parked');
     if (this.mode === 'patrol' || this.mode === 'traffic') this.driver = 'ai';
@@ -61,6 +119,51 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   }
 
   get key() { return `veh_${this.vtype}${this.variant}_`; }
+
+  massNow() { return (MASS[this.vtype] || 1) * (this.wrecked ? 6 : this.driver || this.mode === 'chase' ? 1 : 3); }     // parked cars resist more, wrecks barely budge
+  knockBy(dx, dy, now) {
+    const cap = 330, k = this.kv;
+    k.x += dx; k.y += dy;
+    const m = Math.hypot(k.x, k.y); if (m > cap) { k.x *= cap / m; k.y *= cap / m; }
+    this.noFeedbackUntil = now + 220;                 // the speed loss from a car-to-car hit is handled here, not by the wall-hit detector
+    if (!this.driver && this.mode !== 'chase') this.body.setImmovable(false);
+    // along the heading the hit also slows / reverses a moving car
+    if (this.driver || this.mode === 'chase') {
+      const c = Math.cos(this.heading), s = Math.sin(this.heading), along = dx * c + dy * s;
+      this.speed = Phaser.Math.Clamp(this.speed + along * 0.8, -this.cfg.max * this.cfg.reverse, this.cfg.max);
+      k.x -= along * c * 0.8; k.y -= along * s * 0.8;       // (that part went into the speed instead)
+    }
+  }
+  spinFrom(cx, cy, dvx, dvy) {
+    const rx = cx - this.x, ry = cy - this.y;
+    const torque = (rx * dvy - ry * dvx) / (this.cfg.len * 16 * (MASS[this.vtype] || 1));
+    const turn = Phaser.Math.Clamp(torque, -0.13, 0.13);
+    if (Math.abs(turn) > 0.004) { this.heading = wrap(this.heading + turn); this.refreshView(); }
+  }
+  shiftBy(dx, dy) { this.x += dx; this.y += dy; this.body.x += dx; this.body.y += dy; }
+  crashHit(impact, other) {
+    if (impact < 12) return;
+    const pv = this.scene.player.vehicle;
+    const pnear = pv && pv !== this && Math.hypot(pv.x - this.x, pv.y - this.y) < 160;
+    const dmg = this.driver === 'ai' && !pnear ? Math.min(impact * 0.1, Math.max(0, this.hp - this.maxHp * 0.25)) : impact * 0.1;
+    if (this.driver || this.mode === 'chase') { if (this.pilot) (this.pilot.hitT = this.pilot.hitT || []).push(this.scene.gt); }
+    if (!this.wrecked && dmg > 0 && (this.driver || other.driver)) this.takeDamage(dmg);
+    if (this.driver === 'player') {
+      this.scene.cameras.main.shake(140, Math.min(0.01, impact / 30000));
+      if (impact > 120) this.scene.player.takeDamage(impact * 0.03, true);
+    }
+  }
+  // friction on the knock velocity; parked / wrecked cars slide with it and settle
+  applyKnock(sec) {
+    const k = this.kv, m = Math.hypot(k.x, k.y);
+    if (m < 3) {
+      if (m > 0) { k.x = 0; k.y = 0; if (!this.driver && this.mode !== 'chase') { this.setVelocity(0, 0); this.body.setImmovable(this.mode === 'parked' || this.wrecked); } }
+      return;
+    }
+    const f = Math.exp(-(this.driver || this.mode === 'chase' ? 3.2 : 4.4) * sec);
+    k.x *= f; k.y *= f;
+    if (!this.driver && this.mode !== 'chase') this.setVelocity(k.x, k.y);
+  }
 
   // Four drawn views (side / front / back). The collision box is an axis-aligned rectangle that matches the
   // car's footprint in the current view, and the sprite is tilted by the leftover angle so turns look smooth.
@@ -124,8 +227,8 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
 
     // collision feedback from the last physics step: if we lost most of our speed, we hit something
     const c = Math.cos(this.heading), s = Math.sin(this.heading);
-    const act = this.body.velocity.x * c + this.body.velocity.y * s;
-    if (Math.abs(this.speed) > 55 && Math.abs(act) < Math.abs(this.speed) * 0.45) {
+    const act = (this.body.velocity.x - this.kv.x) * c + (this.body.velocity.y - this.kv.y) * s;
+    if (this.scene.gt > this.noFeedbackUntil && Math.abs(this.speed) > 55 && Math.abs(act) < Math.abs(this.speed) * 0.45) {
       const impact = Math.abs(this.speed) - Math.abs(act);
       this.speed = act * 0.3;
       if (impact > 40) {
@@ -170,7 +273,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     const abs = Math.abs(sp);
     const factor = Phaser.Math.Clamp(abs / 45, 0, 1) * (1 - 0.5 * Math.min(1, abs / cfg.max)) * (inp.handbrake && abs > 60 ? 1.5 : 1);
     this.heading = wrap(this.heading + inp.steer * cfg.steer * factor * Math.sign(sp) * sec);
-    this.setVelocity(Math.cos(this.heading) * sp, Math.sin(this.heading) * sp);
+    this.setVelocity(Math.cos(this.heading) * sp + this.kv.x, Math.sin(this.heading) * sp + this.kv.y);
 
     // fuel
     if (this.driver === 'player' || this.ownedId) {
@@ -448,9 +551,11 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   }
 
   updateVehicle(now, dt) {
+    this.applyKnock(Math.min(this.scene.game.loop.delta || dt, 250) / 1000);      // real frame time: the physics step moves the car for that long, so the friction must match it
+    if (this.driver) this.lastDriverAt = now;
     if (this.driver === 'ai' || this.mode === 'chase') this.aiThink(now, dt);
     if (this.driver || this.mode === 'chase') this.drive(dt);
-    else if (this.mode === 'parked' && this.speed !== 0) { this.speed = 0; this.setVelocity(0, 0); }
+    else if (this.mode === 'parked' && this.speed !== 0) { this.speed = 0; if (Math.hypot(this.kv.x, this.kv.y) < 3) this.setVelocity(0, 0); }
 
     const depth = this.scene.depthOf(this.x, this.y);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }

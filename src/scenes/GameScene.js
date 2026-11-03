@@ -12,7 +12,7 @@ import Wanted, { CRIME } from '../systems/Wanted.js';
 import Player, { CHEST } from '../entities/Player.js';
 import Enemy from '../entities/Enemy.js';
 import Civilian from '../entities/Civilian.js';
-import Vehicle, { VEHICLES } from '../entities/Vehicle.js';
+import Vehicle, { VEHICLES, resolveVehicles } from '../entities/Vehicle.js';
 import { touch, touchEnabled, consumeAction } from '../systems/Touch.js';
 import { profile, resetProfile } from '../systems/Profile.js';
 import { writeSlot } from '../systems/Save.js';
@@ -21,6 +21,10 @@ import RandomEvents from '../systems/Events.js';
 import { getDialogue, dialogueState, chatDialogue } from '../systems/Dialogue.js';
 import { STORY_NPCS } from '../story/npcs.js';
 import * as Casino from '../systems/Casino.js';
+import GangDirector from '../systems/GangEvents.js';
+import { GANGS, GANG_IDS, BOSSES, GUARDS, GANG_CFG, SURRENDER, TIER_CSS, GANG_COLOR_IDX, gstate, repOf, levelOf, addRep, reputationEvent, rivalsOf, relation, logEvent, tierOf, tierMin, atLeast, hasAccess, canMeetBoss, memOf, repHook, mirrorBossDown, restoreBossDown } from '../story/gangs.js';
+import GangJobs from '../systems/GangJobs.js';
+import { JOB_KINDS, FLAVOR } from '../story/gangJobs.js';
 import { AMBIENT } from '../story/casinoTalk.js';
 import { buildPlaces } from '../story/places.js';
 import { OUTFITS } from './ShopScene.js';
@@ -32,6 +36,7 @@ const CHUNK = 512;
 const TILT = 0.62;
 const UPY = 1 / TILT;
 const WALL_PX = 40;        // on-screen height of a wall face (the 32px wall art is stretched up to this)
+const TALL_PX = 30;        // extra brick course stacked on the exterior walls of tall buildings (gang warehouses): the roof rides TALL_PX higher too
 const WALL_TOPS = new Set([T.wallCap, T.wall2Cap, T.tentCap, T.glassCap]);
 // Depth = position along the SCREEN's vertical axis, squeezed into 100..4800 (fixed overlay layers live above that)
 const DEPTH_D0 = (W + H) * TILE;
@@ -127,6 +132,7 @@ export default class GameScene extends Phaser.Scene {
     if (hz) this.add.rectangle(hz.x + hz.w / 2, hz.y + hz.h / 2, hz.w, hz.h, 0x05030a, 0.34).setDepth(3.9);
     this.kennyPoi = null;
     if (profile.flags.kennyFound) this.revealKenny();
+    GANG_IDS.forEach((g) => { if (gstate().found[g] && this.wd.gangs[g] && this.wd.gangs[g].poi) this.wd.pois.push(this.wd.gangs[g].poi); });
     this.containers = this.wd.containers;
     this.containerMarks = [];
     this.containers.forEach((c, i) => {
@@ -148,6 +154,11 @@ export default class GameScene extends Phaser.Scene {
     this.wanted = new Wanted(this);
     this.missions = new MissionManager(this);
     this.randomEvents = new RandomEvents(this);
+    this.gangDirector = new GangDirector(this);
+    this.gangJobs = new GangJobs(this);
+    restoreBossDown();
+    this.bossSpecs = {};
+    repHook.fn = (g, d, t0, t1) => this.onRepChange(g, d, t0, t1);
     this.player = new Player(this, this.wd.spawn.x, this.wd.spawn.y);
     this.enemies = this.physics.add.group();
     this.civilians = this.physics.add.group();
@@ -162,7 +173,12 @@ export default class GameScene extends Phaser.Scene {
     });
     (profile.ownedVehicles || []).forEach((o) => this.ensureFree(this.spawnVehicle({ type: o.type, variant: o.variant, x: o.x, y: o.y, heading: o.heading || 0, hp: o.hp, fuel: o.fuel, mode: 'parked', ownedId: o.id, locked: true })));
     this.wd.enemies.forEach((spec, i) => {
-      if (profile.killedSpawns.includes(i)) return;
+      if (spec.boss) {                                   // a beaten boss stays away for GANG_CFG.bossRespawnMs of REAL time (also across reloads); bossRespawn() brings him back live
+        this.bossSpecs[spec.boss] = spec;
+        const down = gstate().bossDown[spec.boss];
+        if (down !== undefined) { if (Date.now() - down < GANG_CFG.bossRespawnMs) return; delete gstate().bossDown[spec.boss]; }
+      }
+      if (!spec.gang && profile.killedSpawns.includes(i)) return;       // gangs are topped up by the director instead
       const e = this.spawnEnemy(spec);
       e.spawnIdx = i;
     });
@@ -189,7 +205,8 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.enemies);
     this.physics.add.collider(this.player, this.civilians);
     this.physics.add.collider(this.civilians, this.civilians);
-    this.physics.add.collider(this.vehicles, this.vehicles);
+    // car-to-car: our own impulse resolution (see Vehicle.js) instead of Arcade's separation, so cars slide, spin and push each other
+    this.physics.add.overlap(this.vehicles, this.vehicles, (a, b) => { if (a.uid < b.uid) resolveVehicles(this, a, b); });
     this.physics.add.collider(this.player, this.vehicles, null, (p, v) => !this.player.vehicle && Math.abs(v.speed) < 70);
     this.physics.add.collider(this.civilians, this.vehicles, null, slow);
     this.physics.add.collider(this.enemies, this.vehicles, null, slow);
@@ -201,7 +218,7 @@ export default class GameScene extends Phaser.Scene {
       (b, tile) => b.active && !BULLET_PASS.has(tile.index));
     this.physics.add.overlap(this.combat.bullets, this.enemies,
       (b, e) => this.onBulletEnemy(b, e),
-      (b, e) => b.active && b.owner === 'player' && !e.dead);
+      (b, e) => b.active && !e.dead && (b.owner === 'player' || (b.owner === 'gang' && b.shooter && b.shooter !== e && b.shooter.active && b.shooter.isFoe(e))));
     this.physics.add.overlap(this.combat.bullets, this.civilians,
       (b, c) => this.onBulletCivilian(b, c),
       (b, c) => b.active && !c.dead && c.state !== 'inside' && c.kind !== 'story');
@@ -211,6 +228,20 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.combat.bullets, this.vehicles,
       (b, v) => this.onBulletVehicle(b, v),
       (b, v) => b.active && !(b.owner === 'player' && v.driver === 'player'));
+
+    // ---- hideout gates: a barrier across each official entrance, closed until the crew trusts the player (blocks the player on foot and in a car)
+    this.gates = {};
+    GANG_IDS.forEach((g) => {
+      const T = this.wd.gangs[g], r = T && T.gateRect;
+      if (!r) return;
+      const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2, zone = this.add.zone(cx, cy, r.x1 - r.x0, (r.y1 - r.y0) + 144);      // 144 px deeper than the gap: nobody can skip over it at speed or at a low frame rate
+      this.physics.add.existing(zone, true);
+      const bar = this.add.sprite(cx, r.y1 - 4, 'gang_gate_' + g).setOrigin(0.5, 1).setDepth(this.depthOf(cx, r.y1 - 4));
+      this.gates[g] = { zone, bar, open: false };
+      this.physics.add.collider(this.player, zone, null, () => !this.gates[g].open && !this.player.vehicle);
+      this.physics.add.collider(this.vehicles, zone, null, (z, v) => !this.gates[g].open && v === this.player.vehicle);
+      this.physics.add.collider(this.enemies, zone, null, (z, e) => !this.gates[g].open && !!e.jobTag && e.gang !== g);          // job attackers also have to use the real gate
+    });
 
     // ---- restore a saved game (position, inventory, wanted ...) or start fresh
     if (load) this.applyPlayerSave(load);
@@ -227,7 +258,7 @@ export default class GameScene extends Phaser.Scene {
     cam.fadeIn(500);
 
     // ---- input
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,G,Q,X,V,C,Z,M,L,J,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,G,Q,X,V,C,Z,M,L,J,K,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.input.mouse.disableContextMenu();
     this.input.keyboard.on('keydown-O', () => this.atmo && this.atmo.cycleWeather());
     this.input.keyboard.on('keydown-Y', () => { if (this.atmo) { this.atmo.skipHours(3); this.events.emit('toast', 'Time ' + this.atmo.timeText); } });
@@ -377,7 +408,7 @@ export default class GameScene extends Phaser.Scene {
     const r = -this.camRot;
     for (const k of this.activeChunks) {
       const c = this.chunks.get(k);
-      for (let i = 0; i < c.live.length; i++) { const im = c.live[i], it = c.items[i]; im.setRotation(r).setDepth(this.depthOf(it.x, it.y)); }
+      for (let i = 0; i < c.live.length; i++) { const im = c.live[i], it = c.items[i]; if (it.flat) continue; im.setRotation(r).setDepth(this.depthOf(it.x, it.y)); }
     }
     this.crates.getChildren().forEach((s) => s.setRotation(r).setDepth(this.depthOf(s.x, s.y)));
     for (const s of this.items) { s.setRotation(r + (s.tilt || 0)); }
@@ -448,11 +479,13 @@ export default class GameScene extends Phaser.Scene {
     const wd = this.wd;
     this.isWall = new Uint8Array(W * H);
     this.wallFace = new Uint8Array(W * H);
+    this.tallCell = new Uint8Array(W * H);
+    wd.buildings.forEach((b) => { if (!b.tall) return; for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) if (xx === b.x || xx === b.x + b.w - 1 || yy === b.y || yy === b.y + b.h - 1) this.tallCell[yy * W + xx] = 1; });
     const tiles = this.textures.get('tiles');
     const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
     WALL_FAMILY.forEach((idx) => { if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE); });
     for (let idx = 0; idx < 64; idx++) if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE);
-    const FLAT_OBJ = new Set([T.water, T.tree, T.prop]);     // left flat in the tilemap (water) or blank (tree / prop: drawn as sprites)
+    const FLAT_OBJ = new Set([T.water, T.tree, T.prop, T.propHigh]);     // left flat in the tilemap (water) or blank (tree / prop: drawn as sprites)
     this.wallUV = new Map();
     this.isLow = new Uint8Array(W * H);
     const LOW = new Map([[T.fence, 26], [T.barricade, 24], [T.sandbag, 20]]);   // long barriers: continuous low panels
@@ -501,7 +534,7 @@ export default class GameScene extends Phaser.Scene {
       const gl = gs.wallGL.glTexture;
       const unit = pipeline.setTexture2D(gl);
       const z = camera.zoom, cs = gs.cs, sn = gs.sn, hw = camera.width / 2, hh = camera.height / 2;
-      const mx = camera.scrollX + hw, my = camera.scrollY + hh, hz = WALL_PX * z;
+      const mx = camera.scrollX + hw, my = camera.scrollY + hh, hz = (WALL_PX + TALL_PX) * z;
       for (let i = 0; i < q.length; i++) {
         const p = q[i];
         let dx = (p.ax - mx) * z, dy = (p.ay - my) * z;
@@ -522,7 +555,8 @@ export default class GameScene extends Phaser.Scene {
           const lo = Math.min(ax, bx) - 8, hi = Math.max(ax, bx) + 8, top = Math.min(ay, by) - qh;
           if (xr.x > lo && xr.x < hi && xr.y > top && xr.y - 54 * z < Math.max(ay, by)) tint = p.tintFade;
         }
-        pipeline.batchQuad(src, ax, ay - qh, ax, ay, bx, by, bx, by - qh, p.u0, p.v0, p.u1, p.v1, tint, tint, tint, tint, 0, gl, unit);
+        const lf = (p.lift || 0) * z;
+        pipeline.batchQuad(src, ax, ay - qh - lf, ax, ay - lf, bx, by - lf, bx, by - qh - lf, p.u0, p.v0, p.u1, p.v1, tint, tint, tint, tint, 0, gl, unit);
       }
       renderer.pipelines.postBatch(src);
     };
@@ -568,6 +602,20 @@ export default class GameScene extends Phaser.Scene {
         const k = Math.round(255 * (0.7 + 0.3 * Math.min(1, facing)));
         const rgb = (k << 16) | (k << 8) | k;
         img.quads.push({ ax, ay, bx, by, key, u0: uv[0], v0: uv[1], u1: uv[2], v1: uv[3], h: low ? this.lowH.get(this.wallFace[i]) : 0, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 0.3) });
+        if (!low && this.tallCell[i]) {                                   // upper brick course: plain brick above the doors / windows, a touch darker, with a lighter coping line
+          const uw = this.wallUV.get(T.wall2) || uv, k2 = Math.round(k * 0.9), rgb2 = (k2 << 16) | (k2 << 8) | k2;
+          img.quads.push({ ax, ay, bx, by, key: key + 0.01, u0: uw[0], v0: uw[1], u1: uw[2], v1: uw[1] + (uw[3] - uw[1]) * 0.75, h: TALL_PX, lift: WALL_PX, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb2, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb2, 0.3) });
+        }
+      }
+      if (low && this.wallFace[i] === T.fence && cs > 0.5) {         // a fence running up/down the screen is edge-on (no south face of its own): draw its posts so the side fences are visible
+        const isF = (x, y) => x >= 0 && y >= 0 && x < W && y < H && this.isLow[y * W + x] && this.wallFace[y * W + x] === T.fence;
+        if (isF(tx, ty + 1) && !(isF(tx - 1, ty) && isF(tx + 1, ty))) {
+          const cx = (tx + 0.5) * TILE, ay = (ty + 1) * TILE, ax = cx - 7, bx = cx + 7, key = cx * sn + ay * cs + DEPTH_D0 + 0.05, bi = Math.floor(key / BAND);
+          let img = this.wallBands.get(bi);
+          if (!img) { img = this.makeWallBand(); this.wallBands.set(bi, img); }
+          const uv = this.wallUV.get(T.fence), du = uv[2] - uv[0], k = Math.round(255 * 0.82), rgb = (k << 16) | (k << 8) | k;
+          img.quads.push({ ax, ay, bx, by: ay, key, u0: uv[0] + du * 0.3, v0: uv[1], u1: uv[0] + du * 0.7, v1: uv[3], h: this.lowH.get(T.fence), tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 0.3) });
+        }
       }
     }
     this.wallBands.forEach((img, bi) => {
@@ -592,6 +640,7 @@ export default class GameScene extends Phaser.Scene {
     this.initWalls(addScenery);
     wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
     wd.decor.forEach((d) => addScenery(d.x, d.y, d.kind, 1));
+    (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; });      // rugs lie flat on the floor
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
       if (key) addScenery(p.x, p.y, key, 1);
@@ -650,7 +699,7 @@ export default class GameScene extends Phaser.Scene {
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
       let fg = null;
       if (b.lift > 0) { fg = this.add.graphics(); parts.push(fg); }
-      const L = WALL_PX - 8 * TILT + b.lift;
+      const L = WALL_PX - 8 * TILT + b.lift + (b.tall ? TALL_PX : 0);
       const cont = this.add.container(0, -L, parts).setDepth(100 + (b.y + b.h) * TILE - 4);
       return { id: b.id, cont, b, fg, fgDrawn: false, lift: L, alpha: 1, cx: x + w / 2, cy: y + h / 2, rad: Math.hypot(w, h) / 2 + b.lift + 90 };
     });
@@ -669,7 +718,8 @@ export default class GameScene extends Phaser.Scene {
       this.activeChunks.add(k);
       for (const it of c.items) {
         const im = this.chunkPool.pop() || this.add.image(0, 0, 'tree0');
-        im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc, it.sy ?? it.sc * UPY).setRotation(-this.camRot).setDepth(this.depthOf(it.x, it.y)).setVisible(true).setActive(true);
+        if (it.flat) im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, 0.5).setScale(1, 1).setRotation(0).setDepth(3.4).setVisible(true).setActive(true);
+        else im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc, it.sy ?? it.sc * UPY).setRotation(-this.camRot).setDepth(this.depthOf(it.x, it.y)).setVisible(true).setActive(true);
         it.im = im;
         c.live.push(im);
       }
@@ -1095,6 +1145,341 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  /* ------------------------------------------------------------ roads stay clear */
+  onRoadAt(x, y) {
+    const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return false;
+    const g = this.wd.ground[ty][tx];
+    return g === T.road || g === T.roadDash || g === T.roadDashV || g === T.roadCrack || g === T.crossH || g === T.crossV || g === T.bridge;
+  }
+
+  // wrecked or abandoned cars on a road are towed to a free roadside bay (never while they can be seen)
+  towCheck(now) {
+    if (now - (this.towAt || 0) < 1500 || !this.wd.bays) return;
+    this.towAt = now;
+    const p = this.player, vr = this.viewRect(140);
+    this.vehicles.children.iterate((v) => {
+      if (!v || !v.active || v === p.vehicle || v.questTag || v.ownedId || v.driver || v.mode === 'chase' || v.temp) return;
+      if (!this.onRoadAt(v.x, v.y)) return;
+      const broken = v.wrecked && now - (v.wreckedAt || 0) > 25000;
+      const abandoned = v.mode === 'parked' && !v.wrecked && now - (v.lastDriverAt || 0) > 20000;
+      if (!broken && !abandoned) return;
+      if (vr.contains(v.x, v.y)) return;
+      let best = null, bd = 1e9;
+      for (const b of this.wd.bays) {
+        const d = Math.hypot(b.x - v.x, b.y - v.y);
+        if (d >= bd || d > 2600) continue;
+        let taken = false;
+        this.vehicles.children.iterate((o) => { if (!taken && o && o.active && o !== v && Math.hypot(o.x - b.x, o.y - b.y) < 70) taken = true; });
+        if (!taken) { best = b; bd = d; }
+      }
+      if (!best) return;
+      v.setPosition(best.x, best.y); v.body.reset(best.x, best.y);
+      v.heading = best.heading; v.speed = 0; v.kv.x = 0; v.kv.y = 0; v.mode = 'parked'; v.refreshView(true);
+      v.body.setImmovable(true);
+    });
+  }
+
+  /* ------------------------------------------------------------ gangs: reputation, bosses, contracts */
+  openGangs() { if (this.scene.isActive('Gangs')) return; this.scene.pause('Game'); this.scene.launch('Gangs'); }
+
+  applyGangRep(g, n, why) {
+    reputationEvent(g, n);                                       // the repHook shows the notifications
+    if (why) logEvent(why);
+  }
+
+  // notifications for every reputation change (side effects of rivalries / alliances stay quiet unless they cross a tier)
+  onRepChange(g, d, t0, t1) {
+    const name = GANGS[g].name;
+    if (Math.abs(d) >= 3) this.events.emit('toast', name + ': respect ' + (d > 0 ? '+' : '') + d);
+    if (t0 !== t1) this.events.emit('toast', name + ': you are now ' + t1.toLowerCase());
+  }
+
+  // gates open / close with standing; "access granted" and "access revoked" notifications
+  gangTick(now) {
+    this.gateEnforce(now);                                       // every frame
+    if (now - (this.gtick || 0) < 400) return;
+    this.gtick = now;
+    const s = gstate(); s.acc = s.acc || {};
+    GANG_IDS.forEach((g) => {
+      const ok = hasAccess(g), gate = this.gates[g];
+      if (s.acc[g] !== ok) {
+        if (s.acc[g] !== undefined || ok) this.events.emit('banner', { title: ok ? 'HIDEOUT ACCESS' : 'ACCESS REVOKED', sub: GANGS[g].name.toUpperCase() });
+        s.acc[g] = ok;
+      }
+      if (gate && gate.open !== ok) { gate.open = ok; gate.bar.setTexture((ok ? 'gang_gate_open_' : 'gang_gate_') + g); }
+    });
+    this.gangJobs.update(now);
+    this.bossRespawn(now);
+    this.gangSuspicion(now);
+  }
+
+  // ONE access rule for every way in: a player (or the car they drive) inside a yard they are not cleared for is put back outside the gate.
+  // The barrier stops walking; this stops anything that slips past it (sprinting, cars, knock-back, teleports, a revoked pass).
+  gateEnforce(now) {
+    const p = this.player, ent = p.vehicle || p;
+    GANG_IDS.forEach((g) => {
+      const T = this.wd.gangs[g], y = T && T.yard;
+      if (!y || hasAccess(g)) return;
+      if (ent.x < y.x0 || ent.x > y.x1 || ent.y < y.y0 || ent.y > y.y1) return;
+      const r = T.gateRect, ox = (r.x0 + r.x1) / 2, oy = r.y1 + 110;
+      ent.setPosition(ox, oy); if (ent.body) ent.body.reset(ox, oy);
+      if (p.vehicle) { p.vehicle.speed = 0; if (p.vehicle.kv) { p.vehicle.kv.x = 0; p.vehicle.kv.y = 0; } } else { p.setVelocity(0, 0); }
+      if (now - (this.denyAt || 0) > 2500) { this.denyAt = now; this.events.emit('toast', GANGS[g].name + ': no entry. You need ' + GANG_CFG.needAccess + ' standing (' + tierMin(GANG_CFG.needAccess) + '), you have ' + repOf(g) + '.'); }
+    });
+  }
+
+  // is the hideout on high alert (the player attacked it recently)?
+  gangSecurity(g) { return Date.now() < ((gstate().alert || {})[g] || 0); }
+
+  // the player hurt the unkillable guard: it costs reputation, the guard stays put
+  onGuardHit(e, time) {
+    const g = e.guard, m = memOf(g);
+    m.guardAttacks++; m.attacked++; m.lastAttackAt = Date.now();
+    const s = gstate(); s.alert = s.alert || {}; s.alert[g] = Date.now() + GANG_CFG.securityMs;
+    this.applyGangRep(g, GANG_CFG.rep.hitGuard, null);
+    e.say('Hands off! Security!', 1800);
+    this.provokeHideout(e, 420);
+  }
+
+  // a boss is beaten: surrender talk, the crew reacts, he is carried off, and the real-time respawn clock starts
+  onBossSurrender(e) {
+    const id = e.boss, g = e.gang, s = gstate(), lines = SURRENDER[id] || ['I surrender.', 'You win this time.', 'Stand down.'];
+    s.bossDown[id] = Date.now(); mirrorBossDown();
+    const m = memOf(g); m.defeats++; m.attacked++;
+    this.applyGangRep(g, GANG_CFG.rep.bossDefeat, null);           // beating a boss never earns respect
+    logEvent(BOSSES[id].name + ' was beaten and surrendered');
+    this.events.emit('banner', { title: 'BOSS DEFEATED', sub: BOSSES[id].name.toUpperCase() });
+    const dlg = { start: 'a', nodes: { a: { who: id, text: lines[0], next: 'b' }, b: { who: id, text: lines[1], end: true } } };
+    // the crew: some defend, some pull back, some give up
+    this.enemies.children.iterate((o) => {
+      if (!o || o.dead || o === e || o.crew !== g || o.guard || Math.hypot(o.x - e.x, o.y - e.y) > 900) return;
+      const r = Math.random();
+      if (r < 0.34) { o.angry = true; o.angryUntil = this.gt + 40000; o.lastKnown = { x: this.player.x, y: this.player.y }; o.lastSeen = this.gt; if (o.ai === 'idle') o.enterAlert(this.gt, true); o.say && o.say('Boss is down! Get him!', 2000); }
+      else if (r < 0.67) { o.angry = false; o.foe = null; o.retreating = false; o.returnToPost(this.gt); o.say && o.say('Fall back to the posts!', 1800); }
+      else { o.angry = false; o.foe = null; o.ai = 'idle'; o.stop(); o.say && o.say(lines[2] ? 'We give up!' : 'Stand down!', 1800); }
+    });
+    e.say(lines[2], 2600);
+    this.startDialogue(null, { dialogue: dlg, onEnd: () => { if (e.active && !e.dead) { this.tweens.add({ targets: [e], alpha: 0, duration: 500, onComplete: () => e.vanish && e.vanish() }); } } });
+  }
+
+  // a beaten boss is back (real time) in his own room, once the player cannot see the spot
+  bossRespawn(now) {
+    const s = gstate(), t = Date.now();
+    if (now - (this.bossChk || 0) < 1000) return; this.bossChk = now;
+    Object.keys(this.bossSpecs).forEach((id) => {
+      const down = s.bossDown[id];
+      if (down === undefined || t - down < GANG_CFG.bossRespawnMs) return;
+      if (this.enemies.getChildren().some((e) => e.active && !e.dead && e.boss === id)) { delete s.bossDown[id]; mirrorBossDown(); return; }      // only one of him
+      const spec = this.bossSpecs[id], p = this.player;
+      if (Math.hypot(p.x - spec.x, p.y - spec.y) < 380 && this.hasLOS(p.x, p.y, spec.x, spec.y)) return;
+      delete s.bossDown[id]; mirrorBossDown();
+      this.spawnEnemy(spec);
+      logEvent(BOSSES[id].name + ' is back in charge');
+    });
+  }
+
+  // gangs notice rival colours: wearing a rival gang's colour near a hideout makes the crew suspicious (and the guard says so)
+  wornGang() {
+    const L = this.registry.get("appearance") || {};
+    for (const g of GANG_IDS) {                                  // two pieces in the gang colour (shirt, hat, trousers) count as wearing their colours
+      const c = GANG_COLOR_IDX[g], n = (L.shirtColor === c ? 1 : 0) + (L.hat > 0 && L.hatColor === c ? 1 : 0) + (L.pantsColor === c ? 1 : 0);
+      if (n >= 2) return g;
+    }
+    return null;
+  }
+  gangSuspicion(now) {
+    const worn = this.wornGang(), p = this.player;
+    this.suspect = null;
+    if (!worn) return;
+    GANG_IDS.forEach((g) => {
+      if (g === worn || relation(g, worn) !== 'rival') return;
+      const T = this.wd.gangs[g]; if (!T || Math.hypot(p.x - T.base.x, p.y - T.base.y) > 520) return;
+      this.suspect = { g, worn };
+      if (now - ((this.suspNote || {})[g] || -1e9) > 60000) {
+        this.suspNote = this.suspNote || {}; this.suspNote[g] = now;
+        this.events.emit('toast', GANGS[g].name + ' do not like your ' + GANGS[worn].name.toLowerCase().split(' ')[0] + ' colours');
+        if (atLeast(g, 'TRUSTED') === false) this.applyGangRep(g, GANG_CFG.rep.clothes, null);
+      }
+    });
+  }
+
+  // the player hurt a gang member (rate limited: one reputation hit per gang every 25 s)
+  gangHit(e) {
+    this.gangHitAt = this.gangHitAt || {};
+    if (this.gt - (this.gangHitAt[e.gang] || -1e9) < 25000) return;
+    this.gangHitAt[e.gang] = this.gt;
+    const m = memOf(e.gang); m.attacked++; m.lastAttackAt = Date.now();
+    if (e.hideout) { const st = gstate(); st.alert = st.alert || {}; st.alert[e.gang] = Date.now() + GANG_CFG.securityMs; }      // hurting people at the hideout raises its security
+    this.applyGangRep(e.gang, e.boss ? GANG_CFG.rep.hitBoss : GANG_CFG.rep.hitMember, null);
+  }
+
+  onGangKilled(e) {
+    const t = this.gt, s = gstate(), G = GANGS[e.gang];
+    const byPlayer = e.playerHitAt !== undefined && t - e.playerHitAt < 25000;
+    if (byPlayer) {
+      this.applyGangRep(e.gang, e.boss ? -35 : GANG_CFG.rep.killMember, null);
+      s.kills[e.gang] = (s.kills[e.gang] || 0) + 1;
+      const j = s.job;
+      if (j && !j.done && j.target === e.gang) {
+        j.got++;
+        if (j.got >= j.need) {
+          j.done = true; this.addMoney(j.reward); addRep(j.for, 20);
+          this.events.emit('banner', { title: 'CONTRACT COMPLETE', sub: GANGS[j.for].name.toUpperCase() + ' PAY $' + j.reward });
+          logEvent('You finished a contract for the ' + GANGS[j.for].name); s.job = null;
+        } else this.events.emit('toast', 'Contract: ' + j.got + '/' + j.need + ' ' + GANGS[j.target].name);
+      }
+    } else if (e.lastFoe && e.lastFoe.gang) {
+      const k = e.gang + '>' + e.lastFoe.gang;
+      s.grudge[k] = Math.min(3, (s.grudge[k] || 0) + 1);
+      logEvent(GANGS[e.lastFoe.gang].name + ' killed a ' + G.name + ' member');
+    } else if (e.lastFoe && e.lastFoe.isPolice) logEvent('Police shot a ' + G.name + ' member');
+    // (a boss never dies from the player's weapons any more: Enemy.die() turns it into onBossSurrender)
+  }
+
+  // what a gang remembers about the player, as a spoken prefix (only things that gang could know)
+  gangMemoryLine(g) {
+    const m = memOf(g);
+    if (m.betrayed > 0) return 'You turned on us once. ';
+    if (m.guardAttacks > 0) return 'You put hands on my people at the gate. ';
+    if (m.defeats > 0) return 'You beat our boss once. We remember. ';
+    if (m.attacked > 2) return 'You have hurt us before. ';
+    if (m.jobs >= 3) return 'You have done good work for us. ';
+    return '';
+  }
+
+  // the named gate guard: explains the rules, hands out jobs, takes reports
+  guardTalk(e) {
+    const g = e.guard, G = GUARDS[g], F = FLAVOR[g], tier = tierOf(g), gj = this.gangJobs, job = gj.job, mine = job && job.g === g, who = G.id, rep = repOf(g);
+    const pickL = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    let greet = pickL(G.lines[tier.toLowerCase()]);
+    if (this.suspect && this.suspect.g === g) greet = 'Nice ' + GANGS[this.suspect.worn].name.split(' ')[0] + ' colours you are wearing. In OUR street. ' + greet;
+    else greet = this.gangMemoryLine(g) + greet;
+    const access = hasAccess(g), need = GANG_CFG.needAccess, nodes = {};
+    const reqText = 'Standing with the ' + GANGS[g].name + ': ' + tier + ' (' + rep + '). The gate opens at ' + need + ' (' + tierMin(need) + '). The boss only sees RESPECTED friends (' + tierMin(GANG_CFG.needBoss) + '). Run jobs for us, do not shoot our people, and it comes.';
+    const choices = [{ text: 'Can I go in?', next: 'enter' }, { text: 'What does it take to get in?', next: 'req' }];
+    if (tier !== 'HOSTILE') {
+      if (mine && gj.canReport(g, 'guard')) choices.push({ text: 'Report: the job is done', next: 'report' });
+      else if (mine) choices.push({ text: 'About my job', next: 'status' });
+      else choices.push({ text: 'I need work', next: 'work' });
+    } else choices.push({ text: 'Make amends ($300)', next: 'amends' });
+    choices.push({ text: 'Leave', next: 'bye' });
+    nodes.a = { who, text: greet, choices };
+    nodes.enter = { who, text: access ? pickL(G.lines[tier === 'RESPECTED' ? 'respected' : 'trusted']) : tier === 'HOSTILE' ? pickL(G.lines.hostile) : pickL(G.lines.unknown) + ' ' + reqText, next: 'a' };
+    nodes.req = { who, text: reqText, next: 'a' };
+    nodes.amends = { who, text: 'Three hundred and we call it a misunderstanding. Do not make me regret it.', effects: { event: 'gangamends:' + g }, next: 'a' };
+    nodes.locked = { who, text: 'Not yet. Earn more respect first, then ask again.', next: 'work' };
+    const wc = [];
+    gj.available(g).forEach((o) => {
+      const d = o.def;
+      if (o.ok) { wc.push({ text: d.label + '  ($' + d.pay[0] + '-' + d.pay[1] + ', +' + d.rep + ' respect)', next: 'j_' + o.kind }); nodes['j_' + o.kind] = { who, text: F.from + ': "Take it. Do it right and the ' + G.name + ' remember."', effects: { event: 'gangstart:' + g + ':' + o.kind }, next: 'a' }; }
+      else wc.push({ text: d.label + '  (' + o.why + ')', next: 'locked' });
+    });
+    wc.push({ text: 'Back', next: 'a' });
+    nodes.work = { who, text: job && !mine ? 'You are already working for the ' + GANGS[job.g].name + '. Finish or drop that first.' : 'Here is what I have right now.', choices: job && !mine ? [{ text: 'Back', next: 'a' }] : wc };
+    if (mine) {
+      const st = job.stages[job.step];
+      nodes.status = { who, text: job.brief + ' ' + (st ? 'Right now: ' + st.text + '.' : ''), choices: [{ text: 'Drop the job', next: 'drop' }, { text: 'Back', next: 'a' }] };
+      nodes.drop = { who, text: job.kind === 'boss' ? 'Walking out on a boss assignment? That is a betrayal.' : 'Your call. It costs you.', effects: { event: 'gangdrop:' + g }, next: 'a' };
+      nodes.report = { who, text: F.from + ': "' + job.title + ' - done? Good. Here is your cut."', effects: { event: 'gangreport:' + g }, next: 'a' };
+    }
+    nodes.bye = { who, text: tier === 'HOSTILE' ? 'Go.' : 'Stay sharp.', end: true };
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  gangTalk(e) {
+    if (e.surrendered) return;
+    const g = e.gang, B = BOSSES[e.boss], G = GANGS[g], lvl = levelOf(g), s = gstate(), gj = this.gangJobs, job = gj.job, mine = job && job.g === g;
+    const pickL = (a) => a[Math.floor(Math.random() * a.length)];
+    const rivals = rivalsOf(g), target = rivals.length ? rivals[0] : GANG_IDS.find((o) => o !== g && relation(g, o) === 'neutral');
+    const hasJob = s.job && s.job.for === g && !s.job.done;
+    const jobText = hasJob ? 'You already took my contract: ' + s.job.got + ' of ' + s.job.need + ' ' + GANGS[s.job.target].name + ' down. Finish it.'
+      : s.job ? 'You are already working for someone else. Come back when that is done.'
+        : 'Put 3 ' + GANGS[target].name + ' in the ground. $300 and my respect. Do it and walk back to me - or do not, I do not chase.';
+    const who = e.boss, mem = this.gangMemoryLine(g);
+    const nodes = { turf: { who, text: B.lines.turf, next: 'a' }, riv: { who, text: B.lines.rivals, next: 'a' }, bye: { who, text: 'Walk safe. Standing with the ' + G.name + ': ' + tierOf(g).toLowerCase() + '.', end: true } };
+    if (!canMeetBoss(g)) {                                       // not respected yet: a short, cold meeting
+      nodes.a = { who, text: mem + 'Hm. A stranger in my house. The ' + G.name + ' only deal with people my crew respects. Earn it - run jobs for the gate first.', choices: [{ text: 'Whose turf is this?', next: 'turf' }, { text: 'Leave', next: 'bye' }] };
+    } else {
+      const choices = [{ text: hasJob ? 'About the contract' : 'Got any work for me?', next: 'job' }];
+      if (mine && gj.canReport(g, 'boss')) choices.push({ text: 'Report: the assignment is done', next: 'breport' });
+      else if (mine) choices.push({ text: 'About my assignment', next: 'bstat' });
+      else if (!job) choices.push({ text: 'A special assignment?', next: 'assign' });
+      choices.push({ text: 'Whose turf is this?', next: 'turf' }, { text: 'Who are your enemies?', next: 'riv' }, { text: 'Pay your respects ($200)', next: 'pay' }, { text: 'Leave', next: 'bye' });
+      nodes.a = { who, text: mem + pickL(lvl === 'Friendly' ? B.lines.friendly : B.lines.neutral), choices };
+      nodes.job = { who, text: jobText, effects: { event: 'gangjob:' + g }, next: 'a' };
+      nodes.pay = { who, text: 'Respect has a price, and you know it.', effects: { event: 'gangpay:' + g }, next: 'a' };
+      nodes.assign = { who, text: 'Special work for people I trust. It pays well and it is not gentle. Take it?', choices: [{ text: 'I will do it', next: 'astart' }, { text: 'Not now', next: 'a' }] };
+      nodes.astart = { who, text: 'Good. Do not make me regret trusting you.', effects: { event: 'gangstart:' + g + ':boss' }, next: 'a' };
+      if (mine) {
+        const st = job.stages[job.step];
+        nodes.bstat = { who, text: job.brief + ' ' + (st ? 'Right now: ' + st.text + '.' : ''), choices: [{ text: 'Drop it', next: 'bdrop' }, { text: 'Back', next: 'a' }] };
+        nodes.bdrop = { who, text: 'Walking away from me? Remember this.', effects: { event: 'gangdrop:' + g }, next: 'a' };
+        nodes.breport = { who, text: 'You did it. I knew I could count on you.', effects: { event: 'gangreport:' + g }, next: 'a' };
+      }
+    }
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  gangScript(name) {
+    const [cmd, g, arg] = name.split(':'), s = gstate();
+    if (!GANGS[g]) return;
+    if (cmd === 'gangjob') {
+      if (s.job) return;
+      const rivals = rivalsOf(g), target = rivals.length ? rivals[0] : GANG_IDS.find((o) => o !== g && relation(g, o) === 'neutral');
+      s.job = { for: g, target, need: 3, got: 0, reward: 300, done: false };
+      this.events.emit('toast', 'Contract taken: put down 3 ' + GANGS[target].name + ' members ($300)');
+    } else if (cmd === 'gangpay') {
+      if (profile.money < 200) { this.events.emit('toast', 'You cannot afford that ($200)'); return; }
+      this.addMoney(-200);
+      addRep(g, 10);
+    } else if (cmd === 'gangstart') {
+      const job = this.gangJobs.start(g, arg);
+      if (job) this.events.emit('toast', job.brief);
+    } else if (cmd === 'gangreport') this.gangJobs.report(g);
+    else if (cmd === 'gangdrop') this.gangJobs.abandon();
+    else if (cmd === 'gangamends') {
+      if (profile.money < 300) { this.events.emit('toast', 'You cannot afford that ($300)'); return; }
+      this.addMoney(-300); addRep(g, 18);
+      const st = gstate(); if (st.alert) st.alert[g] = 0;
+    }
+  }
+
+  // hideouts are discovered by walking up to them (they then appear on the map)
+  gangDiscover(now) {
+    if (now - (this.gangChk || 0) < 500) return;
+    this.gangChk = now;
+    const p = this.player, f = gstate().found;
+    GANG_IDS.forEach((g) => {
+      const T = this.wd.gangs[g];
+      if (!T || !T.poi || f[g]) return;
+      if (Math.hypot(p.x - T.base.x, p.y - T.base.y) < 320) {
+        f[g] = true; this.wd.pois.push(T.poi);
+        this.events.emit('banner', { title: 'GANG HIDEOUT', sub: GANGS[g].name.toUpperCase() });
+      }
+    });
+    this.gangTrespass(now);
+  }
+
+  // the boss room and the weapon store are private: a warning first, then the crew turns on a visitor they do not respect
+  gangTrespass(now) {
+    const p = this.player, tr = this.trespassT || (this.trespassT = {});
+    GANG_IDS.forEach((g) => {
+      const T = this.wd.gangs[g];
+      if (!T || !T.rooms) return;
+      const room = T.rooms.find((r) => r.priv && p.x >= r.x0 && p.x < r.x1 && p.y >= r.y0 && p.y < r.y1);
+      const boss = this.enemies.getChildren().find((e) => e.active && !e.dead && e.boss && e.gang === g);
+      if (!room || !boss || canMeetBoss(g) || boss.angry || boss.surrendered) { tr[g] = 0; return; }
+      tr[g] = (tr[g] || 0) + 500;
+      if (tr[g] === 1000) { boss.say('This room is private. Get out.', 2600); this.events.emit('toast', GANGS[g].name + ': "This room is private. Get out."'); }
+      if (tr[g] >= 5000) {
+        boss.angry = true; boss.angryUntil = now + 60000; boss.lastKnown = { x: p.x, y: p.y }; boss.lastSeen = now;
+        if (boss.ai === 'idle') boss.enterAlert(now, true);
+        this.provokeHideout(boss, 420);
+      }
+    });
+  }
+
   // game: 'lobby' | 'slots' | 'blackjack' | 'dice' | 'cashier'; host: whose bubble shows (sean | jiro)
   openCasino(game = 'lobby', host = 'sean') {
     if (this.scene.isActive('Casino')) return;
@@ -1138,6 +1523,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   handleScript(name) {
+    if (name && name.startsWith('gang')) { this.gangScript(name); return; }
     if (name === 'm7_start_chase') this.events.emit('toast', 'Sirens! Take the van and lose them!');
   }
 
@@ -1325,18 +1711,28 @@ export default class GameScene extends Phaser.Scene {
     const now = this.gt;
     const pos = { x, y };
     let witnessed = false;
+    // one crime event = one incident. The same crime against the same victim is only counted once per 2 s (a stream of bullets or a
+    // chain of explosions is one incident, not a new 5-star crime every frame), and every incident is remembered so a late phone call
+    // from a witness can never be charged twice or for a crime from before the player escaped
+    this.crimeSeen = this.crimeSeen || new Map();
+    this.cidSeq = this.cidSeq || 0;
+    const ck = reason + '|' + (opts.victim ? (opts.victim._cid = opts.victim._cid || ++this.cidSeq) : 0);
+    if (now - (this.crimeSeen.get(ck) || -1e9) < 2000) return true;
+    this.crimeSeen.set(ck, now);
+    if (this.crimeSeen.size > 80) { for (const [k, t] of this.crimeSeen) if (now - t > 10000) this.crimeSeen.delete(k); }
+    const incident = { at: now, epoch: this.wanted.epoch, called: false, policeSaw: false, severity };
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c === opts.victim || c.kind === 'story') return;
       const d = Math.hypot(c.x - x, c.y - y);
       if (d > 340 || !this.hasLOS(c.x, c.y, x, y)) return;
       witnessed = true;
-      c.witness(pos, severity, now, Math.random() < 0.38);
+      c.witness(pos, severity, now, Math.random() < 0.38, incident);
     });
     this.enemies.children.iterate((e) => {
       if (!e || e.dead || e === opts.victim) return;
       const d = Math.hypot(e.x - x, e.y - y);
       if (d > 380 || !this.hasLOS(e.x, e.y, x, y)) return;
-      if (e.isPolice) { witnessed = true; this.wanted.policeSees(now, pos); }
+      if (e.isPolice) { witnessed = true; incident.policeSaw = true; this.wanted.policeSees(now, pos); }
       else if ((e.hostility === 'provoked' || e.hostility === 'zone') && (!e.hideout || e.crew === 'casino')) {   // the hideout crew has its own, graded reaction (provokeHideout)
         witnessed = true;
         if (severity >= CRIME.PUNCH) { e.angry = true; e.angryUntil = now + 60000; e.lastKnown = { x: this.player.x, y: this.player.y }; e.lastSeen = now; if (e.crew === 'casino') this.provokeHideout(e, 520); }
@@ -1345,15 +1741,21 @@ export default class GameScene extends Phaser.Scene {
     this.vehicles.children.iterate((o) => {
       if (!o || !o.active || o.wrecked || !o.cfg.police || (o.mode !== 'patrol' && o.mode !== 'chase')) return;
       if (Math.hypot(o.x - x, o.y - y) > 420 || !this.hasLOS(o.x, o.y, x, y)) return;
-      witnessed = true; this.wanted.policeSees(now, pos);
+      witnessed = true; incident.policeSaw = true; this.wanted.policeSees(now, pos);
     });
     if (witnessed) this.wanted.add(severity, pos, reason);
     return witnessed;
   }
 
-  civilianCalledPolice(c, pos, severity) {
+  // a witness phones it in. Only the FIRST call of a fresh incident counts, only if police did not already see it themselves, and
+  // never for an incident that is older than ~10 s or from before the wanted level last dropped (those are old news).
+  civilianCalledPolice(c, pos, severity, incident) {
     sfx.phone();
-    this.wanted.add(severity * 0.9, pos, 'reported by a witness');
+    if (!incident) return;
+    if (incident.called || incident.policeSaw) return;
+    if (incident.epoch !== this.wanted.epoch || this.gt - incident.at > 10000) return;
+    incident.called = true;
+    this.wanted.add(severity * 0.5, pos, 'reported by a witness');
   }
 
   onPlayerFiredGun() {
@@ -1763,7 +2165,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     } else {
       if (byPlayer) { const c = this.armedAttackCrime(a); if (c) this.reportCrime(a.x, a.y, c, 'hit with a vehicle', { victim: a }); }
       a.knock(ang, 300, 250);
-      a.takeDamage(dmg, this.gt);
+      a.takeDamage(dmg, this.gt, byPlayer ? undefined : { accident: true });      // an AI car hitting an NPC is an accident, not the player's crime
     }
     v.takeDamage(spd * 0.02);
     v.speed *= 0.8;
@@ -1816,6 +2218,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
   /* ---------------------------------------------------------- kill callbacks */
   onEnemyKilled(e, silent = false) {
+    if (e.gang) { try { this.onGangKilled(e); } catch (err) { console.error('gang kill hook error (ignored)', err); } }
+    if (e.meleeId && Math.random() < 0.55) this.spawnItem(e.x + 10, e.y + 6, 'm_' + e.meleeId);
     this.kills++;
     profile.stats.kills = this.kills;
     if (e.spawnIdx !== undefined && !profile.killedSpawns.includes(e.spawnIdx)) profile.killedSpawns.push(e.spawnIdx);
@@ -1826,8 +2230,11 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const a = Math.random() * Math.PI * 2;
       this.spawnItem(e.x + Math.cos(a) * (10 + i * 6), e.y + Math.sin(a) * (8 + i * 4), id);
     });
-    if (e.isPolice && !e.response && e.angry) this.reportCrime(e.x, e.y, CRIME.KILL_COP, 'killed an officer', { victim: e });
-    else if (e.isPolice && e.angry) this.wanted.add(CRIME.KILL_COP * 0.6, { x: e.x, y: e.y }, 'killed an officer');
+    if (e.isPolice && !e.copKillCounted && e.playerHitAt !== undefined && this.gt - e.playerHitAt < 4000) {          // an officer's death is ONE crime event, and only if the PLAYER just hurt him (not traffic, despawning or other NPCs)
+      e.copKillCounted = true;
+      if (!e.response && e.angry) this.reportCrime(e.x, e.y, CRIME.KILL_COP, 'killed an officer', { victim: e });
+      else if (e.angry) this.wanted.add(CRIME.KILL_COP * 0.6, { x: e.x, y: e.y }, 'killed an officer');
+    }
     this.events.emit('kill', this.kills);
   }
 
@@ -1951,8 +2358,18 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         consider(d + 8, { kind: 'talk', ref: c, x: c.x, y: c.y, label: 'Talk' });
       }
     });
+    this.enemies.children.iterate((e) => {                 // the named gate guards always talk
+      if (!e || e.dead || !e.guard || !e.visible) return;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < 70) consider(d - 10, { kind: 'guardtalk', ref: e, x: e.x, y: e.y, label: 'Talk to ' + GUARDS[e.guard].name });
+    });
+    this.enemies.children.iterate((e) => {                 // gang bosses can be talked to unless they are already hostile
+      if (!e || e.dead || !e.boss || e.surrendered || !e.visible || e.angry || e.ai === 'alert' || e.ai === 'attack' || e.ai === 'cover') return;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < 60 && repOf(e.gang) > -30) consider(d - 8, { kind: 'gangtalk', ref: e, x: e.x, y: e.y, label: 'Talk to ' + e.bossName });
+    });
     this.enemies.children.iterate((e) => {
-      if (!e || e.dead || !e.visible) return;
+      if (!e || e.dead || !e.visible || e.boss || e.guard) return;
       if (e.ai === 'alert' || e.ai === 'attack' || e.ai === 'cover') return;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d > 38) return;
@@ -1984,6 +2401,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
           if (id === 'q_wallet' && !this.missions.wantsItem(id)) { this.takeQuest(id); this.startDialogue('ev_wallet'); } else this.missionEvent('questItem', id);
         } else this.missionEvent('itemPicked', id);
       } else this.events.emit('toast', "Can't carry any more " + def.label.toLowerCase());
+    } else if (t.kind === 'gangtalk') {
+      this.gangTalk(t.ref);
+    } else if (t.kind === 'guardtalk') {
+      this.guardTalk(t.ref);
     } else if (t.kind === 'casino') {
       this.openCasino(t.ref.game === 'hub' ? 'cashier' : t.ref.game, t.ref.game === 'blackjack' || t.ref.game === 'dice' ? 'jiro' : 'sean');
     } else if (t.kind === 'crate') {
@@ -2012,6 +2433,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const crime = this.armedAttackCrime(t.ref);
       if (crime) this.reportCrime(t.ref.x, t.ref.y, crime, 'attacked an NPC', { victim: t.ref });
       t.ref.angry = true;
+      t.ref.playerHitAt = this.gt;
       t.ref.die(true);
       this.events.emit('toast', 'Silent takedown');
     } else if (t.kind === 'door') {
@@ -2072,7 +2494,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.enemies.children.iterate((e) => {
       if (!e || e.dead) return;
       const d = Math.hypot(e.x - x, e.y - y);
-      if (d < r) { if (owner === 'player') { const cr = this.armedAttackCrime(e); if (cr) this.reportCrime(e.x, e.y, cr, 'explosive attack', { victim: e }); } e.takeDamage(dmg * fall(d), this.gt); }
+      if (d < r) { if (owner === 'player') { const cr = this.armedAttackCrime(e); if (cr) this.reportCrime(e.x, e.y, cr, 'explosive attack', { victim: e }); } e.takeDamage(dmg * fall(d), this.gt, owner === 'player' ? undefined : { accident: true }); }
     });
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping) return;
@@ -2097,6 +2519,12 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   onBulletEnemy(b, e) {
+    if (b.owner === 'gang') {                          // faction crossfire: no crime, no player involved
+      this.emitUp(this.fxBlood, b.x, b.y, CHEST, 4);
+      try { e.takeDamage(b.damage, this.gt, b.shooter); } catch (err) { console.error('crossfire error (ignored)', err); }
+      this.combat.kill(b);
+      return;
+    }
     this.emitUp(this.fxBlood, b.x, b.y, CHEST, 5);
     const crime = this.armedAttackCrime(e);
     if (crime) this.reportCrime(e.x, e.y, crime, e.isPolice ? 'shot an officer' : 'armed assault', { victim: e });
@@ -2152,7 +2580,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     // NPC / vehicle simulation
     this.nav.refreshActors(now);
     if (now - (this.vehSightT || 0) > 300) { this.vehSightT = now; this.updateVehicleSight(now); }
-    this.enemies.children.iterate((e) => { if (e && e.active) e.updateEnemy(now, dt); });
+    this.enemies.children.iterate((e) => { if (e && e.active) { try { e.updateEnemy(now, dt); } catch (err) { if (!e.updErr) { e.updErr = true; console.error('enemy update error (ignored)', e.role, err); } } } });      // one broken NPC must never stop the whole game loop
     this.civilians.children.iterate((c) => { if (c && c.active) c.updateCivilian(now, dt); });
     const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
     const near = (v) => Math.abs(v.x - p.x) < rx && Math.abs(v.y - p.y) < ry;
@@ -2163,6 +2591,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.updateSirenAudio();
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
+    this.towCheck(now);
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;
@@ -2255,6 +2685,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (Phaser.Input.Keyboard.JustDown(k.G) || consumeAction('armor')) { if (p.useArmor()) this.events.emit('toast', 'Armor plate applied (+40)'); }
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.toggleLock();
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
+    if (Phaser.Input.Keyboard.JustDown(k.K)) this.openGangs();
 
     this.interact = this.findInteract();
     const it = this.interact;
@@ -2353,6 +2784,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   waypoints() {
     const list = this.missions.waypoints();
     if (this.randomEvents.waypoint) list.push(this.randomEvents.waypoint);
+    const gw = this.gangJobs && this.gangJobs.waypoint(); if (gw) list.push(gw);
     return list;
   }
 
@@ -2382,7 +2814,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       [T.wall]: dark, [T.wall2]: dark, [T.tent]: '#2e3a22', [T.wallCap]: dark, [T.wall2Cap]: dark, [T.tentCap]: '#2e3a22',
       [T.glass]: '#2f6a96', [T.glassCap]: '#2f6a96', [T.window]: '#5a7a8a', [T.windowBroken]: '#5a7a8a',
       [T.tree]: '#1c3d1c', [T.fence]: '#b0b0b0', [T.barricade]: '#8a5a2a', [T.water]: '#2f6fb0', [T.sandbag]: '#b79a62',
-      [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'
+      [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.propHigh]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'
     };
     const bld = { house: '#9a6a52', abandoned: '#6a5a50', shop: '#c9a24a', restaurant: '#d98a3a', police: '#3a62c0', hospital: '#d96a6a', tower: '#3f8aa8', casino: '#b04aa8', warehouse: '#7a6a9a', tent: '#6a7a46', hq: '#56663c' };
     const mk = (key, scale, detail) => {

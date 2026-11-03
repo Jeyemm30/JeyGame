@@ -469,6 +469,7 @@ export default class UIScene extends Phaser.Scene {
     const ty = this.trackerY;
     let lines = [];
     let title = '';
+    const gh = g.gangJobs ? g.gangJobs.hud() : null;
     if (m.def && m.obj) {
       title = (m.def.side ? 'JOB: ' : 'CURRENT MISSION: ') + m.def.title.toUpperCase();
       const objs = m.def.objectives;
@@ -485,17 +486,25 @@ export default class UIScene extends Phaser.Scene {
       const left = m.timeLeft();
       if (left) info += `   TIME ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
       this.mInfo.setText(info).setY(ty + 36 + this.mObjs.height + 2).setVisible(true);
+    } else if (gh) {                                           // a gang job is the current task: same panel as the story missions
+      title = gh.title;
+      lines = gh.lines.slice(0, this.touchMode ? 2 : 5);
+      const t = g.gangJobs.waypoint(); let info = '';
+      if (t) info = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
+      if (gh.time) info += `   TIME ${Math.floor(gh.time / 60000)}:${String(Math.floor(gh.time / 1000) % 60).padStart(2, '0')}`;
+      this.mInfo.setText(info).setY(ty + 36 + this.mObjs.height + 2).setVisible(true);
     } else {
       const n = m.nextStory();
       if (n && !g.dialogueActive) { title = 'NEXT MISSION'; lines = [n.title + (n.giver ? `  -  see ${g.npcName(n.giver)}` : '')]; }
       this.mInfo.setVisible(false);
     }
+    if (m.def && m.obj && gh && !this.touchMode) lines.push('+ ' + gh.title.toLowerCase());
     this.mTitle.setText(title);
     this.mObjs.setText(lines.join('\n'));
     this.mTitle.setVisible(!!title); this.mObjs.setVisible(!!title);
     if (title) {
       const pw = this.touchMode ? 360 : 430;
-      const h = 40 + this.mObjs.height + (m.def ? 24 : 4);
+      const h = 40 + this.mObjs.height + (m.def || gh ? 24 : 4);
       tg.fillStyle(0x000000, 0.5).fillRect(22, ty, pw, h);
       tg.lineStyle(2, 0x6b8f5a, 0.8).strokeRect(22, ty, pw, h);
     }

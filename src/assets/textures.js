@@ -19,20 +19,20 @@ export const T = {
   toilet: 40, sink: 41, dresser: 42, locker: 43, stove: 44, rubble: 45,
   // city additions
   counter: 46, hospBed: 47, bars: 48, desk: 49, pump: 50, bench: 51,
-  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, glass: 58, glassCap: 59, shopShelf: 60, graf1: 61, graf2: 62, graf3: 63
+  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, propHigh: 57, glass: 58, glassCap: 59, shopShelf: 60, graf1: 61, graf2: 62, graf3: 63
 };
 
 // Anything in this set stops movement.
 export const SOLID = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.fence, T.barricade, T.water, T.sandbag,
-  T.doorClosed, T.window, T.windowBroken, T.prop, T.tree,
+  T.doorClosed, T.window, T.windowBroken, T.prop, T.propHigh, T.tree,
   T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
   T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.tree, T.barricade, T.sandbag, T.doorClosed,
-  T.fridge, T.shelf, T.locker, T.cabinet, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3
+  T.fridge, T.shelf, T.locker, T.cabinet, T.propHigh, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3
 ]);
 // Solid for walking but bullets (and sight) go through.
 export const BULLET_PASS = new Set([
