@@ -26,6 +26,8 @@ import { GANGS, GANG_IDS, BOSSES, GUARDS, GANG_CFG, SURRENDER, TIER_CSS, GANG_CO
 import GangJobs from '../systems/GangJobs.js';
 import { JOB_KINDS, FLAVOR } from '../story/gangJobs.js';
 import { AMBIENT } from '../story/casinoTalk.js';
+import BankHeist from '../systems/BankHeist.js';
+import { ystate, yosenActive, currentQuest, questCount, YOSEN_NAME } from '../story/yosen.js';
 import { buildPlaces } from '../story/places.js';
 import { OUTFITS } from './ShopScene.js';
 
@@ -110,9 +112,9 @@ export default class GameScene extends Phaser.Scene {
     this.buildScenery();
     this.places = buildPlaces(this);
     this.lockSafehouse();
-    if (this.wd.casino) {                                  // the VIP room stays locked for non-members
-      const g = this.wd.casino.vipGate; this.vipGateKey = g.y * W + g.x;
-      if (!Casino.state().vip) this.lockedDoors.add(this.vipGateKey);
+    if (this.wd.casino) {                                  // the private rooms upstairs stay locked until the player's VIP level allows them
+      this.casinoGateKeys = (this.wd.casino.gates || []).map((g) => ({ key: g.y * W + g.x, level: g.level }));
+      this.casinoGateKeys.forEach((g) => { if (Casino.vipLevel() < g.level) this.lockedDoors.add(g.key); });
     }
 
     // ---- crates (warehouses, camps, hidden stashes) and searchable furniture
@@ -144,6 +146,7 @@ export default class GameScene extends Phaser.Scene {
     this.fxBlood = this.add.particles(0, 0, 'blood', { speed: { min: 40, max: 160 }, lifespan: 450, scale: { start: 1.2, end: 0 }, emitting: false }).setDepth(5002);
     this.fxSpark = this.add.particles(0, 0, 'spark', { speed: { min: 30, max: 110 }, lifespan: 220, scale: { start: 0.9, end: 0 }, emitting: false }).setDepth(5002);
     this.fxSmoke = this.add.particles(0, 0, 'smoke', { speedY: { min: -40, max: -20 }, speedX: { min: -8, max: 8 }, lifespan: 900, scale: { start: 0.6, end: 1.6 }, alpha: { start: 0.7, end: 0 }, emitting: false }).setDepth(5002);
+    this.fxCig = this.add.particles(0, 0, 'smoke', { speedY: { min: -26, max: -14 }, speedX: { min: -7, max: 7 }, lifespan: 1500, scale: { start: 0.2, end: 0.62 }, alpha: { start: 0.5, end: 0 }, emitting: false }).setDepth(5001);
     this.fxFire = this.add.particles(0, 0, 'fire', { speedY: { min: -50, max: -25 }, lifespan: 450, scale: { start: 1, end: 0 }, emitting: false }).setDepth(5002);
     this.gfx = this.add.graphics().setDepth(5003);
     this.lampGfx = this.add.graphics().setDepth(4997); // vehicle lamps / glow
@@ -178,11 +181,17 @@ export default class GameScene extends Phaser.Scene {
         const down = gstate().bossDown[spec.boss];
         if (down !== undefined) { if (Date.now() - down < GANG_CFG.bossRespawnMs) return; delete gstate().bossDown[spec.boss]; }
       }
-      if (!spec.gang && profile.killedSpawns.includes(i)) return;       // gangs are topped up by the director instead
+      if (!spec.gang && !spec.bank && profile.killedSpawns.includes(i)) return;       // gangs are topped up by the director instead; the bank guards always come back after a reload
       const e = this.spawnEnemy(spec);
       e.spawnIdx = i;
+      if (spec.bank) e.bank = true;
     });
-    this.wd.civilians.forEach((spec) => this.spawnCivilian(spec));
+    this.wd.civilians.forEach((spec) => { const c = this.spawnCivilian(spec); if (spec.bank) c.bankSpec = spec; });
+    this.bankHeist = new BankHeist(this);                                  // Port City Trust: doors, vault, loot and the robbery state match profile.bank (also the cooldown after a reload)
+    {                                                       // Yosen Blackthorn's map marker: "?" until the player has seen him, then his own badge
+      const ys = this.npcSpot('yosen'), y0 = ystate();
+      if (ys) { this.yosenPoi = { type: y0.found ? 'yosen' : 'yosen_q', name: y0.found ? YOSEN_NAME : 'Unknown', x: ys.x, y: ys.y, tx: Math.floor(ys.x / TILE), ty: Math.floor(ys.y / TILE), w: 2, h: 2 }; this.wd.pois.push(this.yosenPoi); }
+    }
     this.wd.items.forEach((it, i) => {
       if (profile.takenItems.includes(i)) return;
       const s = this.spawnItem(it.x, it.y, it.id);
@@ -202,9 +211,15 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.enemies, this.crates);
     this.physics.add.collider(this.civilians, this.crates);
     this.physics.add.collider(this.vehicles, this.crates);
+    if (this.wd.wise && this.wd.wise.signpost) {                    // the WISE SOLE sign post: a 10 px round body on the pole itself
+      const sp = this.wd.wise.signpost, z = this.add.zone(sp.x, sp.y, 10, 10);
+      this.physics.add.existing(z, true); z.body.setCircle(5);        // a 10 px round body: circle against circle separates reliably from every side
+      [this.player, this.civilians, this.enemies, this.vehicles].forEach((g) => this.physics.add.collider(g, z));
+      this.blockMove[sp.ty * W + sp.tx] = 1;                         // walkers' pathfinding goes around the post
+    }
     this.physics.add.collider(this.player, this.enemies);
-    this.physics.add.collider(this.player, this.civilians);
-    this.physics.add.collider(this.civilians, this.civilians);
+    this.physics.add.collider(this.player, this.civilians, null, (p, c) => !c.soft);              // shoppers in the narrow WISE SOLE aisles are soft: you walk past them
+    this.physics.add.collider(this.civilians, this.civilians, null, (a, b) => !(a.soft && b.soft));
     // car-to-car: our own impulse resolution (see Vehicle.js) instead of Arcade's separation, so cars slide, spin and push each other
     this.physics.add.overlap(this.vehicles, this.vehicles, (a, b) => { if (a.uid < b.uid) resolveVehicles(this, a, b); });
     this.physics.add.collider(this.player, this.vehicles, null, (p, v) => !this.player.vehicle && Math.abs(v.speed) < 70);
@@ -433,10 +448,11 @@ export default class GameScene extends Phaser.Scene {
       if (facing <= 0.02) continue;
       const side = -s.nx * this.cs + s.ny * this.sn;                   // sideways lean (for shading)
       const k = 0.62 + 0.38 * Math.min(1, facing) - 0.08 * side;
-      const col = Phaser.Display.Color.GetColor(Math.round(70 * k + 20), Math.round(120 * k + 25), Math.round(170 * k + 30));
+      const cas = b.look === 'casino';
+      const col = cas ? Phaser.Display.Color.GetColor(Math.round(52 * k + 14), Math.round(26 * k + 8), Math.round(84 * k + 20)) : Phaser.Display.Color.GetColor(Math.round(70 * k + 20), Math.round(120 * k + 25), Math.round(170 * k + 30));
       const bot0 = { x: s.a[0] - E.x, y: s.a[1] - E.y }, bot1 = { x: s.b[0] - E.x, y: s.b[1] - E.y }, top0 = { x: s.a[0], y: s.a[1] }, top1 = { x: s.b[0], y: s.b[1] };
       g.fillStyle(col, 1).fillPoints([bot0, bot1, top1, top0], true);
-      const dark = Phaser.Display.Color.GetColor(Math.round(30 * k + 8), Math.round(60 * k + 12), Math.round(90 * k + 16));
+      const dark = cas ? Phaser.Display.Color.GetColor(Math.round(150 * k + 20), Math.round(110 * k + 16), Math.round(30 * k + 8)) : Phaser.Display.Color.GetColor(Math.round(30 * k + 8), Math.round(60 * k + 12), Math.round(90 * k + 16));
       g.lineStyle(1, dark, 0.8);
       const rows = Math.max(2, Math.round(r.lift / 12));
       for (let i = 1; i < rows; i++) { const t = i / rows; g.lineBetween(bot0.x + (top0.x - bot0.x) * t, bot0.y + (top0.y - bot0.y) * t, bot1.x + (top1.x - bot1.x) * t, bot1.y + (top1.y - bot1.y) * t); }
@@ -480,6 +496,9 @@ export default class GameScene extends Phaser.Scene {
     this.isWall = new Uint8Array(W * H);
     this.wallFace = new Uint8Array(W * H);
     this.tallCell = new Uint8Array(W * H);
+    this.darkCell = new Uint8Array(W * H);        // WISE SOLE's own dark, cool storefront colour (its wall cells)
+    this.noFace = new Uint8Array(W * H);          // cells whose wall picture is replaced by a sprite (the animated glass door)
+    wd.buildings.forEach((b) => { if (!b.dark) return; for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) if (xx === b.x || xx === b.x + b.w - 1 || yy === b.y || yy === b.y + b.h - 1) this.darkCell[yy * W + xx] = 1; });
     wd.buildings.forEach((b) => { if (!b.tall) return; for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) if (xx === b.x || xx === b.x + b.w - 1 || yy === b.y || yy === b.y + b.h - 1) this.tallCell[yy * W + xx] = 1; });
     const tiles = this.textures.get('tiles');
     const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
@@ -600,10 +619,11 @@ export default class GameScene extends Phaser.Scene {
         if (!img) { img = this.makeWallBand(); this.wallBands.set(bi, img); }
         const uv = this.wallUV.get(this.wallFace[i]);
         const k = Math.round(255 * (0.7 + 0.3 * Math.min(1, facing)));
-        const rgb = (k << 16) | (k << 8) | k;
-        img.quads.push({ ax, ay, bx, by, key, u0: uv[0], v0: uv[1], u1: uv[2], v1: uv[3], h: low ? this.lowH.get(this.wallFace[i]) : 0, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 0.3) });
+        const dk = this.darkCell[i] && this.wallFace[i] === T.wall2;
+        const rgb = dk ? ((Math.round(k * 0.5) << 16) | (Math.round(k * 0.53) << 8) | Math.round(k * 0.7)) : (k << 16) | (k << 8) | k;
+        if (!this.noFace[i]) img.quads.push({ ax, ay, bx, by, key, u0: uv[0], v0: uv[1], u1: uv[2], v1: uv[3], h: low ? this.lowH.get(this.wallFace[i]) : 0, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb, 0.3) });
         if (!low && this.tallCell[i]) {                                   // upper brick course: plain brick above the doors / windows, a touch darker, with a lighter coping line
-          const uw = this.wallUV.get(T.wall2) || uv, k2 = Math.round(k * 0.9), rgb2 = (k2 << 16) | (k2 << 8) | k2;
+          const uw = this.wallUV.get(T.wall2) || uv, k2 = Math.round(k * 0.9), rgb2 = this.darkCell[i] ? ((Math.round(k2 * 0.5) << 16) | (Math.round(k2 * 0.53) << 8) | Math.round(k2 * 0.7)) : (k2 << 16) | (k2 << 8) | k2;
           img.quads.push({ ax, ay, bx, by, key: key + 0.01, u0: uw[0], v0: uw[1], u1: uw[2], v1: uw[1] + (uw[3] - uw[1]) * 0.75, h: TALL_PX, lift: WALL_PX, tint: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb2, 1), tintFade: Phaser.Renderer.WebGL.Utils.getTintAppendFloatAlpha(rgb2, 0.3) });
         }
       }
@@ -651,12 +671,25 @@ export default class GameScene extends Phaser.Scene {
     // WISE SOLE storefront sign (upright, glued to the wall above the entrance)
     if (wd.casino) {
       const cs = wd.casino;
-      this.casinoSign = dec('casino_sign', cs.sign.x, cs.sign.y, 0, -26, 0.5, 1, 60);
-      this.casinoDecs = [];
-      cs.neons.forEach((n) => this.casinoDecs.push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, 40)));
+      this.casinoSign = dec('casino_sign', cs.sign.x, cs.sign.y, 0, -62, 0.5, 1, 60);
+      this.casinoDecs = []; this.casinoExt = [];
+      cs.neons.forEach((n) => (n.ext ? this.casinoExt : this.casinoDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
       cs.chandeliers.forEach((ch) => this.casinoDecs.push(dec('chandelier', ch.x, ch.y, 0, -86, 0.5, 0.5, 60)));
     }
-    if (wd.wise) this.wiseSign = dec('wise_sign', wd.wise.door.x, wd.wise.door.y - 34, 0, -24, 0.5, 1, 60);
+    if (wd.bank) {                                                // PORT CITY TRUST: sign, awning, window glimpses, lamps, cameras; the vault door is a sprite over its two door tiles
+      const bk = wd.bank;
+      this.bankSign = dec('bank_sign', bk.sign.x, bk.sign.y, 0, -78, 0.5, 1, 60);
+      this.bankDecs = []; this.bankExt = [];
+      bk.neons.forEach((n) => (n.ext ? this.bankExt : this.bankDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
+      bk.doors.vault.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
+      this.bankVaultImg = dec('vault_door_0', bk.vaultDoor.x, bk.vaultDoor.y, 0, 0, 0.5, 1, 6);
+    }
+    if (wd.wise && wd.wise.wallDecor) wd.wise.wallDecor.forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // WISE SOLE: the back-wall sign, spot lights and the logo panel
+    if (wd.wise) {
+      this.wiseSign = dec('wise_sign', wd.wise.door.x, wd.wise.door.y - 34, 0, -24, 0.5, 1, 60);              // the official logo sign above the entrance
+      const dt = wd.wise.doorTile; this.noFace[dt.ty * W + dt.tx] = 1;
+      this.wiseDoor = { tx: dt.tx, ty: dt.ty, state: 0, img: dec('wise_door_0', (dt.tx + 0.5) * TILE, (dt.ty + 1) * TILE - 1, 0, 0, 0.5, 1, 6), evs: [] };
+    }
     // porches over house doors (flat on the ground), striped awnings over shop doors (upright)
     wd.houseDoors.forEach((d, i) => {
       this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2);
@@ -686,6 +719,7 @@ export default class GameScene extends Phaser.Scene {
       sh.fillRect((b.x + b.w) * TILE, b.y * TILE + 10, 36 + b.lift * 0.7, b.h * TILE);
       sh.fillRect(b.x * TILE + 12, (b.y + b.h) * TILE, b.w * TILE + 30, 22 + Math.min(20, b.lift * 0.4));
     });
+    this.lastBillRot = undefined;                      // the scene object is reused on a new game / load: force the roof depths to be recomputed for the new roofs
     this.roofs = wd.buildings.map((b) => {
       const key = b.style === 'shingle' ? 'roofpat_shingle' + (b.colorIdx % 6) : 'roofpat_' + b.style;
       const x = b.x * TILE - 4, y = b.y * TILE, w = b.w * TILE + 8, h = b.h * TILE - 8;
@@ -696,6 +730,10 @@ export default class GameScene extends Phaser.Scene {
       if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
+      if (b.look === 'casino') {                                    // the casino roof: dark plum with illuminated edges
+        parts[0].setTint(0x6a5a8a);
+        parts.push(this.add.rectangle(x, y + h - 8, w, 3, 0xffd24a, 0.95).setOrigin(0, 0), this.add.rectangle(x, y + h - 12, w, 2, 0xff3a8a, 0.8).setOrigin(0, 0), this.add.rectangle(x, y, 3, h, 0xb06aff, 0.85).setOrigin(0, 0), this.add.rectangle(x + w - 3, y, 3, h, 0x3ad8ff, 0.85).setOrigin(0, 0), this.add.rectangle(x, y, w, 3, 0xff3a5a, 0.7).setOrigin(0, 0));
+      }
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
       let fg = null;
       if (b.lift > 0) { fg = this.add.graphics(); parts.push(fg); }
@@ -898,7 +936,7 @@ export default class GameScene extends Phaser.Scene {
     return null;
   }
 
-  setDoor(tx, ty, open) {
+  setDoor(tx, ty, open, quiet = false) {
     const idx = open ? T.doorOpen : T.doorClosed;
     this.wd.obj[ty][tx] = idx;
     const nt = this.objLayer.putTileAt(idx, tx, ty);
@@ -906,8 +944,29 @@ export default class GameScene extends Phaser.Scene {
     this.wallFace[ty * W + tx] = idx;
     this.wallBuild.dirty = true;
     this.refreshCell(tx, ty);
+    if (this.wiseDoor && tx === this.wiseDoor.tx && ty === this.wiseDoor.ty) this.animWiseDoor(open);
+    if (quiet) return;
     sfx.door();
     this.alertNoise(tx * TILE + 16, ty * TILE + 16, 90, 'step');
+  }
+
+  // the WISE SOLE glass door swings through three frames (the tile - and with it the collision - changes at once)
+  animWiseDoor(open) {
+    const d = this.wiseDoor; d.evs.forEach((e) => e.remove(false)); d.evs = [];
+    const seq = open ? [1, 2] : [1, 0];
+    seq.forEach((f, i) => d.evs.push(this.time.delayedCall(90 * (i + 1), () => { if (d.img && d.img.scene) d.img.setTexture('wise_door_' + f); })));
+  }
+
+  // the door closes by itself when nobody is near it any more
+  wiseDoorTick(now) {
+    const d = this.wiseDoor; if (!d || now - (this.wdT || 0) < 500) return;
+    this.wdT = now;
+    if (this.doorState(d.tx, d.ty) !== 'open') { this.wdNear = now; return; }
+    const cx = (d.tx + 0.5) * TILE, cy = (d.ty + 0.5) * TILE, near = (o) => o && o.active && !o.dead && Math.hypot(o.x - cx, o.y - cy) < 62;
+    let any = near(this.player);
+    if (!any) this.civilians.children.iterate((c) => { if (c && near(c)) any = true; });
+    if (!any) this.enemies.children.iterate((c) => { if (c && near(c)) any = true; });
+    if (any) this.wdNear = now; else if (now - (this.wdNear || now) > 4500) this.setDoor(d.tx, d.ty, false);
   }
 
   openDoorAt(x, y) {
@@ -1019,6 +1078,7 @@ export default class GameScene extends Phaser.Scene {
     Object.keys(this.storyNpcs).forEach((id) => {
       const n = this.storyNpcs[id];
       if (!n || !n.active) return;
+      if (n.tag && n.tag.text !== STORY_NPCS[id].name) n.tag.setText(STORY_NPCS[id].name);
       if (!n.tag) n.tag = this.add.text(0, 0, STORY_NPCS[id].name, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: STORY_NPCS[id].color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
       if (!n.mark) {
         n.mark = this.add.text(0, 0, '!', { fontFamily: '"Courier New", monospace', fontSize: '26px', fontStyle: 'bold', color: '#ffd23a', stroke: '#000', strokeThickness: 4 }).setOrigin(0.5, 1).setDepth(6001);
@@ -1034,7 +1094,7 @@ export default class GameScene extends Phaser.Scene {
         n.chat.setVisible(show);
         if (show) { const eh = this.elev(84); n.chat.setText(n.chatLine || '').setPosition(n.x + eh.x, n.y + eh.y).setRotation(-this.camRot).setScale(1, UPY); }
       }
-      const giver = avail.some((m) => m.giver === id);
+      const giver = avail.some((m) => m.giver === id) || (id === 'yosen' && ystate().found && !this.missions.active && !yosenActive() && ystate().done < questCount());
       const target = this.missions.obj && ((this.missions.obj.type === 'talk' && this.missions.obj.npc === id));
       n.mark.setVisible((giver || target) && d < 1200).setRotation(-this.camRot).setScale(1, UPY).setPosition(n.x + this.elev(74 + Math.sin(this.gt / 220) * -3).x, n.y + this.elev(74 + Math.sin(this.gt / 220) * -3).y).setText(target ? '?' : '!').setColor(target ? '#7aff9a' : '#ffd23a');
     });
@@ -1481,10 +1541,67 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // game: 'lobby' | 'slots' | 'blackjack' | 'dice' | 'cashier'; host: whose bubble shows (sean | jiro)
-  openCasino(game = 'lobby', host = 'sean') {
+  openCasino(game = 'lobby', host = 'sean', station = null) {
     if (this.scene.isActive('Casino')) return;
     this.scene.pause('Game');
-    this.scene.launch('Casino', { game, host });
+    this.scene.launch('Casino', { game, host, table: station ? { name: station.name, vip: !!station.vip, level: station.level || 0, stakes: station.stakes || (station.vip ? 'vip' : 'normal') } : null });
+  }
+
+  openAtm(st) {
+    if (this.scene.isActive('Atm')) return;
+    this.scene.pause('Game');
+    this.scene.launch('Atm', { name: st && st.name });
+  }
+
+  inCasinoWing(p) { const w = this.wd.casino && this.wd.casino.wing; return !!w && p.x >= w.interior.x0 * TILE && p.x < (w.interior.x1 + 1) * TILE && p.y >= w.interior.y0 * TILE && p.y < (w.interior.y1 + 1) * TILE; }
+  inCasinoMain(p) { const c = this.wd.casino; return !!c && p.x >= c.interior.x0 * TILE && p.x < (c.interior.x1 + 1) * TILE && p.y >= c.interior.y0 * TILE && p.y < (c.interior.y1 + 1) * TILE; }
+  casinoLabel(st) {
+    switch (st.game) {
+      case 'slots': return 'Play the slot machine';
+      case 'blackjack': return st.vip ? 'Play VIP Blackjack' : 'Play Blackjack';
+      case 'dice': return 'Play Poker Dice';
+      case 'baccarat': return st.vip ? 'Play VIP Baccarat' : 'Play Baccarat';
+      case 'holdem': return st.stakes === 'high' ? "Play private Texas Hold'em" : "Play Texas Hold'em";
+      case 'atm': return 'Use the ATM';
+      case 'stairs': return st.dir === 'up' ? (Casino.vipLevel() >= 1 ? 'Take the stairs up to the VIP level' : 'VIP stairs (members only)') : 'Take the stairs down to the main floor';
+      default: return st.vip ? 'VIP cashier (chips & membership)' : 'Cashier (chips & membership)';
+    }
+  }
+
+  // the staircase: VIP members only going up; both floors are separate rooms, so a fade + a new position is the whole trip
+  useStairs(st) {
+    const cs = this.wd.casino; if (!cs || this.stairBusy || this.over) return;
+    if (st.dir === 'up' && Casino.vipLevel() < 1) {
+      this.events.emit('toast', 'Security: "The VIP level is for members. Ask Sean about an invitation, or visit the cashier."');
+      return;
+    }
+    const dest = st.dir === 'up' ? cs.stairsDown : cs.stairsUp, cam = this.cameras.main;
+    this.stairBusy = true; cam.fadeOut(240, 0, 0, 0);
+    this.time.delayedCall(280, () => {
+      const p = this.player; p.setPosition(dest.x, dest.y); p.body.reset(dest.x, dest.y); p.setVelocity(0, 0);
+      this.casinoFloor = st.dir === 'up' ? 2 : 1;
+      cam.fadeIn(280, 0, 0, 0);
+      this.events.emit('banner', { title: st.dir === 'up' ? 'VIP LEVEL' : 'MAIN FLOOR', sub: st.dir === 'up' ? 'THE CASINO - SECOND FLOOR' : 'THE CASINO - FIRST FLOOR' });
+      this.time.delayedCall(320, () => { this.stairBusy = false; });
+    });
+  }
+
+  // which casino floor is the player on, and keep people out of rooms they are not cleared for (a revoked or lost pass, a bad save)
+  casinoTick(now) {
+    const cs = this.wd.casino; if (!cs || now - (this.cstick || 0) < 400) return;
+    this.cstick = now;
+    const p = this.player, wing = this.inCasinoWing(p);
+    this.casinoFloor = wing ? 2 : this.inCasinoMain(p) ? 1 : 0;
+    if (wing && Casino.vipLevel() < 1) {
+      p.setPosition(cs.stairsUp.x, cs.stairsUp.y); p.body.reset(cs.stairsUp.x, cs.stairsUp.y);
+      this.events.emit('toast', 'Security walks you back down: the VIP level is for members.');
+      return;
+    }
+    if (wing && Casino.vipLevel() < 2) {
+      for (const r of cs.privateRooms || []) if (p.x >= r.x0 * TILE && p.x < (r.x1 + 1) * TILE && p.y >= r.y0 * TILE && p.y < (r.y1 + 1) * TILE) {
+        p.setPosition(r.exit.x, r.exit.y); p.body.reset(r.exit.x, r.exit.y); this.events.emit('toast', 'Security: "The private rooms are for VIP Gold members."');
+      }
+    }
   }
 
   openWise() {
@@ -1502,6 +1619,7 @@ export default class GameScene extends Phaser.Scene {
     const m = this.missions;
     const t = m.onTalk(npcId);
     if (t) { this.startDialogue(t.id, { onEnd: t.then }); return; }
+    if (npcId === 'yosen') { this.yosenTalk(); return; }
     if (!m.active) {
       const av = m.availableStory().find((x) => x.giver === npcId);
       if (av) { this.offerMission(av, npcId); return; }
@@ -1511,6 +1629,49 @@ export default class GameScene extends Phaser.Scene {
     if (npcId === 'sean' || npcId === 'jiro') { this.openCasino('lobby', npcId); return; }
     if (npcId === 'gordy') { this.events.emit('toast', "Gordy: \"Take a look at the lot.\""); this.openShop('dealer', "Gordy's Used Cars"); return; }
     this.startDialogue(null, { dialogue: chatDialogue(npcId, dialogueState(this)) });
+  }
+
+  /* ------------------------------------------------------------- Yosen Blackthorn */
+  // one quest at a time: intro first, then the next quest of his chain is offered (accept or decline); while one runs he only reminds you of it
+  yosenTalk() {
+    const y = ystate(), m = this.missions, q = currentQuest();
+    if (!y.found) { y.found = true; this.yosenFound(); }
+    if (!y.met) { this.startDialogue('y_intro', { onEnd: () => { y.met = true; this.yosenOffer(true); } }); return; }
+    if (yosenActive()) { this.startDialogue(q ? q.remind : 'y_after'); return; }
+    if (!q) { this.startDialogue('y_after'); return; }
+    if (m.active) { this.startDialogue('y_busy'); return; }
+    this.yosenOffer(false);
+  }
+
+  yosenOffer(first) {
+    const y = ystate(), q = currentQuest(), m = this.missions;
+    if (!q || m.active) { if (m.active) this.startDialogue('y_busy'); return; }
+    this.yosenAccepted = false;
+    this.startDialogue(y.declined && !first ? q.again : q.offer, {
+      onEnd: () => {
+        if (this.yosenAccepted && !this.missions.active && !yosenActive()) {
+          y.declined = false;
+          this.missions.start('yosen_' + y.done, { tpl: 'yosen', params: { n: y.done } });
+        } else if (!this.yosenAccepted) { y.declined = true; this.events.emit('toast', 'Yosen: "The offer stays open."'); }
+        this.yosenAccepted = false;
+      }
+    });
+  }
+
+  // the player has come close enough to see who he is: the "?" becomes his marker, his name is known
+  yosenFound() {
+    const y = ystate(); y.found = true;
+    if (this.yosenPoi) { this.yosenPoi.type = 'yosen'; this.yosenPoi.name = YOSEN_NAME; }
+    this.events.emit('banner', { title: YOSEN_NAME.toUpperCase(), sub: 'A QUIET STRANGER IN THE ALLEY', color: '#6ee0ee' });
+    this.events.emit('toast', 'Yosen Blackthorn is marked on your map');
+  }
+
+  yosenTick(now) {
+    const y = ystate();
+    if (y.found || now - (this.yosenChk || 0) < 300) return;
+    this.yosenChk = now;
+    const n = this.storyNpcs.yosen, p = this.player;
+    if (n && n.active && Math.hypot(p.x - n.x, p.y - n.y) < 260) this.yosenFound();
   }
 
   offerMission(av, npcId) {
@@ -1523,6 +1684,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   handleScript(name) {
+    if (name === 'yosen_accept') { this.yosenAccepted = true; return; }
     if (name && name.startsWith('gang')) { this.gangScript(name); return; }
     if (name === 'm7_start_chase') this.events.emit('toast', 'Sirens! Take the van and lose them!');
   }
@@ -2222,7 +2384,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (e.meleeId && Math.random() < 0.55) this.spawnItem(e.x + 10, e.y + 6, 'm_' + e.meleeId);
     this.kills++;
     profile.stats.kills = this.kills;
-    if (e.spawnIdx !== undefined && !profile.killedSpawns.includes(e.spawnIdx)) profile.killedSpawns.push(e.spawnIdx);
+    if (e.spawnIdx !== undefined && !e.bank && !profile.killedSpawns.includes(e.spawnIdx)) profile.killedSpawns.push(e.spawnIdx);
     if (!silent) sfx.kill();
     this.emitUp(this.fxBlood, e.x, e.y, 14, silent ? 6 : 14);
     this.addCorpse(e.x, e.y);
@@ -2325,19 +2487,27 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       if (d < 58) consider(d, { kind: 'container', ref: c, x: c.x, y: c.y, label: c.searched ? `${c.name} (empty)` : `Search ${c.name.toLowerCase()}` });
     }
-    if (this.vipGateKey !== undefined && this.lockedDoors.has(this.vipGateKey) && Casino.state().vip) this.lockedDoors.delete(this.vipGateKey);
+    if (this.casinoGateKeys) this.casinoGateKeys.forEach((g) => { if (Casino.vipLevel() >= g.level) this.lockedDoors.delete(g.key); else this.lockedDoors.add(g.key); });
     if (this.wd.casino) {
       for (const st of this.wd.casino.stations) {
         const d = Math.hypot(st.x - p.x, st.y - p.y);
-        if (d < 40) consider(d, { kind: 'casino', ref: st, x: st.x, y: st.y, label: st.game === 'slots' ? 'Play the slot machine' : st.game === 'blackjack' ? 'Play Blackjack' : st.game === 'dice' ? 'Play Poker Dice' : 'Cashier / VIP desk' });
+        if (d < 40) consider(d, { kind: 'casino', ref: st, x: st.x, y: st.y, label: this.casinoLabel(st) });
       }
+    }
+    if (this.bankHeist && this.bankHeist.wd) {
+      for (const st of this.wd.bank.stations) {
+        const d = Math.hypot(st.x - p.x, st.y - p.y);
+        if (d < 40) consider(d, { kind: 'bank', ref: st, x: st.x, y: st.y, label: st.game === 'atm' ? 'Use the ATM' : (this.bankHeist.canStart() ? 'Teller counter' : 'Hold up the bank') });
+      }
+      this.bankHeist.lootTargets(p, consider);
     }
     for (const dr of this.wd.doors) {
       const cx = dr.x * TILE + TILE / 2, cy = dr.y * TILE + TILE / 2;
       const d = Math.hypot(cx - p.x, cy - p.y);
       if (d < 54) {
         const locked = this.lockedDoors.has(dr.y * W + dr.x);
-        consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: locked ? (dr.y * W + dr.x === this.vipGateKey ? 'VIP room (members only)' : 'Locked door') : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
+        const bk = this.bankHeist && this.bankHeist.wd && this.bankHeist.doorHandled(dr.y * W + dr.x) && (locked || this.bankHeist.keys.vault.includes(dr.y * W + dr.x)) ? this.bankHeist.doorLabel(dr.y * W + dr.x) : null;
+        consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: bk ? bk : locked ? ((this.casinoGateKeys || []).some((g) => g.key === dr.y * W + dr.x) ? 'Private room (VIP Gold only)' : 'Locked door') : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
       }
     }
     this.vehicles.children.iterate((v) => {
@@ -2348,7 +2518,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c.state === 'flee' || c.state === 'phone') return;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d > 50 || !c.visible) return;
+      if (d > (c.npcId === 'ezekiel' ? 74 : 50) || !c.visible) return;                // Ezekiel stands behind his counter: he can be talked to from the front of it
       if (c.kind === 'story') {
         if (c.npcId === 'fare') return;
         consider(d + 4, { kind: 'story', ref: c, x: c.x, y: c.y, label: `Talk to ${this.npcName(c.npcId)}` });
@@ -2405,8 +2575,17 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       this.gangTalk(t.ref);
     } else if (t.kind === 'guardtalk') {
       this.guardTalk(t.ref);
+
     } else if (t.kind === 'casino') {
-      this.openCasino(t.ref.game === 'hub' ? 'cashier' : t.ref.game, t.ref.game === 'blackjack' || t.ref.game === 'dice' ? 'jiro' : 'sean');
+      const st = t.ref;
+      if (st.game === 'stairs') this.useStairs(st);
+      else if (st.game === 'atm') this.openAtm(st);
+      else this.openCasino(st.game === 'hub' ? 'cashier' : st.game, this.inCasinoWing(st) ? 'jiro' : 'sean', st);
+    } else if (t.kind === 'bank') {
+      if (t.ref.game === 'atm') this.openAtm(t.ref);
+      else this.bankHeist.startRobbery();
+    } else if (t.kind === 'bankloot') {
+      this.bankHeist.take(t.ref);
     } else if (t.kind === 'crate') {
       this.openCrate(t.ref);
     } else if (t.kind === 'container') {
@@ -2440,6 +2619,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       p.pickupUntil = this.gt + 320;
       const { x, y } = t.ref;
       const key = y * W + x;
+      if (this.bankHeist && this.bankHeist.wd && this.bankHeist.onDoor(key)) return;
       if (key === this.vipGateKey && this.lockedDoors.has(key)) {
         this.events.emit('toast', 'VIP members only. Ask Sean, or visit the cashier.');
         return;
@@ -2592,7 +2772,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
-    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;
@@ -2621,7 +2801,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     }
     this.insideBuilding = cb >= 0;
     if (this.wiseSign) this.wiseSign.setAlpha(this.insideBuilding ? 0.1 : 1);
-    if (this.casinoSign) this.casinoSign.setAlpha(this.insideBuilding ? 0.1 : 1);       // keep the big storefront sign out of the way indoors
+    if (this.casinoSign) this.casinoSign.setAlpha(this.insideBuilding ? 0.1 : 1);
+    if (this.bankSign) this.bankSign.setAlpha(this.insideBuilding ? 0.1 : 1);
+    if (this.bankExt && this.bankExtIn !== this.insideBuilding) { this.bankExtIn = this.insideBuilding; this.bankExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
+    if (this.casinoExt && this.casinoExt.length && this.casinoExtIn !== this.insideBuilding) { this.casinoExtIn = this.insideBuilding; this.casinoExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }       // keep the big storefront sign out of the way indoors
 
     this.updateCamera(now, dt, aimWorld);
 

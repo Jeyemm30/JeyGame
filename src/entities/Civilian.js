@@ -37,7 +37,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.faceGoal = this.face;
     this.state = kind === 'ped' ? 'walk' : kind === 'sit' ? 'sit' : 'idle';
     // casino guests / staff: a station to keep (act), a seat or post (face), an optional walking route
-    this.act = spec.act || null; this.seated = !!spec.sit; this.sitFace = spec.face; this.seed = spec.seed || 0; this.vip = !!spec.vip; this.poseNow = null;
+    this.act = spec.act || null; this.seated = !!spec.sit; this.sitFace = spec.face; this.seed = spec.seed || 0; this.vip = !!spec.vip; this.poseNow = null; this.soft = !!spec.soft;       // soft shoppers (WISE SOLE) never block the player's way
     this.route = spec.route || null; this.routeI = 0; this.pChk = 0; this.pPos = { x: spec.x, y: spec.y };
     if (this.act) { this.state = this.seated ? 'sit' : 'idle'; if (spec.face !== undefined) { this.face = spec.face; this.faceGoal = spec.face; } }
     this.node = spec.node ?? -1;
@@ -71,6 +71,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.dead = false;
     this.hurtByPlayer = false;
 
+    if (this.npcId === 'yosen') { this.smk = { phase: 'idle', at: 0, wait: 2200 + Math.random() * 3200, wisp: 0 }; this.face = Math.PI / 2; this.faceGoal = this.face; this.baseFace = this.face; }       // Yosen smokes while he waits
     this.shadow = scene.add.sprite(spec.x, spec.y, 'shadow').setDepth(3.5);
     if (this.state === 'sit') { this.face = Math.PI / 2; }
   }
@@ -200,6 +201,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
     if (time < this.knockUntil) { this.setVelocity(this.kvx, this.kvy); this.sync(time, dt); return; }
 
+    if (this.smk) { this.updateYosen(time, dt, dist); return; }
     if (this.kind === 'story') { this.updateStory(time, dt, dist); return; }
     if (this.act) { this.updatePatron(time, dt, dist); return; }
 
@@ -235,10 +237,14 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       this.moveToward(this.home.x, this.home.y, this.walk, time); this.turn(this.moveAngle, 6, dt); this.sync(time, dt); return;
     }
     if (this.state === 'idle' && this.seated && away <= 22) { this.state = 'sit'; this.setPosition(this.home.x, this.home.y); }
+    if (this.soft && this.state !== 'sit') {                                      // a shopper in a narrow aisle steps out of the way (and walks back to the post afterwards)
+      const pl = this.scene.player, ddx = this.x - pl.x, ddy = this.y - pl.y, dd = Math.hypot(ddx, ddy);
+      if (dd < 38 && !pl.vehicle) { const ang = Math.atan2(ddy, ddx); this.moveToward(this.x + Math.cos(ang) * 60, this.y + Math.sin(ang) * 60, this.walk * 1.3, time); this.turn(ang + Math.PI, 4, dt); this.sync(time, dt); return; }
+    }
     this.stop();
     const goal = this.sitFace ?? this.face;
     // somebody close and talking to the hosts / the player: glance at them
-    if (dist < 90 && this.state !== 'sit' && !['slots', 'dealer', 'bartend', 'cashier'].includes(this.act)) this.turn(Math.atan2(this.scene.player.y - this.y, this.scene.player.x - this.x), 2.5, dt);
+    if (dist < 90 && this.state !== 'sit' && !['slots', 'dealer', 'bartend', 'cashier', 'teller', 'atmuse', 'queue'].includes(this.act)) this.turn(Math.atan2(this.scene.player.y - this.y, this.scene.player.x - this.x), 2.5, dt);
     else this.turn(goal, 3, dt);
     const ph = ((time / 1000) + this.seed * 3.7) % 12, within = (a, b) => ph >= a && ph < b;
     const odd = this.seed % 2 === 1, third = this.seed % 3;
@@ -256,6 +262,11 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       case 'clothes': if (within(4, 5.2) || within(9, 10)) this.poseNow = { pickup: true }; break;                                              // looking through the racks
       case 'tryon': if (within(2, 3.4) || within(7, 8.4)) this.poseNow = { lift: true }; break;                                              // trying shoes on
       case 'pay': if (within(5, 6.4)) this.poseNow = { pickup: true }; else if (within(0, 4)) this.poseNow = { talk: true }; break;         // at the checkout
+      case 'teller': if (within(3, 4.6) || within(8, 9)) this.poseNow = { pickup: true }; else if (within(5, 7.5)) this.poseNow = { talk: true }; break;                  // serving the queue
+      case 'typing': if (within(1, 2.8) || within(6, 7.4) || within(10, 11)) this.poseNow = { lift: true }; break;                                              // at the keyboard
+      case 'queue': if (within(3 + (this.seed % 4), 4.6 + (this.seed % 4))) this.poseNow = { talk: true }; break;                                                  // waiting in line
+      case 'atmuse': if (within(1.5, 3.2) || within(8, 9.2)) this.poseNow = { pickup: true }; break;                                                               // at the cash machine
+      case 'manager': if (within(2, 4.5)) this.poseNow = { talk: true }; else if (within(7, 8.2)) this.poseNow = { lift: true }; break;
       case 'valet': if (within(4, 5)) this.poseNow = { pickup: true }; else if (within(8, 11)) this.poseNow = { talk: true }; break;
       default: break;
     }
@@ -278,6 +289,41 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     }
     this.moveToward(t.x, t.y, this.walk, time); this.turn(this.moveAngle, 6, dt);
     this.sync(time, dt);
+  }
+
+  /* Yosen: stands still, leans on his spot and smokes. One cycle = raise the hand (mid frame), a puff (hand at the mouth), lower it, then he blows
+     out a little smoke that rises and fades; the pause until the next cycle is random. Close up / while talking he only holds the cigarette. */
+  updateYosen(time, dt, dist) {
+    const sc = this.scene, p = sc.player, k = this.smk;
+    this.stop();
+    const engaged = dist < 78 || time < (this.stareUntil || 0);
+    if (dist < 150) this.turn(Math.atan2(p.y - this.y, p.x - this.x), 2.4, dt); else this.turn(this.baseFace, 1.6, dt);
+    const el = time - k.at;
+    const go = (ph, wait) => { k.phase = ph; k.at = time; if (wait) k.wait = wait; };
+    if (engaged) { if (k.phase !== 'idle') go('idle', 1500 + Math.random() * 1500); }
+    else if (k.phase === 'idle' && el > k.wait) go('raise');
+    else if (k.phase === 'raise' && el > 300) go('puff');
+    else if (k.phase === 'puff' && el > 950) go('lower');
+    else if (k.phase === 'lower' && el > 300) { go('exhale'); k.puffed = 0; }
+    else if (k.phase === 'exhale') {
+      if (k.puffed < 3 && el > k.puffed * 260) { k.puffed++; this.smokeAt(50, k.puffed === 1 ? 2 : 1); }
+      if (el > 1500) go('idle', 3600 + Math.random() * 6200);
+    }
+    if (k.phase === 'idle' && !engaged && time > k.wisp) { k.wisp = time + 1500 + Math.random() * 1400; this.smokeAt(47, 1); }       // the lit end of the cigarette
+    this.sync(time, dt);
+  }
+
+  smokeAt(h, n) {
+    const sc = this.scene, em = sc.fxCig; if (!em) return;
+    const o = sc.elev(h), side = this.dirKey === 'r' ? (this.flipX ? -6 : 6) : this.dirKey === 'u' ? 0 : 2, so = sc.fromScreen(side, 0);
+    em.emitParticleAt(this.x + o.x + so.x, this.y + o.y + so.y, n);
+  }
+
+  smokeFrame(time) {
+    const ph = this.smk.phase;
+    if (ph === 'raise' || ph === 'lower') return 20;
+    if (ph === 'puff') return 19;
+    return (Math.floor((time + this.animOff) / 650) % 2) ? 21 : 18;
   }
 
   // Named story characters stand where the story needs them, face the player, and (Shade) tail the player.
@@ -458,11 +504,12 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     const sc = this.scene, rot = sc.camRot || 0;
     const dir = dirFromAngle(this.face + rot);
     const key = dir === 'l' ? 'r' : dir;
+    this.dirKey = key;
     this.setFlipX(dir === 'l');
     const bg = this.npcId === 'jiro' ? 1.12 : 1;                      // Jiro is noticeably bigger and taller than everybody else
     this.setRotation(-rot).setScale(bg, sc.upY * bg);
     if (this.moveSpeed > 0) this.animT += dt * (this.moveSpeed / 60);
-    this.setFrame(key + poseFrame({
+    this.setFrame(key + (this.smk ? this.smokeFrame(time) : poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
       sit: this.state === 'sit', hurt: time < this.hurtUntil,
       talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
@@ -470,7 +517,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       panic: this.state === 'flee' || (this.npcId === 'sean' && this.moveSpeed === 0 && Math.floor(time / 1000) % 11 === 2 && time % 1000 < 700) || (this.npcId === 'ezekiel' && this.moveSpeed === 0 && Math.floor(time / 1000) % 9 === 2 && time % 1000 < 650),   // Ezekiel throws his arms up when he is excited about a sneaker       // Kenny counts his cash / reaches under the counter
       lean: (this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 10 === 8),
       ...(this.poseNow || {})
-    }));
+    })));
     if (this.kind === 'worker' && this.state !== 'sit') {
       if (!this.carryImg) this.carryImg = this.scene.add.image(0, 0, 'carrybox');
       const sideF = dir === 'r' || dir === 'l';

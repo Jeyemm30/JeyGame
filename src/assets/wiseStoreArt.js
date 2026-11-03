@@ -106,6 +106,8 @@ export function drawWiseStoreArt(scene) {
     sh(c, 51, 59, 48); R(c, 2, 24, 98, 30, '#16162a'); R(c, 2, 22, 98, 4, '#e8e8f0'); R(c, 2, 22, 98, 1, '#ffffff'); R(c, 2, 52, 98, 3, '#0a0a14');
     for (let i = 0; i < 4; i++) { R(c, 6 + i * 24, 28, 20, 22, '#20203a'); R(c, 6 + i * 24, 28, 20, 1, '#3a3a5a'); }
     font(c, 8, GOLD); c.fillText('WISE SOLE', 51, 40); R(c, 20, 46, 62, 1, NEON);
+  });
+  mk('wise_counter_items', 102, 62, (c) => {                          // the register, monitor and bags on the counter top: drawn BEHIND the person at the till
     R(c, 60, 12, 20, 12, '#2a2d34'); R(c, 61, 6, 18, 12, '#14141a'); R(c, 62, 7, 16, 9, '#2a4a7a'); R(c, 63, 8, 8, 2, '#8ac8ff'); R(c, 66, 18, 8, 3, '#2a2a30');
     R(c, 14, 14, 22, 10, '#c8ccd2'); R(c, 15, 10, 16, 5, '#8a8f98'); R(c, 16, 11, 8, 3, '#7ac8a8'); R(c, 18, 17, 14, 2, '#4a4f58'); R(c, 38, 14, 8, 10, '#3a6aa8'); R(c, 39, 14, 6, 2, '#fff');
     R(c, 82, 6, 12, 18, '#ff3a8a'); R(c, 82, 6, 12, 2, '#ff8ac0'); R(c, 85, 3, 6, 4, '#c82a6a'); R(c, 85, 12, 6, 6, '#ffe27a'); R(c, 94, 12, 7, 12, '#16162a'); R(c, 94, 12, 7, 2, '#3ad8ff');
@@ -113,17 +115,11 @@ export function drawWiseStoreArt(scene) {
   });
   mk('shop_bags', 28, 24, (c) => { ellipse(c, 14, 21, 11, 2, 'rgba(0,0,0,0.25)'); R(c, 2, 6, 11, 14, '#ff3a8a'); R(c, 2, 6, 11, 2, '#ff8ac0'); R(c, 5, 3, 5, 4, '#c82a6a'); R(c, 4, 12, 7, 3, GOLD); R(c, 14, 8, 11, 12, '#16162a'); R(c, 14, 8, 11, 2, CYAN); R(c, 17, 5, 5, 4, '#3a3a5a'); R(c, 16, 14, 7, 3, NEON); });
   /* ---------- fitting room + mirrors + decor */
-  mk('mirror_full', 28, 62, (c) => { sh(c, 14, 59, 9); R(c, 3, 4, 22, 52, '#c9a227'); R(c, 5, 6, 18, 48, '#b8d4e4'); R(c, 7, 8, 5, 36, '#e8f4fc'); R(c, 15, 14, 2, 10, '#f8fcff'); R(c, 6, 56, 3, 4, '#8a6a1a'); R(c, 19, 56, 3, 4, '#8a6a1a'); });
-  mk('curtain_fit', 38, 66, (c) => { R(c, 1, 2, 36, 3, '#c0c4c8'); for (let i = 0; i < 5; i++) { R(c, 3 + i * 7, 5, 6, 52, i % 2 ? '#e84a8a' : '#c8307a'); R(c, 3 + i * 7, 5, 1, 52, '#ff8ac0'); } R(c, 3, 55, 32, 3, '#8a1a4a'); });
   mk('stock_shelf', 36, 62, (c) => {
     sh(c, 18, 59, 15); R(c, 3, 4, 30, 52, '#4a4f58'); R(c, 5, 6, 26, 48, '#20222a'); for (let r = 0; r < 3; r++) R(c, 5, 20 + r * 14, 26, 2, '#8a8f98');
     for (let r = 0; r < 3; r++) { const y = 20 + r * 14; for (let i = 0; i < 3; i++) { const col = ['#e8e8e8', '#ff3a8a', '#3ad8ff', '#ffe27a', '#2a2d34'][(i + r * 2) % 5]; R(c, 6 + i * 8, y - 11, 7, 11, col); R(c, 6 + i * 8, y - 11, 7, 2, shade(col, 0.3)); R(c, 7 + i * 8, y - 6, 5, 1, shade(col, -0.35)); } }
   });
   mk('box_stack', 34, 40, (c) => { sh(c, 17, 37, 14); [[3, 22, 20, 14, '#ff3a8a'], [11, 8, 20, 14, '#e8e8f0'], [4, 8, 8, 14, '#3ad8ff']].forEach(([x, y, w, h, col]) => { R(c, x, y, w, h, col); R(c, x, y, w, 2, shade(col, 0.3)); R(c, x + 2, y + h - 5, w - 4, 1, shade(col, -0.35)); R(c, x + w / 2 - 3, y + 4, 6, 2, '#16162a'); }); });
-  mk('wise_logo_wall', 104, 70, (c) => {
-    R(c, 2, 8, 100, 36, '#0c0c14'); R(c, 4, 10, 96, 32, '#16162a'); c.strokeStyle = NEON; c.lineWidth = 2; c.strokeRect(6, 12, 92, 28); c.strokeStyle = CYAN; c.lineWidth = 1; c.strokeRect(9, 15, 86, 22);
-    font(c, 16, '#5a0f2a'); c.fillText('WISE SOLE', 54, 28); font(c, 16, GOLD); c.fillText('WISE SOLE', 52, 26); font(c, 5, '#8ad8ff'); c.fillText('STEP SMART. DRESS SHARP.', 52, 36);
-  });
   [['#ff3a8a', '#16162a'], ['#3ad8ff', '#16162a'], ['#ffe27a', '#2a2d34'], ['#7a3ae0', '#f2f2f0']].forEach(([bg, fg], v) => mk('ad_poster_' + v, 34, 66, (c) => {
     R(c, 3, 6, 28, 40, '#1a1a22'); R(c, 4, 7, 26, 38, bg); R(c, 6, 9, 22, 22, shade(bg, -0.35));
     if (v === 0) shoe(c, 9, 17, '#ffe27a', '#16162a', 2); if (v === 1) { shoe(c, 9, 14, '#e8e8e8', '#e84a4a', 1); shoe(c, 9, 22, '#2a2d34', '#ffd24a', 0); } if (v === 2) { R(c, 12, 12, 10, 16, '#2a2d34'); R(c, 10, 14, 14, 6, '#e84a4a'); } if (v === 3) { R(c, 11, 11, 12, 18, '#f2e04a'); R(c, 13, 8, 8, 5, '#e0c8a8'); }
@@ -134,7 +130,57 @@ export function drawWiseStoreArt(scene) {
     c.strokeStyle = CYAN; c.lineWidth = 2; c.strokeRect(14, 14, 100, 52); font(c, 14, '#5a0f2a'); c.fillText('WISE SOLE', 66, 42); font(c, 14, GOLD); c.fillText('WISE SOLE', 64, 40);
     for (let i = 0; i < 20; i++) { R(c, 14 + i * 5, 11, 2, 2, i % 2 ? '#ff3a8a' : CYAN); R(c, 14 + i * 5, 67, 2, 2, i % 2 ? CYAN : '#ff3a8a'); }
   });
-  mk('pend_track', 74, 84, (c) => {
-    R(c, 6, 0, 62, 4, '#16162a'); R(c, 6, 3, 62, 1, '#3a3a5a'); for (let i = 0; i < 4; i++) { const x = 12 + i * 15; R(c, x, 4, 2, 8, '#2a2a30'); R(c, x - 3, 12, 8, 6, '#c8c8cc'); R(c, x - 2, 17, 6, 2, '#fff8c0'); c.globalAlpha = 0.16; poly4(c, [[x + 1, 18], [x - 8, 56], [x + 10, 56]], '#fff4c0'); c.globalAlpha = 1; }
+
+  /* ================================================================ EXTERIOR: the official logo (the uploaded image), sign, signpost, door, window displays, neon
+     The logo is the user's image, drawn as-is: only scaled (aspect ratio kept, stepwise high-quality downscale, no redrawn lettering). */
+  const logoBmp = (h) => {
+    if (!scene.textures.exists('wise_logo_src')) return null;
+    const img = scene.textures.get('wise_logo_src').getSourceImage();
+    const w = Math.max(1, Math.round(img.width * h / img.height));
+    let cur = img, cw = img.width, ch = img.height;
+    while (cw / 2 >= w * 1.2) { const cv = document.createElement('canvas'); cv.width = Math.ceil(cw / 2); cv.height = Math.ceil(ch / 2); const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(cur, 0, 0, cv.width, cv.height); cur = cv; cw = cv.width; ch = cv.height; }
+    const out = document.createElement('canvas'); out.width = w; out.height = h; const g = out.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip(); g.drawImage(cur, 0, 0, w, h);
+    return out;
+  };
+  const LS = logoBmp(52), LP = logoBmp(42);
+  mk('wise_sign', 136, 64, (c) => {                                    // the big sign above the door
+    R(c, 0, 0, 136, 64, '#08080e'); R(c, 2, 2, 132, 60, '#14141f'); R(c, 0, 0, 136, 2, NEON); R(c, 0, 62, 136, 2, CYAN); R(c, 0, 0, 2, 64, NEON); R(c, 134, 0, 2, 64, CYAN);
+    for (let i = 0; i < 3; i++) { R(c, 10, 24 + i * 6, 24 - i * 4, 3, i % 2 ? CYAN : NEON); R(c, 102 + i * 4, 24 + i * 6, 24 - i * 4, 3, i % 2 ? NEON : CYAN); }
+    R(c, 6, 6, 4, 4, NEON); R(c, 126, 6, 4, 4, CYAN); R(c, 6, 54, 4, 4, CYAN); R(c, 126, 54, 4, 4, NEON);
+    if (LS) c.drawImage(LS, Math.round((136 - LS.width) / 2), Math.round((64 - LS.height) / 2));
   });
+  mk('wise_post', 62, 98, (c) => {                                     // the freestanding sign post: pole, base plate, board with the logo
+    ellipse(c, 31, 94, 14, 4, 'rgba(0,0,0,0.35)');
+    R(c, 20, 88, 22, 5, '#2a2d38'); R(c, 20, 88, 22, 1, '#5a5f70'); R(c, 24, 85, 14, 4, '#3a3d4a');                // the base plate
+    R(c, 28, 52, 6, 36, '#2a2d38'); R(c, 28, 52, 2, 36, '#5a5f70'); R(c, 33, 52, 1, 36, '#14141c');                                    // the pole
+    R(c, 27, 64, 8, 2, '#ff3a8a'); R(c, 27, 68, 8, 2, CYAN);                                                                                    // pink / cyan bands on the pole
+    R(c, 4, 2, 54, 52, '#08080e'); R(c, 6, 4, 50, 48, '#14141f'); R(c, 4, 2, 54, 2, NEON); R(c, 4, 52, 54, 2, CYAN); R(c, 4, 2, 2, 52, NEON); R(c, 56, 2, 2, 52, CYAN);
+    R(c, 28, 50, 6, 4, '#3a3d4a'); R(c, 8, 6, 3, 3, NEON); R(c, 51, 6, 3, 3, CYAN); R(c, 8, 45, 3, 3, CYAN); R(c, 51, 45, 3, 3, NEON);
+    if (LP) c.drawImage(LP, Math.round(31 - LP.width / 2), Math.round(28 - LP.height / 2));
+  });
+  // the single glass door (32 x 40, dark metal frame, pink / cyan accents, handle): 0 closed, 1 ajar, 2 open
+  const door = (key, open) => mk(key, 32, 40, (c) => {
+    if (open === 0) {
+      R(c, 0, 0, 32, 40, '#101118'); R(c, 1, 1, 30, 38, '#2a2d3a'); R(c, 3, 3, 26, 34, '#2c5878'); R(c, 3, 3, 26, 14, '#4a86ac');
+      R(c, 6, 6, 3, 28, 'rgba(255,255,255,0.28)'); R(c, 11, 6, 1, 20, 'rgba(255,255,255,0.16)'); R(c, 3, 3, 2, 34, NEON); R(c, 27, 3, 2, 34, CYAN);
+      R(c, 3, 33, 26, 4, '#1a1c26'); R(c, 4, 34, 24, 1, '#5a5f70'); R(c, 23, 15, 3, 13, '#c8ccd4'); R(c, 23, 15, 1, 13, '#ffffff'); R(c, 0, 0, 32, 1, '#3a3d4a');
+    } else {
+      R(c, 0, 0, 32, 40, '#101118'); R(c, 2, 2, 28, 36, '#0a0a10'); R(c, 4, 20, 24, 18, '#1c1a24'); R(c, 4, 36, 24, 2, '#3a3a4a');         // the dark doorway
+      const w = open === 1 ? 13 : 5;
+      R(c, 2, 2, w, 36, '#2a2d3a'); R(c, 3, 3, Math.max(1, w - 2), 34, open === 1 ? '#2c5878' : '#3a6a8c'); R(c, 2, 3, 1, 34, NEON);
+      if (open === 1) { R(c, 4 + w - 5, 15, 2, 12, '#c8ccd4'); R(c, 6, 6, 2, 26, 'rgba(255,255,255,0.25)'); }
+      R(c, 29, 2, 1, 36, CYAN); R(c, 0, 0, 32, 1, '#3a3d4a');
+    }
+  });
+  door('wise_door_0', 0); door('wise_door_1', 1); door('wise_door_2', 2);
+  // display windows: something to look at behind the glass (28 x 36, drawn on the glass tile)
+  const win = (key, draw) => mk(key, 28, 36, (c) => { R(c, 0, 0, 28, 36, 'rgba(10,12,24,0.42)'); R(c, 1, 1, 26, 34, 'rgba(24,30,56,0.5)'); draw(c); R(c, 4, 2, 3, 30, 'rgba(255,255,255,0.18)'); R(c, 0, 0, 28, 1, '#0a0a12'); R(c, 0, 35, 28, 1, '#0a0a12'); });
+  win('wise_win_shoes_a', (c) => { R(c, 6, 26, 16, 4, '#2a2d38'); R(c, 6, 26, 16, 1, '#5a5f70'); shoe(c, 6, 17, '#e8e8e8', '#e84a4a', 1); R(c, 3, 8, 22, 1, NEON); });
+  win('wise_win_shoes_b', (c) => { R(c, 4, 26, 20, 4, '#2a2d38'); R(c, 4, 26, 20, 1, '#5a5f70'); shoe(c, 4, 14, '#3a6aa8', '#ffffff', 2); shoe(c, 12, 20, '#ffe27a', '#16162a', 0); R(c, 3, 8, 22, 1, CYAN); });
+  win('wise_win_poster', (c) => { R(c, 5, 6, 18, 24, '#1a1a22'); R(c, 6, 7, 16, 22, NEON); R(c, 8, 10, 12, 10, '#16162a'); shoe(c, 7, 12, '#ffe27a', '#16162a', 2); R(c, 8, 23, 12, 4, '#16162a'); R(c, 9, 24, 10, 1, GOLD); R(c, 9, 26, 6, 1, CYAN); });
+  win('wise_win_shoes_c', (c) => { R(c, 6, 26, 16, 4, '#2a2d38'); R(c, 6, 26, 16, 1, '#5a5f70'); shoe(c, 6, 16, '#2a2d34', '#ffd24a', 0); shoe(c, 8, 8, '#7a3ae0', '#ffe27a', 3); R(c, 3, 33, 22, 1, CYAN); });
+  mk('wise_neon_a', 96, 8, (c) => { c.globalAlpha = 0.25; R(c, 0, 0, 96, 8, NEON); c.globalAlpha = 1; R(c, 0, 3, 96, 2, '#ffd0e8'); R(c, 0, 2, 96, 1, NEON); R(c, 0, 5, 96, 1, NEON); });
+  mk('wise_neon_b', 96, 8, (c) => { c.globalAlpha = 0.25; R(c, 0, 0, 96, 8, CYAN); c.globalAlpha = 1; R(c, 0, 3, 96, 2, '#d0f6ff'); R(c, 0, 2, 96, 1, CYAN); R(c, 0, 5, 96, 1, CYAN); });
+  mk('wise_sconce', 12, 22, (c) => { R(c, 4, 0, 4, 6, '#2a2d38'); R(c, 2, 6, 8, 8, '#16162a'); R(c, 3, 7, 6, 6, '#fff4c8'); c.globalAlpha = 0.22; ellipse(c, 6, 11, 6, 9, '#fff4c8'); c.globalAlpha = 1; });
 }

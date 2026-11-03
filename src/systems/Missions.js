@@ -121,6 +121,7 @@ export default class MissionManager {
       if (first && def.onComplete) def.onComplete(gs);
     } else {
       profile.flags.sideDone = (profile.flags.sideDone || 0) + 1;
+      if (def.onComplete) def.onComplete(gs);
     }
     gs.events.emit('banner', { title: 'MISSION PASSED', sub: `${def.title.toUpperCase()}   +$${money}${rep ? '   +' + rep + ' REP' : ''}`, color: '#7aff9a' });
     sfx.heal();

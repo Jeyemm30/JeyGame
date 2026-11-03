@@ -498,6 +498,14 @@ function drawChar(c, ox, oy, dir, f, a) {
       if (a.hair === 3) { P(10, 2 + hy, 12, 4, hairC); P(9, 4 + hy, 3, 14, hairC); P(20, 4 + hy, 3, 14, hairC); if (back) P(10, 2 + hy, 12, 16, hairC); }
       if (a.hair === 4) { P(10, 2 + hy, 12, 4, hairC); if (back) { P(10, 2 + hy, 12, 9, hairC); P(14, 11 + hy, 4, 9, hairC); } else P(22, 6 + hy, 2, 5, hairC); }
       if (a.hair === 5) { P(14, 0 + hy, 4, 6, hairC); if (back) P(14, 0 + hy, 4, 10, hairC); }
+      if (a.hair === 7) {                                   // CURLY: a tall, springy, rounded mop with lighter curls and loose sideburn curls
+        const hl = shade(hairC, 0.32), hd = shade(hairC, -0.15);
+        P(9, 0 + hy, 14, 5, hairC); P(8, 1 + hy, 2, 7, hairC); P(22, 1 + hy, 2, 7, hairC); P(10, 4 + hy, 12, 2, hairC);
+        [[11, 1], [14, 0], [18, 1], [21, 2], [10, 3], [16, 3], [20, 4], [12, 5]].forEach(([qx, qy]) => P(qx, qy + hy, 2, 1, hl));
+        [[9, 4], [13, 2], [19, 3], [22, 5]].forEach(([qx, qy]) => P(qx, qy + hy, 1, 2, hd));
+        if (back) { P(9, 0 + hy, 14, 12, hairC); P(8, 3 + hy, 2, 7, hairC); P(22, 3 + hy, 2, 7, hairC); [[11, 6], [15, 8], [19, 6], [13, 10], [17, 10]].forEach(([qx, qy]) => P(qx, qy + hy, 2, 1, hl)); }
+        else { P(10, 6 + hy, 2, 3, hairC); P(20, 6 + hy, 2, 3, hairC); }
+      }
       if (a.hair === 6) { P(10, 2 + hy, 12, 3, hairC); P(12, 0 + hy, 10, 3, hairC); P(19, 0 + hy, 4, 2, shade(hairC, 0.25)); if (back) P(10, 2 + hy, 12, 7, hairC); else { P(10, 4 + hy, 1, 3, hairC); P(21, 4 + hy, 1, 3, hairC); } }
     }
     if (a.hat > 0) {
@@ -553,6 +561,11 @@ function drawChar(c, ox, oy, dir, f, a) {
       if (a.hair === 4) { P(11, 2 + hy, 10, 4, hairC); P(10, 4 + hy, 4, 6, hairC); P(8, 8 + hy, 3, 9, hairC); }
       if (a.hair === 5) { P(13, 0 + hy, 7, 5, hairC); }
       if (a.hair === 6) { P(11, 2 + hy, 10, 3, hairC); P(13, 0 + hy, 9, 3, hairC); P(11, 4 + hy, 3, 5, hairC); }
+      if (a.hair === 7) {                                   // curly, side view
+        const hl = shade(hairC, 0.32);
+        P(10, 0 + hy, 13, 5, hairC); P(9, 2 + hy, 5, 9, hairC); P(21, 1 + hy, 2, 4, hairC); P(12, 4 + hy, 9, 2, hairC);
+        [[12, 1], [16, 0], [20, 1], [10, 4], [14, 3], [19, 3], [11, 8]].forEach(([qx, qy]) => P(qx, qy + hy, 2, 1, hl));
+      }
     }
     if (a.hat === 1) { P(12, 2, 9, 5, hatC); P(12, 2, 9, 1, shade(hatC, 0.25)); P(20, 6, 6, 2, shade(hatC, -0.25)); }
     if (a.hat === 2) { P(11, 2, 11, 6, hatC); P(11, 6, 11, 2, shade(hatC, -0.25)); P(14, 0, 5, 2, shade(hatC, 0.3)); }
@@ -631,6 +644,53 @@ function drawPose(c, ox, oy, dir, f, a) {
   else if (f === 16) put(14, 44, 64, 0.9, 0.9);
   else if (f === 17) put(16, 46, 90, 0.7, 0.7);
   c.restore();
+}
+
+/* Yosen's sheet: the normal 18 frames plus 4 more per direction - 18 hold (cigarette between the fingers, arm bent), 19 puff (hand at the mouth),
+   20 mid-raise, 21 hold while breathing. The right arm is redrawn after the body build is applied, so it matches the slim body. */
+export const SMOKE_FRAMES = { hold: 18, puff: 19, mid: 20, holdB: 21 };
+function smokeArm(c, ox, oy, dir, kind, app, dy) {
+  const P = (x, y, w, h, col) => R(c, ox + x, oy + y + dy, w, h, col);
+  const sleeve = CLOTH_COLORS[app.shirtColor], skin = app.skinHex || SKIN_TONES[app.skin], white = '#f4f2ea', tip = '#ff7a1a';
+  const dark = shade(sleeve, -0.18);
+  const clear = (x, y, w, h) => c.clearRect(ox + x, oy + y + dy, w, h);
+  if (dir === 'd') {
+    clear(21, 15, 3, 17);
+    P(21, 17, 2, 6, sleeve); P(21, 17, 1, 6, dark);
+    if (kind === 'hold') { P(19, 21, 3, 2, sleeve); P(18, 18, 2, 3, skin); P(18, 15, 1, 3, white); P(18, 14, 1, 1, tip); }
+    if (kind === 'mid') { P(19, 16, 3, 5, sleeve); P(18, 13, 2, 3, skin); P(18, 10, 1, 3, white); P(18, 9, 1, 1, tip); }
+    if (kind === 'puff') { P(19, 14, 3, 6, sleeve); P(17, 11, 3, 3, skin); P(16, 11, 1, 1, white); P(20, 12, 3, 1, white); P(23, 12, 1, 1, tip); }
+  } else if (dir === 'r') {
+    clear(14, 15, 4, 17); P(14, 15, 4, 16, sleeve);                       // the near arm hangs over the torso in the side view: put the torso back before drawing the arm
+    P(14, 17, 3, 6, sleeve); P(14, 17, 1, 6, dark);
+    if (kind === 'hold') { P(16, 21, 4, 2, sleeve); P(20, 19, 2, 3, skin); P(21, 16, 1, 3, white); P(21, 15, 1, 1, tip); }
+    if (kind === 'mid') { P(16, 16, 3, 5, sleeve); P(19, 13, 2, 3, skin); P(21, 12, 3, 1, white); P(24, 12, 1, 1, tip); }
+    if (kind === 'puff') { P(16, 14, 3, 6, sleeve); P(19, 10, 2, 4, skin); P(21, 11, 3, 1, white); P(24, 11, 1, 1, tip); }
+  } else {
+    clear(21, 15, 3, 17);
+    if (kind === 'hold') { P(21, 17, 2, 6, sleeve); P(21, 23, 2, 2, skin); P(22, 25, 1, 2, white); P(22, 27, 1, 1, tip); }
+    else { P(21, 15, 2, 5, sleeve); P(21, 10, 2, 5, sleeve); P(21, 8, 2, 2, skin); P(23, 8, 1, 2, white); P(23, 7, 1, 1, tip); }
+  }
+}
+
+export function generateSmoker(scene, key, app) {
+  const cols = CHAR_COLS + 4;
+  const tex = makeCanvas(scene, key, cols * 32, 144, (c) => {
+    ['d', 'u', 'r'].forEach((dir, row) => {
+      for (let f = 0; f < cols; f++) {
+        const base = f < CHAR_COLS ? f : f === SMOKE_FRAMES.holdB ? 5 : 0;
+        if (f >= CHAR_COLS) c.clearRect(f * 32, row * 48, 32, 48);       // the fall / dead poses of the frames before spill into these cells: wipe them first
+        drawPose(c, f * 32, row * 48, dir, base, app);
+        if (app.build === 'slim' || app.build === 'big') buildCell(c, f * 32, row * 48, dir, base, app.build);
+        if (f >= CHAR_COLS) smokeArm(c, f * 32, row * 48, dir, f === SMOKE_FRAMES.puff ? 'puff' : f === SMOKE_FRAMES.mid ? 'mid' : 'hold', app, f === SMOKE_FRAMES.holdB ? 1 : 0);
+        outlineCell(c, f * 32, row * 48);
+      }
+    });
+  });
+  ['d', 'u', 'r'].forEach((dir, row) => {
+    for (let f = 0; f < cols; f++) { const name = dir + f; if (!tex.has(name)) tex.add(name, 0, f * 32, row * 48, 32, 48); }
+  });
+  return tex;
 }
 
 export function generateCharacter(scene, key, app) {

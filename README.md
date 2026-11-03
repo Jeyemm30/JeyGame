@@ -1,4 +1,6 @@
-# JeyGame – Open-World City Story (2D pixel art)
+# CITY OF CHAOS – Open-World City Story (2D pixel art)
+
+Created by John Mark V. Espineda.
 
 Phaser 3 + Vite. All art and sound are generated in code (no external assets, no online services), so the game runs fully offline once `npm install` has finished. Angled top-down 2D – no 3D.
 
@@ -153,3 +155,93 @@ Limits (needs extra art to do better): the sprites only have south / north / sid
 - **Jobs** (talk to the guard, F): delivery, territory patrol, recovery, rival investigation, protection, gang defense; **boss assignments** from the boss at Respected. Each gang has its own texts, characters and rewards; jobs show in the mission panel with waypoints, have time limits, cooldowns and consequences for failing or dropping them. "Make amends" ($300) lets a hostile standing recover.
 - **Boss defeat**: a beaten boss surrenders (unique lines per boss), the crew defends / retreats / gives up, and the boss is carried off. He respawns in his private room after 10 **real** minutes (timestamp saved in the save and mirrored in the browser, so a refresh does not reset it). Beating a boss costs reputation instead of giving it.
 - **Memory**: gangs remember attacks on their people, guard assaults, betrayals, boss defeats and finished jobs (their dialogue changes). Wearing a rival gang's colours (two pieces) near a hideout makes them suspicious. The boss room and weapon store are private unless you are Respected.
+
+## Casino expansion: two floors, chips, ATM, Baccarat, Texas Hold'em
+- **Bigger casino** (22 x 21): reception with Sean, two ATMs, chip cashier, slot banks, blackjack, poker dice, two baccarat tables, bar, waiting lounge, security office, restrooms, more space between tables, chandeliers, neon signs and a lit entrance. Every table has chip stacks; NPC dealers and players sit at them.
+- **Floor 2 - the VIP tower** (a sealed building across the road, reached only by the grand staircase; there are no doors or windows): VIP blackjack, VIP baccarat, Texas Hold'em, a VIP cashier and banking terminals, a VIP lounge, Jiro's office, extra guards and wealthy NPCs, plus two private rooms (VIP Gold only). The minimap label changes to VIP LEVEL.
+- **Access:** floor 2 needs VIP (cashier $5,000, 150 casino reputation, or an invitation from Sean at 60). VIP Gold (250 reputation, or Jiro's invitation at 160) opens the private rooms and raises the limit from 5,000 to 25,000 chips. Security walks you back down if you are somewhere you are not cleared for.
+- **Chips and coins:** all games are played with casino chips (white 10, red 50, green 100, blue 500, black 1,000, purple 5,000, plus small coins). Exchange at the cashier, 1 chip = $1 both ways. The ATM moves cash between the wallet and a bank account only. Every transfer validates the amount and is logged (saved). Table buy-ins in Hold'em are returned exactly once when you stand up.
+- **Baccarat:** Player / Banker / Tie bets with chips, dealing animation, standard third-card rules, Banker pays 0.95:1, Tie 8:1, push on ties, a betting timer, visitors at the table and a bead plate. **Texas Hold'em:** you against three AI players with different styles (they only see their own cards and the board), blinds, side pots, check/call/raise/fold.
+- **Sean** works the reception on floor 1, **Jiro** the VIP office on floor 2; both change their dialogue with your VIP level.
+
+## WISE SOLE walkability
+- Shoppers inside WISE SOLE are "soft": you walk past them instead of being blocked in the aisles (they never stand in your way). The fitting-room doorway is two tiles wide and the gap between the two shoe islands is two tiles wide. Every solid tile in the store has a visible object on it, and all furniture is unchanged.
+
+## WISE SOLE redesign
+- The shop now has tall walls with a visible back wall under the roof, and no interior sign (the only big WISE SOLE sign is the one on the front of the building).
+- Layout: sneaker wall + limited-edition unit at the back, a sneaker island and try-on bench at the left, the clothing zone (wall shelves, racks, mannequins) on the left, premium plinths + island and accessories on the right, the checkout with Ezekiel and a queue at the front, a small fitting room at the bottom left, and a wide open aisle from the door to the back wall. Every walkable tile is reachable.
+
+## WISE SOLE: one open room
+- The backroom and the fitting room are gone: WISE SOLE is a single open room. Ezekiel stands behind a horizontal checkout counter in the upper right (the old backroom space), with stock shelves behind him; walk up to the counter and press F (he can be talked to from the front of the counter, and from beside it).
+- The old fitting-room corner is now open floor (no mirrors). There are no visible hanging lamps: the store is lit by soft glows spread over the shoe wall, the clothing zone, the premium zone and the checkout. The register and monitor on the counter are drawn behind Ezekiel so his whole body stays visible, and shoppers step aside when you walk up to them.
+
+## WISE SOLE exterior
+- A dark, cool storefront: big glass display windows (sneakers and posters behind the glass), two dark pillars, pink and cyan neon strips, two wall lights, a paved entrance apron.
+- **One single glass door** (dark metal frame, pink/cyan accents, handle). It starts closed and solid, F opens it with a three-frame swing (collision follows the real open/closed state), and it closes by itself after a few seconds when nobody is near. Walkers open it too.
+- **The official logo** is your uploaded image (`src/assets/wise_logo.png`, loaded at boot), only scaled (aspect ratio kept, high-quality downscale) and cropped to its round badge: on the sign above the door and on the **freestanding signpost** beside the entrance (pole, base plate, board with the logo, pink/cyan bands).
+- The signpost has a 10 px round collision body on the pole itself (the player never gets closer than ~14 px from any direction, vehicles and walkers collide with it, and walkers' pathfinding goes around its tile).
+- There is no other WISE SOLE sign anywhere (none inside the store). Exterior glows come on at night; the interior glows only show while you are inside.
+
+## Menus: CITY OF CHAOS
+- **New title and logo** (CITY OF CHAOS): painted logo on the main menu, the loading screen, the credits, the pause menu and the browser tab.
+- **Main menu**: an animated dusk view of the city built from the game's own wall / window / door / road tiles, vehicle and lamp sprites (cars drive by, street lamps flicker, pedestrians walk, windows flicker, haze drifts). Continue (shows the latest save), New Game (asks first when a save exists), Load Game, Character, Settings, Credits, Exit Game (asks, tries to close the tab, otherwise shows a goodbye screen), plus Story / Side missions, Controls and Fullscreen. Mouse hover and Up/Down + Enter both work.
+- **Pause menu** (ESC or the new MENU button at the top of the screen; touch players keep the II button): the world stays visible, darkened and softly blurred, behind a side panel with Resume, Mission Log, Save, Load, Settings, Controls, Main Menu (asks first) and Exit Game, plus a small status card. The Game scene is paused, so the player, NPCs, enemies and vehicles stop and no input reaches the game; ESC again or Resume continues; a second pause menu can never open on top of the first.
+- Settings, Save/Load, Controls and Credits use the same charcoal and orange look (the shared button style changed with them).
+
+## Character creation / customisation
+- The character screen uses the main menu's design system: the same logo, the same animated city behind it, menu-style tabs, menu-style bottom buttons (Confirm Character is the orange primary), the same fades between screens.
+- Tabs: Appearance (your whole look at a glance - click a line to jump to it), Hairstyle, Hair Color, Skin Tone, Headwear, Clothing, Pants, Shoes, Accessories (backpack). Style choices show a small live preview of that option on your character; colours are swatches. The big preview is the real player sprite, re-painted instantly, with rotate (< > or Q / E) and a walk toggle. Up/Down switch tabs, Left/Right step the option.
+- Back asks before throwing away unconfirmed changes; Randomize and Reset Appearance (back to the default look); Confirm Character saves the look and starts the game (or returns to the menu when you came from Character).
+
+## Casino exterior
+- A luxury look from the street: a large CASINO marquee (gold letters, bulb border, chips, dice and card suits), a striped red / purple entrance canopy, two black-marble columns with gold bands and lights, a red-carpet walkway with gold bollards, vertical neon strips (red / gold / purple / cyan) on the pillars and corners, dark plum glass with a gold window grid, a plum roof with illuminated edges, and window panes with glimpses of the interior (slot machines, a chandelier, a card table, the bar).
+- The footprint, doors, entrance coordinates, collision and the interior are unchanged; the columns stand beside the 2-tile door lane and the guards' spots. The exterior decorations fade out when you are inside, and the interior glows only show once you are in the building (not through the roof).
+
+## Story Missions and Side Missions screens
+
+Both screens now use the same design as the main menu (charcoal panels, orange and cyan accents, the same buttons and hover effects) and live in one scene, `src/scenes/MissionsScene.js`.
+
+- **Tabs**: STORY MISSIONS (orange) and SIDE MISSIONS (cyan). Switch with the mouse, Left/Right, or Q/E.
+- **Story list**: all 15 missions grouped by chapter, each card with the contact's portrait, a status pill (Available, Active, Completed, Locked, Failed) and the cash reward. Completed cards are dimmed with a check mark.
+- **Side list**: the six repeatable jobs with item or vehicle art, a difficulty rating, and where the job takes you.
+- **Detail panel**: description, contact, reward, requirements for locked missions, and an objectives checklist showing done, current and upcoming steps.
+- **Buttons**: START MISSION / CONTINUE MISSION / RETRY / REPLAY / ABORT / START JOB. Locked missions have no start button. BACK, ESC or J closes the screen and returns to wherever you came from (game, pause menu or main menu).
+- **Controls**: mouse click and wheel scrolling, or Up/Down to pick a mission and Enter for the main action.
+- **Behind the screen**: the game world, darkened (blurred when opened from the J key) or the animated city in the main menu, where the screen is read-only and shows your latest save.
+- Mission rules are unchanged: starting, aborting, replaying and rewards still go through the existing mission system. Starting a mission from the pause menu now returns you straight to the game.
+
+## Port City Trust - the robbable bank
+
+A new bank stands at the west end of the bottom shop row on Market Street (Midtown). It replaced two or three ordinary shops there; nothing else in the city changed. It is a normal public building until you rob it.
+
+**Where**: Market Street, west block, south side of the street (it shows on the map as "Port City Trust").
+
+**Exterior**: big gold-on-navy sign, awning with columns, glass front with window displays, wall lanterns, security cameras, two ATMs on the street, benches and parked cars.
+
+**Interior** (everything is walkable, nothing is crowded):
+- Public hall: queue lane, two ATMs, self-service kiosks, two banking desks, waiting sofas.
+- Teller counter with six sections, and a staff-only door.
+- Staff corridor with tellers and a patrolling guard, then four rooms: the manager's office, the employee workstations, the security room (monitor wall, control panel, guard) and the vault (deposit-box wall, cash shelves, pallets, heavy vault door).
+- People: a manager, tellers, clerks, queueing customers, ATM users, people on the sofas, walkers coming in and out, and five guards (door, hall patrol, corridor patrol, monitors, vault).
+
+**Robbery**
+1. Draw a firearm and press F at the teller counter ("Hold up the bank"). Without a drawn gun you only get a hint.
+2. The alarm goes off: guards turn hostile, customers and staff run, the staff and security doors unlock, a red alert panel shows your progress, and police are dispatched. The wanted level rises once for the robbery (3 stars); it can never be charged twice for the same robbery, not even after a reload.
+3. Go through the staff door to the vault door and press F to open the **Vault Sequence lock**: four different symbols out of six, a new random code every robbery, three clues, and pegs after each try (green = right slot, amber = right symbol, wrong slot). Five tries, then the lock jams for 40 real seconds. Wrong tries trip extra silent alarms.
+4. When it opens (the door slides aside), take the cash bundles, money bags and gold bars (14 stacks, $8,450 in total; the amount is `BANK_CFG.lootScale` in `Bank.js`). A stack can only be taken once. The panel shows how much you have taken.
+5. Escape. The existing police system does the chasing; the robbery ends when your wanted level is gone and you are away from the building.
+
+**Cooldown**: once anything has been stolen (or the vault is emptied) the vault is empty and sealed for 10 **real** minutes. Starting a robbery then only shows the time left. When the time is up the bank resets itself: new code, money back, doors locked again, guards and customers restored. The timer uses the real clock and is saved with the game, so it survives refreshes and loading; if more than 10 minutes pass while the game is closed the bank is already restored when you load. Leaving the building never resets it.
+
+**Files**: `src/systems/Bank.js` (state, puzzle rules, cooldown), `src/systems/BankHeist.js` (the robbery in the world), `src/scenes/VaultScene.js` (the puzzle screen), `src/assets/bankArt.js` (art), the `PORT CITY TRUST` block in `src/systems/WorldGen.js`.
+
+## Yosen Blackthorn - the mysterious quest-giver
+
+A thin young man with a tall black curly mop, a teal hoodie, navy jeans and orange sneakers waits in the quiet back alley of the west residential block (a fixed spot, one NPC, he never wanders or follows you). He smokes while he waits: every few seconds (random) he raises his hand, takes a puff, lowers it and blows out a little smoke that rises and fades. Close up or in conversation he only holds the cigarette.
+
+- **Finding him**: a gold **?** marks his exact spot on the world map and the minimap from the start. When you get within about 8 tiles he is "discovered": the marker turns into his teal **Y** badge, the name Yosen Blackthorn appears, and his name tag, dialogue and mission screens use it (before that he is just "Stranger").
+- **One quest at a time**: talk to him (F). First an intro, then he offers the next quest of five: Spare Light, Left on Repeat, Wrong Crowd, The Quiet Envelope, Roof Rules. Accept or decline; a declined quest stays available and he asks again next time. While a quest is running he only reminds you of it, and he does not offer another until it is done. He also waits if another story mission or job is active.
+- **Story**: his tone is casual and a little mysterious, and each finished quest reveals a bit more (his family's old Blackthorn Lounge, the crew in the photo ...) without telling it all.
+- **Mission screen**: his current quest is the first card on the SIDE MISSIONS tab (giver, description, objectives with progress, reward, difficulty). It can be continued or aborted there, but it can only be started by talking to him. Objectives use the normal waypoints, minimap markers, quest items and dialogue.
+- **Saving**: progress is saved in profile.flags.yosen (found / met / quests done / declined) and the running quest uses the normal mission save. Rewards are paid once, and only the quest that is actually next can advance the chain.
+- **Files**: `src/story/yosen.js` (quests, dialogue, state), the `yosen` entry in `src/story/side.js`, `updateYosen` in `src/entities/Civilian.js`, hair style 7 and `generateSmoker` in `src/assets/textures.js`.

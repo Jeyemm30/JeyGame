@@ -54,6 +54,11 @@ export function buildPlaces(gs) {
   if (wd.hideout) { P.kenny = { x: wd.hideout.kenny.x, y: wd.hideout.kenny.y, name: "Kenny's hideout" }; }
   if (wd.wise) { P.wise = { x: wd.wise.owner.x, y: wd.wise.owner.y, name: 'WISE SOLE' }; }
   if (wd.casino) { P.sean = { x: wd.casino.sean.x, y: wd.casino.sean.y, name: 'Casino reception' }; P.jiro = { x: wd.casino.jiro.x, y: wd.casino.jiro.y, name: 'Casino card room' }; P.casino = { x: wd.casino.door.x, y: wd.casino.door.y, name: 'Casino' }; }
+  {                                                              // Yosen Blackthorn: the quiet back alley of the west residential block on Market Street's row (a fixed spot)
+    const yb = wd.blocks.find((b) => b.c === 0 && b.r === 3) || wd.blocks.find((b) => b.alley !== undefined);
+    const s = snap(yb.x0 * TILE + 7 * TILE, (yb.alley + 0.5) * TILE, 160);
+    P.yosen = { x: s.x, y: s.y, name: 'The quiet alley' };
+  }
   P.houses = homes.map((h) => ({ x: h.x, y: h.y + 14 }));
   P.shops = doors.filter((d) => d.kind === 'shop' || d.kind === 'restaurant');
   P.tutorial = null;

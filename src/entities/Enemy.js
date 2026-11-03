@@ -28,6 +28,8 @@ export const ROLES = {
   guard: { tex: 'npc_guard', hostility: 'provoked', preset: 'pistol' },
   casino_guard: { tex: 'npc_casino_guard', hostility: 'provoked', preset: 'pistol' },
   casino_guard2: { tex: 'npc_casino_guard2', hostility: 'provoked', preset: 'pistol' },
+  bank_guard: { tex: 'npc_bank_guard', hostility: 'provoked', preset: 'pistol' },
+  bank_guard2: { tex: 'npc_bank_guard2', hostility: 'provoked', preset: 'pistol' },
   gang: { tex: 'npc_gang', hostility: 'territory', preset: 'pistol' },
   criminal: { tex: 'npc_criminal', hostility: 'always', preset: 'pistol' },
   gang2: { tex: 'npc_gang2', hostility: 'provoked', preset: 'pistol' },

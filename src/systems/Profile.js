@@ -14,6 +14,7 @@ export const profile = {
   takenItems: [],
   stats: { time: 0, kills: 0, distance: 0 },
   lastVehicleId: null,
+  bank: null,                // Port City Trust heist state (Bank.js); null = a normal bank
   slot: 0
 };
 
@@ -31,6 +32,7 @@ export function resetProfile() {
   profile.takenItems = [];
   profile.stats = { time: 0, kills: 0, distance: 0 };
   profile.lastVehicleId = null;
+  profile.bank = null;
 }
 
 export function loadProfile(data) {
@@ -50,7 +52,8 @@ export function loadProfile(data) {
     killedSpawns: [...(data.killedSpawns || [])],
     takenItems: [...(data.takenItems || [])],
     stats: { time: 0, kills: 0, distance: 0, ...(data.stats || {}) },
-    lastVehicleId: data.lastVehicleId || null
+    lastVehicleId: data.lastVehicleId || null,
+    bank: data.bank ? JSON.parse(JSON.stringify(data.bank)) : null
   });
 }
 

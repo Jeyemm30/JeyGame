@@ -21,12 +21,12 @@ export function button(scene, x, y, str, onClick, { w = 300, h = 50, size = 22 }
   const t = scene.add.text(0, 0, str, { fontFamily: FONT, fontSize: size + 'px', color: '#e8f2e0', fontStyle: 'bold', align: 'center', wordWrap: { width: w - 20 } }).setOrigin(0.5);
   // tap targets are at least ~48px tall on touch devices, and grow to fit wrapped text
   h = Math.max(touch ? Math.max(h, 50) : h, t.height + 14);
-  const bg = scene.add.rectangle(0, 0, w, h, 0x24331f).setStrokeStyle(3, 0x6b8f5a);
+  const bg = scene.add.rectangle(0, 0, w, h, 0x1d2027).setStrokeStyle(2, 0x4a4d58);
   c.add([bg, t]);
   c.setSize(w, h);
   bg.setInteractive({ useHandCursor: true });
-  bg.on('pointerover', () => { bg.setFillStyle(0x3f5e36); t.setColor('#ffffff'); });
-  bg.on('pointerout', () => { bg.setFillStyle(0x24331f); t.setColor('#e8f2e0'); });
+  bg.on('pointerover', () => { bg.setFillStyle(0x2a2e38).setStrokeStyle(2, 0xff6a2a); t.setColor('#ffffff'); });
+  bg.on('pointerout', () => { bg.setFillStyle(0x1d2027).setStrokeStyle(2, 0x4a4d58); t.setColor('#e8f2e0'); });
   bg.on('pointerup', () => { sfx.click(); onClick(); });
   c.setText = (s) => t.setText(s);
   return c;
@@ -61,8 +61,8 @@ export const CONTROLS_TEXT = [
 export function controlsPanel(scene, onClose) {
   const c = scene.add.container(0, 0).setDepth(100);
   const block = scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0.75).setInteractive();
-  const panel = scene.add.rectangle(640, 360, 760, 680, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
-  const title = label(scene, 640, 40, 'CONTROLS', 30, '#f2e08a', 0.5, 0);
+  const panel = scene.add.rectangle(640, 360, 760, 680, 0x14161c).setStrokeStyle(3, 0xff6a2a);
+  const title = label(scene, 640, 40, 'CONTROLS', 30, '#ffb070', 0.5, 0);
   const body = scene.add.text(640, 84, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '17px', color: '#e8f2e0', lineSpacing: 4 }).setOrigin(0.5, 0);
   const close = button(scene, 640, 668, 'CLOSE', () => { c.destroy(); if (onClose) onClose(); }, { w: 200, h: 44, size: 20 });
   c.add([block, panel, title, body, close]);

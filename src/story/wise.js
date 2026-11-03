@@ -159,7 +159,7 @@ export const LINES = {
   buyOutfit: ['A full outfit! Head to toe, no notes. Looking good!', 'The whole look. I love a customer who commits.', 'Done. You are walking out of here as a different person.'],
   buyRare: ['A limited edition?! Okay, you have taste AND money. Treat those with respect.', 'Only a handful of those exist. Handle with style.', 'Collector energy. I respect it deeply.'],
   poor: ['Ooh, that is a little more than you are holding. Come back when you have the cash.', 'Trust me, it hurts me more than it hurts you. Come back with more money.', 'The price tag is not a suggestion, my friend. Save up and come back.'],
-  equip: ['Looking good!', 'Oh, now THAT is a look.', 'Mirror is over there, but you already know it works.'],
+  equip: ['Looking good!', 'Oh, now THAT is a look.', 'You wear that better than the mannequin does.'],
   off: ['Taking it off? Fine, fine. It will be here when you want it back.', 'Understood. Back to basics.'],
   save: ['Saved! Your wardrobe is looking serious.', 'Locked in. Come back and wear it anytime.'],
   load: ['Back in that one? Classic.', 'Smooth. Changing outfits like a pro.'],

@@ -83,6 +83,13 @@ export default class UIScene extends Phaser.Scene {
     this.bannerTitle = label(this, 640, 160, '', 44, '#f2e08a', 0.5, 0.5).setDepth(30).setAlpha(0);
     this.bannerSub = label(this, 640, 205, '', 22, '#ffffff', 0.5, 0.5).setDepth(30).setAlpha(0);
 
+    // bank heist panel (top centre) + the red alarm wash
+    this.alarmRect = this.add.rectangle(640, 360, 1280, 720, 0xff1a1a, 0).setDepth(1);
+    this.bankG = this.add.graphics().setDepth(8);
+    this.bankT1 = label(this, 640, 22, '', 18, '#ff8a7a', 0.5, 0).setDepth(9);
+    this.bankT2 = label(this, 640, 46, '', 13, '#e8f2e0', 0.5, 0).setDepth(9);
+    this.bankInfo = null;
+    this.ysTxt = this.add.text(0, 0, '?', { fontFamily: '"Courier New", monospace', fontSize: '15px', fontStyle: 'bold', color: '#ffd23a', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(5).setVisible(false);
     // minimap (click it to open the full-screen world map)
     this.mmImg = this.add.image(MM_X, MM_Y, 'minimap').setOrigin(0, 0).setScale(MM_SCALE).setDepth(1);
     this.mmFrame = this.add.rectangle(MM_X - 3, MM_Y - 3, MM_W + 6, MM_H + 6).setOrigin(0, 0).setStrokeStyle(3, 0x6b8f5a).setDepth(2);
@@ -117,6 +124,14 @@ export default class UIScene extends Phaser.Scene {
     this.buildInventory();
     if (this.touchMode) this.buildTouchControls();
 
+    // a clickable MENU button for mouse players (touch players have the II button): opens the same pause menu as ESC
+    if (!this.touchMode) {
+      const mb = this.add.rectangle(640, 18, 118, 26, 0x14161c, 0.78).setStrokeStyle(1, 0x2a2d36).setDepth(60).setInteractive({ useHandCursor: true });
+      const mt = this.add.text(640, 18, 'MENU  (ESC)', { fontFamily: '"Courier New", monospace', fontSize: '11px', color: '#9a9ca6', fontStyle: 'bold' }).setOrigin(0.5).setDepth(61);
+      mb.on('pointerover', () => { mb.setStrokeStyle(1, 0xff6a2a).setFillStyle(0x23262e, 0.95); mt.setColor('#ffffff'); });
+      mb.on('pointerout', () => { mb.setStrokeStyle(1, 0x2a2d36).setFillStyle(0x14161c, 0.78); mt.setColor('#9a9ca6'); });
+      mb.on('pointerup', () => { sfx.click(); this.openPause(); });
+    }
     // keys
     this.input.keyboard.addKey('TAB');
     this.input.keyboard.on('keydown-TAB', () => this.toggleInventory());
@@ -142,11 +157,14 @@ export default class UIScene extends Phaser.Scene {
     this.onBanner = (b) => this.showBanner(b);
     this.onReqMissions = () => this.openMissions();
     g.events.on('profile', this.onProfile);
+    this.onBankHud = (i) => { this.bankInfo = i; };
     g.events.on('banner', this.onBanner);
+    g.events.on('bankHud', this.onBankHud);
     g.events.on('request-missions', this.onReqMissions);
     this.events.once('shutdown', () => {
       g.events.off('profile', this.onProfile);
       g.events.off('banner', this.onBanner);
+      g.events.off('bankHud', this.onBankHud);
       g.events.off('request-missions', this.onReqMissions);
       g.events.off('toast', this.onToast);
       g.events.off('player-hit', this.onHit);
@@ -161,7 +179,7 @@ export default class UIScene extends Phaser.Scene {
 
   /* ----------------------------------------------------------- state toggles */
   modalActive() {
-    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'SaveLoad', 'Dialogue', 'Ending', 'Credits'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
+    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
   }
 
   onEsc() {
@@ -365,9 +383,35 @@ export default class UIScene extends Phaser.Scene {
   }
 
   /* ------------------------------------------------------------------ update */
-  update() {
+  // robbery progress / cooldown panel and the alarm wash
+  drawBank(time) {
+    const i = this.bankInfo, bg = this.bankG;
+    bg.clear();
+    if (!i) { this.bankT1.setText(''); this.bankT2.setText(''); this.alarmRect.setFillStyle(0xff1a1a, 0); return; }
+    const usd = (n) => '$' + Math.round(n).toLocaleString();
+    const w = 420, x = 640 - w / 2, y = 14;
+    bg.fillStyle(0x0c0d11, 0.88).fillRect(x, y, w, 84).lineStyle(2, i.mode === 'active' ? 0xff4a3a : 0x3ad0e0, 1).strokeRect(x, y, w, 84);
+    if (i.mode === 'active') {
+      const flash = 0.5 + 0.5 * Math.sin(time / 150);
+      bg.fillStyle(0xff4a3a, 0.5 + 0.5 * flash).fillRect(x, y, w, 4);
+      this.bankT1.setText('BANK ROBBERY').setColor('#ff8a7a');
+      const frac = i.total ? i.money / i.total : 0;
+      bg.fillStyle(0x2a2d36, 1).fillRect(x + 16, y + 66, w - 32, 8).fillStyle(0x4ac07a, 1).fillRect(x + 16, y + 66, (w - 32) * Math.min(1, frac), 8);
+      this.bankT2.setText(!i.solved ? (i.lock > 0 ? 'VAULT LOCKDOWN - lock jammed ' + Math.ceil(i.lock / 1000) + ' s' : 'Reach the vault at the back and crack the lock') : `LOOT ${usd(i.money)} / ${usd(i.total)}   (${i.n}/${i.of} stacks)`).setColor(i.lock > 0 && !i.solved ? '#ff7a6a' : '#e8f2e0');
+      this.alarmRect.setFillStyle(0xff1a1a, i.near ? 0.05 + 0.07 * flash : 0.03);
+    } else {
+      const s = Math.ceil(i.left / 1000);
+      this.bankT1.setText('PORT CITY TRUST').setColor('#6ee0ee');
+      bg.fillStyle(0x2a2d36, 1).fillRect(x + 16, y + 66, w - 32, 8).fillStyle(0x3ad0e0, 1).fillRect(x + 16, y + 66, (w - 32) * (1 - i.left / (10 * 60 * 1000)), 8);
+      this.bankT2.setText(`Vault sealed and empty - reopens in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`).setColor('#e8f2e0');
+      this.alarmRect.setFillStyle(0xff1a1a, 0);
+    }
+  }
+
+  update(time) {
     const g = this.game_, p = this.p;
     if (!p || !p.active) return;
+    this.drawBank(time);
     const h = this.hud;
     h.clear();
     const bar = (x, y, w, hgt, frac, col) => {
@@ -564,8 +608,9 @@ export default class UIScene extends Phaser.Scene {
   drawMinimap(g, p) {
     const show = settings.minimap;
     this.mmImg.setVisible(show); this.mmFrame.setVisible(show); this.mmHit.setVisible(show); this.mmLabel.setVisible(show);
+    this.mmLabel.setText(g.casinoFloor === 2 ? "VIP LEVEL" : g.casinoFloor === 1 ? "CASINO" : "MAP");
     this.mmDots.clear();
-    if (!show) return;
+    if (!show) { this.ysTxt.setVisible(false); return; }
     const ptx = p.x / TILE, pty = p.y / TILE;
     const cx0 = Phaser.Math.Clamp(Math.round(ptx - MM_TILES_X / 2), 0, MAP_W - MM_TILES_X);
     const cy0 = Phaser.Math.Clamp(Math.round(pty - MM_TILES_Y / 2), 0, MAP_H - MM_TILES_Y);
@@ -581,6 +626,13 @@ export default class UIScene extends Phaser.Scene {
       const col = w.kind === 'giver' ? 0x66ccff : w.kind === 'event' ? 0xff9a3a : 0xffd23a;
       d.fillStyle(Math.floor(this.time.now / 300) % 2 ? col : 0xffffff, 1).fillTriangle(x, y - 6, x + 5, y, x, y + 6).fillTriangle(x, y - 6, x - 5, y, x, y + 6);
     });
+    // Yosen Blackthorn: a "?" while he is undiscovered, a teal "Y" afterwards (only while his spot is inside the minimap)
+    const yp = g.yosenPoi;
+    if (yp) {
+      const x = sx(yp.x), y = sy(yp.y), found = yp.type === 'yosen';
+      this.ysTxt.setVisible(inside(x, y)).setPosition(x, y - 4).setText(found ? 'Y' : '?').setColor(found ? '#6ee0ee' : '#ffd23a');
+      if (inside(x, y)) d.lineStyle(1, found ? 0x6ee0ee : 0xffd23a, 0.9).strokeCircle(x, y - 4, 7);
+    } else this.ysTxt.setVisible(false);
     // custom map markers
     d.fillStyle(0xffd23a, 1);
     (g.markers || []).forEach((m) => { const x = sx(m.x), y = sy(m.y); if (inside(x, y)) d.fillTriangle(x, y - 6, x - 4, y, x + 4, y); });

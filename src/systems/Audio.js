@@ -107,6 +107,7 @@ export const sfx = {
   suspicious() { if (throttle('susp', 400)) { tone(330, 0.12, { type: 'triangle', vol: 0.12 }); tone(392, 0.14, { type: 'triangle', vol: 0.12, delay: 0.1 }); } },
   alertEnemy() { if (throttle('alertE', 400)) { tone(520, 0.1, { type: 'square', vol: 0.14 }); tone(780, 0.16, { type: 'square', vol: 0.14, delay: 0.09 }); } },
   stab() { noise(0.12, { freq: 1200, endFreq: 300, vol: 0.3, type: 'bandpass' }); },
+  alarm() { if (throttle('alarm', 1100)) { tone(900, 0.4, { type: 'square', vol: 0.1, slideTo: 640 }); tone(640, 0.4, { type: 'square', vol: 0.1, delay: 0.45, slideTo: 900 }); } },
   click() { tone(800, 0.03, { type: 'square', vol: 0.1 }); },
   die() { tone(200, 0.8, { type: 'sawtooth', vol: 0.3, slideTo: 30 }); noise(0.6, { freq: 1000, endFreq: 60, vol: 0.5 }); }
 };

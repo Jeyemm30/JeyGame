@@ -19,15 +19,6 @@ export function drawCasinoArt(scene) {
   const mk = (key, w, h, fn) => makeCanvas(scene, key, w, h, fn);
 
   /* ---------------------------------------------------------------- exterior */
-  mk('casino_sign', 260, 74, (c) => {
-    R(c, 0, 0, 260, 74, '#0a0710'); R(c, 3, 3, 254, 68, '#1a0c24'); R(c, 6, 6, 248, 62, '#12081a');
-    bulbs(c, 6, 6, 254, 6, 8, ['#ffe27a', '#ff4a8a', '#3ad8ff']); bulbs(c, 6, 68, 254, 68, 8, ['#3ad8ff', '#ffe27a', '#ff4a8a']);
-    bulbs(c, 6, 6, 6, 68, 8, ['#ff4a8a', '#ffe27a']); bulbs(c, 254, 6, 254, 68, 8, ['#ffe27a', '#3ad8ff']);
-    font(c, 40, '#5a0f2a'); c.fillText('CASINO', 134, 36); font(c, 40, '#ffd24a'); c.fillText('CASINO', 130, 32);
-    font(c, 40, '#fff4b8'); c.fillText('CASINO', 130, 30);
-    font(c, 11, '#ff6aa8'); c.fillText('★ LUCKY 7 ★  DICE • CARDS • SLOTS  ★ VIP ★', 130, 56);
-    ['♠', '♥', '♦', '♣'].forEach((g, i) => { font(c, 14, i % 3 === 1 || i === 2 ? '#ff3a5a' : '#e8e8f4'); c.fillText(g, 24 + i * 0, 20 + i * 11); c.fillText(g, 236, 20 + i * 11); });
-  });
   mk('casino_arch', 70, 26, (c) => {         // small gold lintel over the glass doors
     R(c, 0, 4, 70, 18, '#c9a227'); R(c, 0, 4, 70, 2, '#fff0a0'); R(c, 0, 20, 70, 2, '#7a5a10'); R(c, 4, 8, 62, 10, '#1a0c24');
     font(c, 9, '#ffe27a'); c.fillText('ENTRANCE', 35, 13); bulbs(c, 3, 3, 67, 3, 6, ['#fff4b8', '#ffd24a']);
@@ -211,5 +202,128 @@ export function drawCasinoArt(scene) {
     ellipse(c, 14, 15, 12, 12, '#000000'); ellipse(c, 14, 14, 12, 12, '#c4202e');
     for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; R(c, Math.round(14 + Math.cos(a) * 10) - 2, Math.round(14 + Math.sin(a) * 10) - 2, 4, 4, '#f6f6f6'); }
     ellipse(c, 14, 14, 7, 7, '#a01820'); ellipse(c, 14, 14, 5, 5, '#e8e8f0'); font(c, 8, '#a01820'); c.fillText('$', 14, 14);
+  });
+
+  /* ---------------------------------------------------------------- casino chips + coins (UI discs, table stacks), ATM, stairs, new tables */
+  const CHIP_COL = { 10: '#eeeef2', 50: '#c4202e', 100: '#2e8a3a', 500: '#2a4aa8', 1000: '#1c1c24', 5000: '#8a4ae8' };
+  Object.keys(CHIP_COL).forEach((v) => {
+    const col = CHIP_COL[v], dk = shade(col, -0.45), lt = shade(col, 0.35), lab = v >= 1000 ? (v / 1000) + 'K' : String(v), dark = v === '10';
+    mk('chip_' + v, 32, 32, (c) => {                                  // the chip seen from the front (UI, bets)
+      ellipse(c, 16, 18, 14, 13, 'rgba(0,0,0,0.4)'); ellipse(c, 16, 16, 14, 14, dk); ellipse(c, 16, 16, 13, 13, col);
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + Math.PI / 8; R(c, Math.round(16 + Math.cos(a) * 11) - 2, Math.round(16 + Math.sin(a) * 11) - 2, 4, 4, dark ? '#c4202e' : '#f4f4f8'); }
+      ellipse(c, 16, 16, 8, 8, dk); ellipse(c, 16, 16, 7, 7, lt); ellipse(c, 16, 16, 6, 6, col);
+      font(c, lab.length > 3 ? 7 : lab.length > 2 ? 8 : 9, dark ? '#1c1c24' : '#ffffff'); c.fillText(lab, 16, 17);
+    });
+    mk('chipside_' + v, 24, 8, (c) => {                                // one chip seen from the side, for stacks
+      R(c, 1, 3, 22, 5, dk); R(c, 1, 2, 22, 5, col); R(c, 1, 2, 22, 1, lt);
+      for (let i = 0; i < 6; i++) R(c, 3 + i * 4, 2, 2, 5, dark ? '#c4202e' : '#f4f4f8');
+    });
+  });
+  const coin = (key, col, lab) => mk(key, 18, 18, (c) => {
+    ellipse(c, 9, 10, 8, 8, 'rgba(0,0,0,0.4)'); ellipse(c, 9, 9, 8, 8, shade(col, -0.4)); ellipse(c, 9, 9, 7, 7, col); ellipse(c, 9, 9, 5, 5, shade(col, 0.25)); ellipse(c, 9, 9, 4, 4, col);
+    font(c, 8, shade(col, -0.55)); c.fillText(lab, 9, 10); R(c, 5, 4, 3, 1, 'rgba(255,255,255,0.8)');
+  });
+  coin('coin_1', '#b8733a', '1'); coin('coin_5', '#c4ccd6', '5');
+  const stack = (key, vals) => mk(key, 30, 40, (c) => {                // a small world stack of chips on a table
+    ellipse(c, 15, 36, 12, 3, 'rgba(0,0,0,0.3)');
+    vals.forEach((col, i) => { const y = 30 - i * 3, dk = shade(col, -0.45), lt = shade(col, 0.35); R(c, 8, y + 2, 14, 3, dk); R(c, 8, y, 14, 3, col); R(c, 8, y, 14, 1, lt); R(c, 11, y, 1, 3, '#f4f4f8'); R(c, 15, y, 1, 3, '#f4f4f8'); R(c, 19, y, 1, 3, '#f4f4f8'); });
+  });
+  stack('chipstack_a', ['#c4202e', '#c4202e', '#eeeef2', '#2e8a3a']); stack('chipstack_b', ['#2a4aa8', '#2e8a3a', '#2e8a3a', '#c4202e', '#c4202e', '#c4202e']); stack('chipstack_c', ['#1c1c24', '#1c1c24', '#8a4ae8', '#2a4aa8', '#2a4aa8', '#2e8a3a', '#c4202e']);
+
+  mk('atm', 34, 60, (c) => {
+    ellipse(c, 17, 57, 14, 3, 'rgba(0,0,0,0.3)'); R(c, 4, 6, 26, 50, '#4a5058'); R(c, 4, 6, 26, 2, '#8a929c'); R(c, 4, 6, 2, 50, '#6a727c'); R(c, 28, 6, 2, 50, '#2e343a'); R(c, 3, 54, 28, 3, '#22262c');
+    R(c, 8, 10, 18, 4, '#101418'); font(c, 5, '#3aff8a'); c.fillText('ATM', 17, 12);
+    R(c, 8, 16, 18, 14, '#0a2a1a'); R(c, 9, 17, 16, 12, '#1a6a4a'); R(c, 10, 18, 14, 2, '#6affb0'); R(c, 10, 22, 10, 1, '#3adf90'); R(c, 10, 25, 12, 1, '#3adf90'); R(c, 9, 17, 16, 3, 'rgba(255,255,255,0.12)');
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) R(c, 9 + i * 6, 33 + j * 4, 4, 3, j === 3 && i === 2 ? '#3aff8a' : '#c8cdd4');
+    R(c, 8, 50, 18, 3, '#101418'); R(c, 10, 51, 14, 1, '#3adf90'); R(c, 24, 36, 2, 10, '#ffd24a');
+  });
+  mk('casino_stairs', 120, 92, (c) => {                                // grand staircase going up (a wide flight, red carpet, gold rails)
+    ellipse(c, 60, 88, 54, 4, 'rgba(0,0,0,0.3)');
+    for (let i = 0; i < 9; i++) { const y = 74 - i * 7, w = 96 - i * 3; R(c, 60 - w / 2, y, w, 8, i % 2 ? '#8a1428' : '#a01830'); R(c, 60 - w / 2, y, w, 1, '#e0707a'); R(c, 60 - w / 2, y + 7, w, 1, '#4a0a14'); R(c, 60 - w / 2 + 2, y + 2, 3, 4, '#c9a227'); R(c, 60 + w / 2 - 5, y + 2, 3, 4, '#c9a227'); }
+    R(c, 4, 26, 5, 56, '#c9a227'); R(c, 4, 26, 5, 2, '#fff0a0'); R(c, 111, 26, 5, 56, '#c9a227'); R(c, 111, 26, 5, 2, '#fff0a0');
+    for (let i = 0; i < 6; i++) { R(c, 7, 30 + i * 9, 2, 8, '#8a6a10'); R(c, 111, 30 + i * 9, 2, 8, '#8a6a10'); }
+    R(c, 20, 2, 80, 20, '#16101e'); R(c, 22, 4, 76, 16, '#241632'); c.strokeStyle = '#ffd24a'; c.lineWidth = 2; c.strokeRect(24, 6, 72, 12); font(c, 11, '#ffe27a'); c.fillText('VIP LEVEL  ▲', 60, 13); bulbs(c, 22, 3, 98, 3, 6, ['#ffe27a', '#ff4a8a']);
+  });
+  mk('casino_stairs_down', 120, 92, (c) => {                           // the same flight seen from the VIP floor, going down
+    ellipse(c, 60, 88, 54, 4, 'rgba(0,0,0,0.3)');
+    for (let i = 0; i < 9; i++) { const y = 20 + i * 7, w = 70 + i * 3; R(c, 60 - w / 2, y, w, 8, i % 2 ? '#8a1428' : '#a01830'); R(c, 60 - w / 2, y, w, 1, '#e0707a'); R(c, 60 - w / 2, y + 7, w, 1, '#4a0a14'); }
+    R(c, 6, 18, 5, 66, '#c9a227'); R(c, 6, 18, 5, 2, '#fff0a0'); R(c, 109, 18, 5, 66, '#c9a227'); R(c, 109, 18, 5, 2, '#fff0a0');
+    R(c, 20, 0, 80, 16, '#16101e'); R(c, 22, 2, 76, 12, '#241632'); c.strokeStyle = '#3ad8ff'; c.lineWidth = 2; c.strokeRect(24, 4, 72, 8); font(c, 9, '#9ae8ff'); c.fillText('MAIN FLOOR  ▼', 60, 9);
+  });
+  table('baccarat_table', '#0f4a68', 96, 52, (c, w) => {              // kidney-shaped baccarat layout: PLAYER / BANKER / TIE
+    c.strokeStyle = 'rgba(255,226,122,0.75)'; c.lineWidth = 1; c.strokeRect(14, 8, w - 28, 16); c.beginPath(); c.moveTo(w / 2, 8); c.lineTo(w / 2, 24); c.stroke();
+    font(c, 5, 'rgba(255,226,122,0.95)'); c.fillText('PLAYER', w / 2 - 17, 14); c.fillText('BANKER', w / 2 + 17, 14); font(c, 4, '#ff8ac0'); c.fillText('TIE  PAYS 8 TO 1', w / 2, 21);
+    R(c, 20, 17, 4, 3, '#c4202e'); R(c, 70, 18, 4, 3, '#eeeef2'); R(c, 44, 19, 4, 3, '#2a4aa8'); R(c, 36, 26, 5, 7, '#f2f2f2'); R(c, 42, 27, 5, 7, '#f2f2f2'); R(c, 37, 28, 3, 2, '#c4202e');
+  });
+  table('holdem_table', '#15664a', 96, 52, (c, w) => {
+    c.strokeStyle = 'rgba(255,226,122,0.6)'; c.lineWidth = 1; c.beginPath(); c.ellipse(w / 2, 16, 26, 7, 0, 0, Math.PI * 2); c.stroke();
+    font(c, 5, 'rgba(255,226,122,0.9)'); c.fillText("TEXAS HOLD'EM", w / 2, 8);
+    for (let i = 0; i < 5; i++) { R(c, 30 + i * 8, 12, 6, 8, '#f6f6f6'); R(c, 30 + i * 8, 12, 6, 1, '#c8c8d0'); R(c, 32 + i * 8, 14, 1, 3, i % 2 ? '#c4202e' : '#15151a'); }
+    [[16, 22, '#c4202e'], [30, 27, '#2a4aa8'], [62, 27, '#15151a'], [76, 22, '#2e8a3a']].forEach(([x, y, col]) => { R(c, x, y, 6, 3, col); R(c, x, y, 6, 1, shade(col, 0.4)); R(c, x + 1, y + 1, 4, 1, '#f2f2f2'); });
+  });
+  table('vbj_table', '#4a0f2a', 80, 48, (c, w) => {                    // VIP blackjack: burgundy felt
+    c.strokeStyle = 'rgba(255,226,122,0.8)'; c.lineWidth = 1; c.beginPath(); c.arc(w / 2, 6, 24, 0.15 * Math.PI, 0.85 * Math.PI); c.stroke();
+    font(c, 5, 'rgba(255,226,122,0.95)'); c.fillText('VIP BLACKJACK 3 TO 2', w / 2, 20);
+    [[22, 16], [40, 19], [58, 16]].forEach(([x, y]) => { c.strokeStyle = 'rgba(255,226,122,0.55)'; c.beginPath(); c.arc(x, y, 3, 0, Math.PI * 2); c.stroke(); });
+    R(c, 32, 6, 5, 7, '#f2f2f2'); R(c, 38, 7, 5, 7, '#f2f2f2'); R(c, 33, 7, 3, 2, '#c4202e'); R(c, 20, 14, 4, 2, '#1c1c24'); R(c, 56, 14, 4, 2, '#8a4ae8'); R(c, 39, 17, 4, 2, '#2a4aa8');
+  });
+  table('vbac_table', '#1c1c34', 96, 52, (c, w) => {                   // VIP baccarat: midnight felt, gold trim
+    c.strokeStyle = 'rgba(255,226,122,0.85)'; c.lineWidth = 1; c.strokeRect(14, 8, w - 28, 16); c.beginPath(); c.moveTo(w / 2, 8); c.lineTo(w / 2, 24); c.stroke();
+    font(c, 5, 'rgba(255,226,122,0.95)'); c.fillText('PLAYER', w / 2 - 17, 14); c.fillText('BANKER', w / 2 + 17, 14); font(c, 4, '#d8b0ff'); c.fillText('VIP BACCARAT', w / 2, 21);
+    R(c, 20, 17, 4, 3, '#8a4ae8'); R(c, 70, 18, 4, 3, '#1c1c24'); R(c, 44, 19, 4, 3, '#c4202e'); R(c, 36, 26, 5, 7, '#f2f2f2'); R(c, 42, 27, 5, 7, '#f2f2f2'); R(c, 37, 28, 3, 2, '#8a4ae8');
+  });
+  mk('vip_rope', 44, 30, (c) => {                                       // gold posts with a black velvet rope across the VIP stairs
+    ellipse(c, 22, 27, 18, 3, 'rgba(0,0,0,0.3)');
+    [[5, 12], [39, 12]].forEach(([x, y]) => { R(c, x - 1, y, 3, 14, '#c9a227'); R(c, x - 3, y + 14, 7, 2, '#8a6a1a'); R(c, x - 2, y - 2, 5, 3, '#ffe27a'); });
+    R(c, 6, 14, 32, 2, '#16101e'); R(c, 6, 16, 32, 1, '#000000'); R(c, 6, 13, 32, 1, '#4a3a6a');
+  });
+  neon('neon_atm', 'ATM', '#3aff8a', 44); neon('neon_baccarat', 'BACCARAT', '#3ad8ff', 72); neon('neon_holdem', "HOLD'EM", '#ff7a1a', 64); neon('neon_stairs', 'VIP  ▲', '#ffd24a', 56);
+  neon('neon_reception', 'RECEPTION', '#ff4a8a', 76); neon('neon_exchange', 'CHIPS', '#ffd24a', 52); neon('neon_vipcash', 'VIP CASHIER', '#d8b0ff', 84); neon('neon_private', 'PRIVATE', '#ff4a4a', 60); neon('neon_office', 'OFFICE', '#c8d0ff', 56); neon('neon_viplounge', 'VIP LOUNGE', '#c88aff', 84);
+  mk('casino_sign_vip', 200, 56, (c) => {                              // the sign on the VIP tower
+    R(c, 0, 0, 200, 56, '#0a0710'); R(c, 3, 3, 194, 50, '#1a0c24'); R(c, 6, 6, 188, 44, '#12081a');
+    bulbs(c, 6, 6, 194, 6, 8, ['#ffe27a', '#ff4a8a', '#3ad8ff']); bulbs(c, 6, 50, 194, 50, 8, ['#3ad8ff', '#ffe27a', '#ff4a8a']);
+    font(c, 28, '#3a0f5a'); c.fillText('VIP TOWER', 102, 28); font(c, 28, '#d8b0ff'); c.fillText('VIP TOWER', 100, 26); font(c, 9, '#ffd24a'); c.fillText('★ MEMBERS ONLY - USE THE CASINO STAIRS ★', 100, 43);
+  });
+
+  /* ---------------------------------------------------------------- exterior redesign: big marquee sign, canopy, columns, neon strips, window glimpses */
+  const GOLD = '#ffd24a', RED = '#ff3a5a', PURP = '#b06aff', CYAN = '#3ad8ff';
+  const chip = (c, x, y, r, col) => { ellipse(c, x, y + 1, r, r, 'rgba(0,0,0,0.45)'); ellipse(c, x, y, r, r, shade(col, -0.45)); ellipse(c, x, y, r - 1, r - 1, col); for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; R(c, Math.round(x + Math.cos(a) * (r - 4)) - 1, Math.round(y + Math.sin(a) * (r - 4)) - 1, 3, 3, '#f6f6f8'); } ellipse(c, x, y, r - 7, r - 7, shade(col, -0.35)); ellipse(c, x, y, r - 8, r - 8, shade(col, 0.2)); };
+  const dice = (c, x, y, n) => { R(c, x + 1, y + 2, 26, 26, 'rgba(0,0,0,0.45)'); R(c, x, y, 26, 26, '#8a8a96'); R(c, x + 1, y + 1, 24, 24, '#f6f4ee'); R(c, x + 1, y + 1, 24, 6, '#ffffff'); const P = { 5: [[6, 6], [18, 6], [12, 12], [6, 18], [18, 18]], 3: [[6, 6], [12, 12], [18, 18]], 2: [[6, 6], [18, 18]] }[n]; P.forEach(([px, py]) => { R(c, x + px, y + py, 4, 4, n === 5 ? '#c4202e' : '#15151a'); }); };
+  mk('casino_sign', 320, 104, (c) => {
+    R(c, 0, 0, 320, 104, '#07050c'); R(c, 3, 3, 314, 98, '#1e0c2a'); R(c, 6, 6, 308, 92, '#12071a');
+    c.globalAlpha = 0.25; R(c, 8, 8, 304, 38, '#ff3a5a'); c.globalAlpha = 1; R(c, 8, 8, 304, 1, '#ffd0a0');
+    R(c, 9, 9, 302, 2, '#c9a227'); R(c, 9, 93, 302, 2, '#c9a227'); R(c, 9, 9, 2, 86, '#c9a227'); R(c, 309, 9, 2, 86, '#c9a227');
+    bulbs(c, 6, 6, 314, 6, 8, [GOLD, RED, PURP, CYAN]); bulbs(c, 6, 98, 314, 98, 8, [CYAN, PURP, RED, GOLD]); bulbs(c, 6, 6, 6, 98, 8, [RED, GOLD, CYAN, PURP]); bulbs(c, 314, 6, 314, 98, 8, [PURP, CYAN, GOLD, RED]);
+    font(c, 58, '#3a0818'); c.fillText('CASINO', 164, 49); font(c, 58, RED); c.fillText('CASINO', 162, 47); font(c, 58, GOLD); c.fillText('CASINO', 160, 45);
+    c.save(); c.beginPath(); c.rect(0, 0, 320, 38); c.clip(); font(c, 58, '#fff4b8'); c.fillText('CASINO', 160, 45); c.restore();
+    R(c, 70, 72, 180, 2, CYAN); R(c, 70, 75, 180, 1, PURP);
+    font(c, 10, '#ff8ac0'); c.fillText('★  VIP   •   CARDS   •   DICE   •   SLOTS  ★', 160, 85);
+    chip(c, 34, 36, 15, '#c4202e'); chip(c, 34, 62, 11, '#2a4aa8'); dice(c, 266, 16, 5); dice(c, 274, 46, 3);
+    font(c, 16, '#e8e8f4'); c.fillText('♠', 58, 24); font(c, 16, '#ff3a5a'); c.fillText('♥', 262, 78); font(c, 16, '#ff3a5a'); c.fillText('♦', 58, 70); font(c, 16, '#e8e8f4'); c.fillText('♣', 288, 84);
+  });
+  mk('casino_canopy', 176, 52, (c) => {                                 // the grand entrance canopy: gold fascia, striped red / purple awning, scalloped edge with bulbs
+    ellipse(c, 88, 47, 80, 4, 'rgba(0,0,0,0.3)');
+    R(c, 0, 0, 176, 9, '#c9a227'); R(c, 0, 0, 176, 2, '#fff0a0'); R(c, 0, 7, 176, 2, '#7a5a10'); bulbs(c, 4, 4, 172, 4, 8, ['#fff4b8', '#ff3a5a', '#fff4b8', '#b06aff']);
+    for (let i = 0; i < 16; i++) { const x = 4 + i * 10.7, col = i % 2 ? '#4a1a6a' : '#9a1830'; R(c, x, 9, 10.7, 26, col); R(c, x, 9, 1, 26, shade(col, 0.25)); ellipse(c, x + 5.3, 35, 5.3, 4, col); R(c, x + 4, 36, 3, 3, '#ffe27a'); }
+    R(c, 4, 9, 168, 2, 'rgba(0,0,0,0.35)'); R(c, 18, 40, 3, 8, '#ffe27a'); R(c, 155, 40, 3, 8, '#ffe27a'); c.globalAlpha = 0.25; ellipse(c, 19, 46, 8, 6, '#ffe27a'); ellipse(c, 156, 46, 8, 6, '#ffe27a'); c.globalAlpha = 1;
+  });
+  mk('casino_column', 26, 78, (c) => {                                  // a black-marble column with gold bands, capital and a light on top
+    ellipse(c, 13, 74, 12, 3, 'rgba(0,0,0,0.35)'); R(c, 1, 68, 24, 6, '#2a2d34'); R(c, 0, 72, 26, 4, '#1a1c22'); R(c, 1, 68, 24, 1, '#7a5a10');
+    R(c, 5, 14, 16, 54, '#14121c'); R(c, 7, 14, 3, 54, '#3a3450'); R(c, 18, 14, 3, 54, '#0a0810'); R(c, 5, 22, 16, 2, '#c9a227'); R(c, 5, 58, 16, 2, '#c9a227');
+    R(c, 1, 6, 24, 9, '#c9a227'); R(c, 1, 6, 24, 2, '#fff0a0'); R(c, 1, 13, 24, 2, '#7a5a10'); R(c, 11, 1, 4, 5, '#ffe8a0'); c.globalAlpha = 0.25; ellipse(c, 13, 4, 11, 8, '#ffd870'); c.globalAlpha = 1;
+  });
+  [RED, GOLD, PURP, CYAN].forEach((col, i) => mk('casino_vs_' + i, 10, 60, (c) => {   // vertical neon light strips
+    c.globalAlpha = 0.22; R(c, 0, 0, 10, 60, col); c.globalAlpha = 1; R(c, 3, 0, 4, 60, shade(col, -0.2)); R(c, 4, 0, 2, 60, shade(col, 0.6)); for (let y = 6; y < 60; y += 12) R(c, 3, y, 4, 2, '#ffffff');
+  }));
+  const win = (key, draw) => mk(key, 28, 36, (c) => { R(c, 0, 0, 28, 36, 'rgba(18,8,26,0.5)'); c.globalAlpha = 0.18; R(c, 0, 0, 28, 36, '#ffb050'); c.globalAlpha = 1; draw(c); R(c, 4, 2, 3, 32, 'rgba(255,255,255,0.15)'); R(c, 0, 0, 28, 1, '#0a0610'); R(c, 0, 35, 28, 1, '#0a0610'); });
+  win('casino_win_0', (c) => { R(c, 3, 10, 9, 24, '#7a1020'); R(c, 4, 12, 7, 7, '#ffe27a'); R(c, 5, 21, 5, 2, '#3aff8a'); R(c, 15, 10, 9, 24, '#143a7a'); R(c, 16, 12, 7, 7, '#8fe8ff'); R(c, 17, 21, 5, 2, '#ff4a4a'); });        // slot machines glowing
+  win('casino_win_1', (c) => { R(c, 13, 0, 2, 9, '#c9a227'); c.globalAlpha = 0.4; ellipse(c, 14, 14, 12, 10, '#ffe9a0'); c.globalAlpha = 1; for (let i = 0; i < 5; i++) { R(c, 5 + i * 4, 10 + (i % 2) * 3, 2, 5, '#fff4c0'); R(c, 4 + i * 4, 15 + (i % 2) * 3, 4, 3, '#bfe8ff'); } R(c, 2, 28, 24, 3, '#4a0a22'); });        // a chandelier
+  win('casino_win_2', (c) => { ellipse(c, 14, 28, 12, 5, '#0e5a30'); ellipse(c, 14, 27, 11, 4, '#14683a'); R(c, 8, 20, 5, 7, '#f2f2f2'); R(c, 15, 21, 5, 7, '#f2f2f2'); R(c, 9, 22, 2, 2, '#c4202e'); R(c, 13, 6, 2, 8, '#2a2d34'); c.globalAlpha = 0.35; ellipse(c, 14, 18, 11, 9, '#ffe9a0'); c.globalAlpha = 1; });        // a card table under a lamp
+  win('casino_win_3', (c) => { R(c, 2, 14, 24, 2, '#6a3a22'); R(c, 2, 24, 24, 2, '#6a3a22'); const cols = ['#2a9a4a', '#c9822a', '#3a7ad0', '#c4202e', '#e8e0c0', '#8a3aa0']; for (let i = 0; i < 6; i++) { R(c, 3 + i * 4, 8, 3, 6, cols[i]); R(c, 3 + i * 4, 18, 3, 6, cols[(i + 2) % 6]); } R(c, 3, 29, 22, 2, '#ff3a8a'); });        // the bar
+  mk('casino_bollard', 16, 38, (c) => { ellipse(c, 8, 35, 6, 2, 'rgba(0,0,0,0.35)'); R(c, 6, 12, 4, 22, '#2a2d34'); R(c, 6, 12, 1, 22, '#5a5f70'); R(c, 3, 30, 10, 4, '#3a3d4a'); R(c, 3, 8, 10, 6, '#c9a227'); R(c, 3, 8, 10, 1, '#fff0a0'); R(c, 5, 1, 6, 8, '#ffe8a0'); c.globalAlpha = 0.25; ellipse(c, 8, 5, 8, 7, '#ffd870'); c.globalAlpha = 1; });
+  mk('casino_walk', 64, 192, (c) => {                                   // the red-carpet walkway to the entrance, flat on the ground
+    R(c, 0, 0, 64, 192, '#3a0610'); R(c, 3, 0, 58, 192, '#7a1224'); R(c, 6, 0, 52, 192, '#9a1830'); R(c, 8, 0, 48, 192, '#7a1224');
+    R(c, 4, 0, 1, 192, '#c9a227'); R(c, 59, 0, 1, 192, '#c9a227'); R(c, 9, 0, 1, 192, '#ffd870'); R(c, 54, 0, 1, 192, '#ffd870');
+    for (let y = 12; y < 190; y += 24) { poly(c, [[32, y], [40, y + 8], [32, y + 16], [24, y + 8]], '#c9a227'); poly(c, [[32, y + 3], [37, y + 8], [32, y + 13], [27, y + 8]], '#9a1830'); }
   });
 }

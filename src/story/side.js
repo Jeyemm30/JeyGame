@@ -1,3 +1,4 @@
+import { ystate, YOSEN_QUESTS } from './yosen.js';
 // Repeatable side jobs. Each template creates serialisable `params` from the live city and builds a
 // mission definition (same shape as the story missions) from them, so a saved job can be rebuilt on load.
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -123,6 +124,20 @@ export const SIDE_TEMPLATES = {
         ]
       };
     }
+  }
+};
+
+// Yosen Blackthorn's chain of quests (story/yosen.js). It is a side-job template so the engine, save / restore, waypoints and the mission
+// screens treat it like every other job - but it is NOT in SIDE_ORDER: only Yosen hands these out, one at a time, in order.
+SIDE_TEMPLATES.yosen = {
+  title: 'Yosen Blackthorn', blurb: 'A stranger in a back alley has favours to ask - one at a time.',
+  make() { return { n: ystate().done }; },
+  build(p, gs) {
+    const q = YOSEN_QUESTS[p.n] || YOSEN_QUESTS[0];
+    return {
+      title: q.title, desc: q.desc, giver: 'yosen', reward: q.reward, objectives: q.objectives(gs), yosenN: p.n,
+      onComplete() { const y = ystate(); if (y.done === p.n) { y.done = p.n + 1; y.declined = false; } }       // only the quest that is actually next can advance the chain: a reward is never paid twice
+    };
   }
 };
 

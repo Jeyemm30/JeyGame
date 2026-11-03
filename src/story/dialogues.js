@@ -1,3 +1,4 @@
+import { YOSEN_DIALOGUES } from './yosen.js';
 // Dialogue trees. A node: { who, text | (s)=>text, next | choices:[{text, next, if, effects}], effects, end }
 // effects: { flags:{}, rep:n, money:n, give:'q_item', take:'q_item', wanted:n, event:'name' }
 // `s` passed to functions: { flag(k), rep, wanted, done(id) }
@@ -290,3 +291,5 @@ DIALOGUES.ev_wallet = {
     c: { who: 'player', text: 'The owner is grateful. A small reward and a good feeling.', end: true }
   }
 };
+
+Object.assign(DIALOGUES, YOSEN_DIALOGUES);                    // Yosen Blackthorn's conversations live in yosen.js

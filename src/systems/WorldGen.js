@@ -153,12 +153,12 @@ export function generateWorld(seed = 20240) {
 
   /* ------------------------------------------------------------- helpers */
   let buildingId = 0;
-  const homeJobs = [], keepClear = new Set();
+  const homeJobs = [], keepClear = new Set(), shopRects = [];
   const addPoi = (type, name, x, y, w, h) => out.pois.push({ type, name, x: (x + w / 2) * TILE, y: (y + h / 2) * TILE, tx: x, ty: y, w, h });
   const registerBuilding = (x, y, w, h, style, extra = {}) => {
     const b = {
       id: buildingId++, x, y, w, h, style, colorIdx: extra.colorIdx ?? ri(0, 5), broken: !!extra.abandoned,
-      lift: extra.lift || 0, kind: extra.kind || 'house', tall: !!extra.tall
+      lift: extra.lift || 0, kind: extra.kind || 'house', tall: !!extra.tall, dark: !!extra.dark, look: extra.look || null
     };
     out.buildings.push(b);
     return b;
@@ -638,6 +638,7 @@ export function generateWorld(seed = 20240) {
     { kind: 'Pizza', tier: 'food', floor: T.wood, tables: true }
   ];
   function shop(x, y, w, h, spec, o = {}) {
+    shopRects.push({ x, y, w, h });
     const ab = !!o.abandoned;
     fillBuildingShell(x, y, w, h, o.wall ?? T.wall, spec.floor);
     const dx = x + w - 3;
@@ -820,215 +821,327 @@ export function generateWorld(seed = 20240) {
     }
   }
 
-  /* ---- WISE SOLE streetwear boutique (Ezekiel Blackwell), 14 x 13: entrance + welcome area, sneaker wall + shoe islands + limited-edition
-          cases, try-on benches, clothing racks + folded shelves, accessories wall, mannequins, checkout counter, fitting room, backroom ---- */
+  /* ---- WISE SOLE streetwear boutique (Ezekiel Blackwell), 14 x 13, tall walls, ONE open room (inner 12 x 11). No backroom, no fitting room.
+          BACK WALL sneaker wall + limited-edition unit under a long WISE SOLE sign, stock shelves behind the checkout; UPPER RIGHT the checkout (a horizontal
+          counter facing the room, Ezekiel behind it, a queue in front); LEFT clothing (wall shelves, racks, mannequins) with a sneaker island and try-on bench,
+          and open floor below it; RIGHT premium plinths + island and accessories along the east wall;
+          CENTER a wide open aisle (lx 5-8) from the double door to the back wall ---- */
   function wiseSole(x, y, w, h) {
     fillBuildingShell(x, y, w, h, T.wall2, T.tileFloor);
     const dx = x + 6, fy = y + h - 1;
-    addDoorTile(dx, fy, true); addDoorTile(dx + 1, fy, true);                       // automatic-style double door, open so customers walk in and out
+    addDoorTile(dx, fy, false);                                                      // ONE single glass door: closed (solid) until somebody opens it
     placeWindows(x, y, w, h, { windowChance: 1 });
+    for (let lx = 1; lx <= 12; lx++) if (lx !== 6) obj[fy][x + lx] = (lx === 3 || lx === 9) ? T.wall2 : T.glass;           // big glass display windows between two dark pillars
     const L = (lx) => x + lx, M = (ly) => y + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
     const put = (lx, ly, idx) => { if (obj[M(ly)][L(lx)] === -1) { obj[M(ly)][L(lx)] = idx; return true; } return false; };
     const decor = (kind, xx, yy) => out.decor.push({ kind, x: xx, y: yy });
     const prop = (lx, ly, kind, dx = 0, dy = 32) => { if (put(lx, ly, T.prop)) decor(kind, cx(lx) + dx, M(ly) * TILE + dy); };
     const flat = (kind, xx, yy) => out.rugs.push({ key: kind, x: xx, y: yy });
-    // floors: modern tile, carpet in the fitting room and the clothing zone, concrete in the backroom
+    // floors: tile everywhere, carpet in the clothing zone (left) and the premium zone (right)
     for (let ly = 1; ly <= 11; ly++) for (let lx = 1; lx <= 12; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
-    for (let ly = 5; ly <= 9; ly++) for (let lx = 6; lx <= 11; lx++) ground[M(ly)][L(lx)] = T.carpet;
-    // backroom (top right) behind a door, with stock shelves
-    for (let ly = 1; ly <= 4; ly++) obj[M(ly)][L(8)] = T.wall2;
-    for (let lx = 8; lx <= 12; lx++) obj[M(4)][L(lx)] = T.wall2;
-    obj[M(4)][L(10)] = T.doorClosed; out.doors.push({ x: L(10), y: M(4) });
-    for (let ly = 1; ly <= 3; ly++) for (let lx = 9; lx <= 12; lx++) ground[M(ly)][L(lx)] = T.concrete;
-    [9, 10, 11, 12].forEach((lx) => prop(lx, 1, 'stock_shelf', 0, 34));
-    prop(9, 3, 'box_stack', 0, 34); prop(12, 3, 'box_stack', 0, 34);
-    // fitting room (bottom left): walls, a curtained doorway, mirrors
-    for (let lx = 1; lx <= 4; lx++) obj[M(7)][L(lx)] = T.wall2;
-    for (let ly = 7; ly <= 11; ly++) if (ly !== 9) obj[M(ly)][L(4)] = T.wall2;
-    for (let ly = 8; ly <= 11; ly++) for (let lx = 1; lx <= 3; lx++) ground[M(ly)][L(lx)] = T.carpet;
-    decor('curtain_fit', L(4) * TILE + 16, M(9) * TILE + 30);
-    prop(1, 8, 'mirror_full', 0, 32); prop(3, 8, 'mirror_full', 0, 32);
-    decor('pouf', cx(2), M(10) * TILE + 28); decor('pouf', cx(3), M(11) * TILE + 20);
-    // sneaker wall (back wall) + limited-edition unit
+    for (let ly = 5; ly <= 11; ly++) for (let lx = 1; lx <= 4; lx++) ground[M(ly)][L(lx)] = T.carpet;
+    for (let ly = 5; ly <= 9; ly++) for (let lx = 9; lx <= 12; lx++) ground[M(ly)][L(lx)] = T.carpet;
+    // BACK WALL: the sneaker wall + the limited-edition unit, stock shelves behind the checkout
     prop(1, 1, 'wise_shoewall_0', 32, 34); put(2, 1, T.prop); put(3, 1, T.prop);
     prop(4, 1, 'wise_shoewall_1', 32, 34); put(5, 1, T.prop); put(6, 1, T.prop);
     prop(7, 1, 'wise_shoewall_lim', 0, 34);
-    // shoe islands, limited-edition glass plinths, try-on benches
-    const island = (lx, kind) => { if (put(lx, 3, T.prop) && put(lx + 1, 3, T.prop)) decor(kind, L(lx + 1) * TILE, M(3) * TILE + 34); };
-    island(2, 'shoe_island_0'); island(5, 'shoe_island_1');
-    prop(7, 3, 'plinth_0', 0, 34); prop(7, 5, 'plinth_1', 0, 34);
-    decor('shoe_bench', L(3) * TILE, M(5) * TILE + 30); decor('shoe_bench', L(6) * TILE, M(5) * TILE + 30);
-    // accessories along the east wall
-    prop(12, 5, 'acc_caps', 0, 34); prop(12, 6, 'acc_beanies', 0, 34); prop(12, 7, 'acc_case', 0, 34); prop(12, 8, 'acc_bags', 0, 34); prop(12, 9, 'acc_sun', 0, 34);
-    prop(1, 5, 'shelf_folded_0', 0, 34); prop(1, 6, 'shelf_folded_1', 0, 34);
-    // clothing racks + mannequins
-    prop(9, 6, 'rack_hoodies', 0, 34); prop(11, 6, 'rack_jackets', 0, 34); prop(9, 8, 'rack_jeans', 0, 34); prop(11, 8, 'rack_tees', 0, 34);
-    prop(7, 7, 'mannequin4', 0, 34); prop(5, 8, 'mannequin5', 0, 34); prop(8, 10 - 1, 'mannequin6', 0, 34);
-    // checkout: counter with register + monitor + bags, owner at the east end
-    for (let lx = 8; lx <= 10; lx++) put(lx, 10, T.prop);
-    decor('wise_counter', L(9) * TILE + 16, M(10) * TILE + 36);
-    decor('shop_bags', cx(11) + 6, M(10) * TILE + 30);
-    // decor: logo + posters on the backroom wall, plants, armchair-style poufs, rug, ceiling track lights
-    decor('wise_logo_wall', L(10) * TILE + 16, M(5) * TILE + 38);
-    decor('ad_poster_0', cx(8) - 2, M(5) * TILE + 26); decor('ad_poster_1', cx(12) + 2, M(5) * TILE + 26);
-    prop(5, 6, 'palm_pot', 0, 34); prop(12, 11, 'palm_pot', 0, 34);
-    decor('pouf', cx(5) + 6, M(11) * TILE + 24);
-    flat('wise_rug', L(8) * TILE + 16, M(7) * TILE + 16);
-    [[4, 4], [9, 7], [9, 10], [3, 9]].forEach(([lx, ly]) => decor('pend_track', L(lx) * TILE + 16, M(ly) * TILE + 6));
-    registerBuilding(x, y, w, h, 'shingle', { kind: 'shop' });
+    [9, 10, 11, 12].forEach((lx) => prop(lx, 1, 'stock_shelf', 0, 34));
+    prop(8, 1, 'palm_pot', 0, 34);
+    // CHECKOUT (upper right): a horizontal counter with the register / monitor, Ezekiel behind it, accessories close the east end
+    for (let lx = 9; lx <= 11; lx++) put(lx, 3, T.prop);
+    decor('wise_counter', L(10) * TILE + 16, M(3) * TILE + 36);
+    // LEFT: a sneaker island under the wall with its try-on bench, then the clothing zone
+    const island = (lx, ly, kind) => { if (put(lx, ly, T.prop) && put(lx + 1, ly, T.prop)) decor(kind, L(lx + 1) * TILE, M(ly) * TILE + 34); };
+    island(2, 3, 'shoe_island_0'); decor('shoe_bench', L(3) * TILE, M(4) * TILE + 30);
+    prop(1, 5, 'shelf_folded_0', 0, 34); prop(1, 6, 'shelf_folded_1', 0, 34); prop(1, 7, 'rack_jeans', 0, 34); prop(1, 8, 'rack_tees', 0, 34);
+    prop(3, 5, 'rack_hoodies', 0, 34); prop(3, 7, 'rack_jackets', 0, 34);
+    prop(4, 6, 'mannequin4', 0, 34); prop(4, 8, 'mannequin5', 0, 34);
+    // RIGHT: glass plinths, the premium island, accessories along the east wall
+    prop(9, 6, 'plinth_0', 0, 34); prop(11, 6, 'plinth_1', 0, 34); island(9, 8, 'shoe_island_1');
+    prop(12, 3, 'acc_caps', 0, 34); prop(12, 4, 'acc_beanies', 0, 34); prop(12, 5, 'acc_case', 0, 34); prop(12, 6, 'acc_bags', 0, 34); prop(12, 7, 'acc_sun', 0, 34);
+    decor('shop_bags', cx(11) + 6, M(3) * TILE + 30);
+    prop(5, 11, 'mannequin6', 0, 34); prop(1, 2, 'palm_pot', 0, 34); prop(12, 11, 'palm_pot', 0, 34);
+    flat('wise_rug', L(6) * TILE + 32, M(6) * TILE + 16);
+    registerBuilding(x, y, w, h, 'shingle', { kind: 'shop', tall: true, dark: true });                        // tall: a second brick course, so the back wall is a real wall under the roof
     addPoi('wise', 'WISE SOLE', x, y, w, h);
     publicDoor(dx, fy, 'shop', 'WISE SOLE');
-    [[dx - 3, y + h + 1, 'poster_board0'], [dx + 4, y + h + 1, 'poster_board1'], [x + 1, y + h + 1, 'planter'], [x + w - 2, y + h + 1, 'planter'], [dx + 6, y + h + 1, 'poster_board2']].forEach(([tx, ty, k]) => { if (inb(tx, ty) && obj[ty][tx] === -1) out.decor.push({ kind: k, x: px(tx), y: ty * TILE + 30 }); });
-    // customers: browsing, trying shoes on, at the racks, paying, walking in and out
-    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, ...extra });
-    pat(2, 4, 'shoe', { face: -Math.PI / 2, seed: 1 }); pat(6, 4, 'shoe', { face: -Math.PI / 2, seed: 4 });
-    pat(3, 5, 'tryon', { sit: true, face: -Math.PI / 2, seed: 2 }); pat(5, 5, 'tryon', { sit: true, face: -Math.PI / 2, seed: 5 });
-    pat(10, 7, 'clothes', { face: -Math.PI / 2, seed: 3 }); pat(8, 6, 'clothes', { face: 0, seed: 6 });
-    pat(9, 11, 'pay', { face: -Math.PI / 2, seed: 7 });
-    const door = { x: (dx + 1) * TILE, y: (fy + 1) * TILE };
-    out.civilians.push({ x: cx(10), y: cy(7), kind: 'patron', act: 'walk', seed: 1, route: [{ x: cx(8), y: cy(7) }, { x: cx(7), y: cy(4) }, { x: cx(10), y: cy(7) }, { x: cx(7), y: cy(9) }] });
-    out.civilians.push({ x: door.x, y: door.y + 70, kind: 'patron', act: 'walk', seed: 2, route: [{ x: door.x, y: door.y + 70 }, { x: door.x, y: door.y }, { x: cx(7), y: cy(8) }, { x: cx(4), y: cy(4) }, { x: cx(9), y: cy(7) }, { x: door.x, y: door.y - 4 }, { x: door.x, y: door.y + 70 }] });
+    for (let ty = fy + 1; ty <= fy + 3; ty++) for (let tx = x + 1; tx <= x + w - 2; tx++) if (inb(tx, ty) && obj[ty][tx] === -1 && (ground[ty][tx] === T.grass1 || ground[ty][tx] === T.grass2 || ground[ty][tx] === T.grass3)) ground[ty][tx] = T.plaza;      // a clean paved entrance
+    // the freestanding sign post (a pole with a narrow collision body, see GameScene) beside the entrance
+    const spx = px(x + 10), spy = (fy + 2) * TILE + 26;
+    out.decor.push({ kind: 'wise_post', x: spx, y: spy });
+    [[dx - 3, y + h + 1, 'poster_board0'], [dx + 5, y + h + 1, 'poster_board1'], [x + 1, y + h + 1, 'planter'], [x + w - 2, y + h + 1, 'planter'], [dx + 6, y + h + 1, 'poster_board2']].forEach(([tx, ty, k]) => { if (inb(tx, ty) && obj[ty][tx] === -1) out.decor.push({ kind: k, x: px(tx), y: ty * TILE + 30 }); });
+    // customers: browsing, trying shoes on, at the racks, in the queue, walking in and out (soft: they never block the aisles)
+    const UP = -Math.PI / 2;
+    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, soft: true, ...extra });
+    pat(2, 2, 'shoe', { face: UP, seed: 1 }); pat(5, 2, 'shoe', { face: UP, seed: 4 });
+    pat(2, 4, 'tryon', { sit: true, soft: false, face: UP, seed: 2 }); pat(3, 4, 'tryon', { sit: true, soft: false, face: UP, seed: 5 });
+    pat(2, 6, 'clothes', { face: Math.PI, seed: 3 }); pat(5, 7, 'clothes', { face: Math.PI, seed: 6 });
+    pat(11, 9, 'shoe', { face: Math.PI, seed: 8 }); pat(8, 6, 'pay', { face: UP, seed: 7 });
+    const door = { x: px(dx), y: (fy + 1) * TILE };
+    out.civilians.push({ x: cx(7), y: cy(8), kind: 'patron', act: 'walk', seed: 1, route: [{ x: cx(7), y: cy(8) }, { x: cx(6), y: cy(5) }, { x: cx(6), y: cy(2) }, { x: cx(5), y: cy(3) }, { x: cx(7), y: cy(6) }, { x: cx(7), y: cy(10) }] });
+    out.civilians.push({ x: door.x, y: door.y + 70, kind: 'patron', act: 'walk', seed: 2, route: [{ x: door.x, y: door.y + 70 }, { x: door.x, y: door.y }, { x: cx(6), y: cy(9) }, { x: cx(6), y: cy(4) }, { x: cx(8), y: cy(4) }, { x: cx(7), y: cy(6) }, { x: door.x, y: door.y - 4 }, { x: door.x, y: door.y + 70 }] });
     const lt = (xx, yy, col, extra = {}) => ({ x: xx, y: yy, steady: true, col, ...extra });
+    const li = (xx, yy, col, extra = {}) => lt(xx, yy, col, { indoor: true, ...extra });      // interior glows only show while you are inside
     out.wise = {
-      door: { x: (dx + 1) * TILE, y: (fy + 1) * TILE },
-      owner: { x: cx(11), y: cy(10) },
-      lights: [lt(cx(3), cy(3), 0xffd0f0), lt(cx(6), cy(3), 0xc8e8ff), lt(cx(7), cy(3), 0xffd870, { neon: true }), lt(cx(10), cy(7), 0xffe8c0), lt(cx(9), cy(10), 0xffe0f0), lt(cx(11), cy(2), 0xfff0d0), lt(cx(2), cy(10), 0xffa8d8), lt(cx(12), cy(7), 0xffd870), lt(cx(8), cy(5), 0xff5aa0, { neon: true }), lt(dx * TILE + 32, (fy + 1) * TILE + 6, 0xff5aa0, { neon: true })]
+      door: { x: px(dx), y: (fy + 1) * TILE },
+      doorTile: { tx: dx, ty: fy },
+      signpost: { x: spx, y: spy - 5, tx: x + 10, ty: fy + 2 },
+      owner: { x: cx(10), y: cy(2) + 14 },                                     // fixed behind the checkout counter (the story NPC never walks away from this spot)
+      wallDecor: [
+        // the things on the counter top stand BEHIND Ezekiel (anchored one row back, lifted to the counter top), so his whole body stays visible
+        { key: 'wise_counter_items', x: L(10) * TILE + 16, y: M(3) * TILE + 36 - 52, sy: 32, dz: -4 },
+        // the facade: display windows (something to look at behind the glass), pink / cyan neon strips and two wall lights
+        ...[[1, 'wise_win_shoes_a'], [2, 'wise_win_poster'], [4, 'wise_win_shoes_b'], [5, 'wise_win_shoes_c'], [7, 'wise_win_shoes_c'], [8, 'wise_win_shoes_b'], [10, 'wise_win_poster'], [11, 'wise_win_shoes_a'], [12, 'wise_win_shoes_b']].map(([lx, key]) => ({ key, x: cx(lx), y: (fy + 1) * TILE - 2, sy: -2, dz: 8 })),
+        { key: 'wise_neon_a', x: (x + 2.5) * TILE, y: (fy + 1) * TILE - 2, sy: -40, dz: 9 }, { key: 'wise_neon_a', x: (x + 4.9) * TILE, y: (fy + 1) * TILE - 2, sy: -40, dz: 9 },
+        { key: 'wise_neon_b', x: (x + 8.1) * TILE, y: (fy + 1) * TILE - 2, sy: -40, dz: 9 }, { key: 'wise_neon_b', x: (x + 10.5) * TILE, y: (fy + 1) * TILE - 2, sy: -40, dz: 9 },
+        { key: 'wise_sconce', x: cx(3), y: (fy + 1) * TILE - 2, sy: -16, dz: 10 }, { key: 'wise_sconce', x: cx(9), y: (fy + 1) * TILE - 2, sy: -16, dz: 10 }
+      ],
+      lights: [li(cx(3), cy(2), 0xffe6d8), li(cx(6), cy(2), 0xe4f0ff), li(cx(10), cy(2), 0xffe8e0), li(cx(2), cy(5), 0xffe0e8), li(cx(6), cy(5), 0xfff0dc), li(cx(10), cy(5), 0xffe6dc), li(cx(3), cy(8), 0xffe8dc), li(cx(6), cy(8), 0xfff0dc), li(cx(10), cy(8), 0xffe6e0), li(cx(3), cy(10), 0xfff0e4), li(cx(8), cy(10), 0xfff0e4), li(cx(11), cy(10), 0xffe8e4), li(cx(10), cy(3), 0xffd8e4, { neon: true }), lt(px(dx), (fy + 1) * TILE + 6, 0xff5aa0, { neon: true }), lt(cx(2), (fy + 1) * TILE + 14, 0xff5aa0, { neon: true }), lt(cx(11), (fy + 1) * TILE + 14, 0x3ad8ff, { neon: true }), lt(px(dx), (fy + 1) * TILE - 40, 0xfff0d8, { neon: true }), lt(cx(3), (fy + 1) * TILE + 2, 0xfff4c8), lt(cx(9), (fy + 1) * TILE + 2, 0xfff4c8), lt(spx, spy - 40, 0xffb070, { neon: true })]
     };
   }
 
-  /* ---- THE CASINO: a landmark east of the river. Glass front + neon sign, valet plaza with luxury cars, and a full interior:
-          reception, gambling floor (slots, blackjack, poker dice), lounge, bar, cashier, VIP room, security office, restrooms ---- */
+  /* ---- THE CASINO: a landmark east of the river. Glass front + neon sign, valet plaza with luxury cars. FLOOR 1 (this building, 22 x 21):
+          reception, ATMs, chip cashier, slots, blackjack, poker dice, baccarat, bar, waiting lounge, security, restrooms and the grand staircase to
+          the VIP level. FLOOR 2 (the sealed VIP tower south of the road, built last by casinoWing() and reached only by the staircase). ---- */
   function casino(b) {
-    const X = 200, Y = 103, W = 18, H = 18, fy = Y + H - 1;
+    const X = 197, Y = 100, W = 22, H = 21, fy = Y + H - 1;
     const L = (lx) => X + lx, M = (ly) => Y + ly;                 // interior tile helpers (lx / ly are tiles inside the building)
     const cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
     // clear the lot of forest
-    for (let y = 97; y <= 126; y++) for (let x = 199; x <= 218; x++) {
+    for (let y = 97; y <= 126; y++) for (let x = 196; x <= 219; x++) {
       obj[y][x] = -1; ground[y][x] = y > fy ? T.plaza : T.grass1;
     }
-    mark(199, 97, 20, 30, 0);
+    mark(196, 97, 24, 30, 0);
     fillBuildingShell(X, Y, W, H, T.wall2, T.carpet);
     // glass front with two stone pillars and an automatic double door
-    for (let lx = 1; lx <= 16; lx++) obj[fy][L(lx)] = (lx === 4 || lx === 13) ? T.wall2 : T.glass;
-    obj[fy][L(8)] = T.doorOpen; obj[fy][L(9)] = T.doorOpen;
-    for (let ly = 14; ly <= 16; ly++) for (let lx = 7; lx <= 10; lx++) ground[M(ly)][L(lx)] = T.tileFloor;       // marble lobby
+    for (let lx = 1; lx <= 20; lx++) obj[fy][L(lx)] = (lx === 5 || lx === 16) ? T.wall2 : T.glass;
+    obj[fy][L(10)] = T.doorOpen; obj[fy][L(11)] = T.doorOpen;
+    for (let ly = 16; ly <= 19; ly++) for (let lx = 1; lx <= 13; lx++) ground[M(ly)][L(lx)] = T.tileFloor;       // marble lobby + reception
     const prop = (lx, ly) => { obj[M(ly)][L(lx)] = T.prop; };
     const decor = (kind, x, y) => out.decor.push({ kind, x, y });
     const solid = (lx, ly, idx) => { if (obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = idx; };
 
-    // ---- security office (top-left) + restrooms (top-middle) + VIP room (top-right)
+    // ---- security office (top-left) + restrooms (top-middle)
     for (let ly = 1; ly <= 5; ly++) obj[M(ly)][L(5)] = T.wall2;
     for (let lx = 1; lx <= 5; lx++) obj[M(5)][L(lx)] = T.wall2;
     obj[M(5)][L(3)] = T.doorOpen;
     for (let ly = 1; ly <= 4; ly++) for (let lx = 1; lx <= 4; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
     solid(2, 1, T.desk); solid(3, 1, T.desk); solid(1, 4, T.locker); solid(4, 4, T.cabinet);
-    for (let ly = 1; ly <= 7; ly++) obj[M(ly)][L(10)] = T.wall2;
+    for (let ly = 1; ly <= 5; ly++) obj[M(ly)][L(10)] = T.wall2;
     for (let lx = 6; lx <= 10; lx++) obj[M(5)][L(lx)] = T.wall2;
     obj[M(5)][L(8)] = T.doorOpen;
     for (let ly = 1; ly <= 4; ly++) for (let lx = 6; lx <= 9; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
     solid(6, 1, T.sink); solid(7, 1, T.toilet); solid(8, 1, T.sink); solid(9, 1, T.toilet);
-    for (let lx = 10; lx <= 16; lx++) obj[M(7)][L(lx)] = T.wall2;
-    obj[M(7)][L(13)] = T.doorClosed; out.doors.push({ x: L(13), y: M(7) });
-    // VIP room dressing
-    solid(13, 3, T.prop); solid(14, 3, T.prop); decor('poker_table', (L(14)) * TILE, M(3) * TILE + 36);
-    solid(12, 1, T.prop); solid(13, 1, T.prop); decor('lounge_sofa', L(13) * TILE, M(1) * TILE + 34);
-    solid(16, 3, T.prop); decor('armchair', cx(16), M(3) * TILE + 30);
-    solid(11, 2, T.prop); decor('palm_pot', cx(11), M(2) * TILE + 34);
-    for (let lx = 12; lx <= 15; lx++) decor('bar_stool', cx(lx), M(4) * TILE + 28);
 
-    // ---- gambling floor
-    const slotCells1 = [1, 2, 4, 5, 6, 7, 9];
-    const slotCells2 = [1, 2, 3, 4, 5];
-    const stations = [];
-    slotCells1.forEach((lx, i) => { prop(lx, 6); decor('slot_machine' + (i % 3), cx(lx), M(6) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(7), name: 'Slot machine' }); });
-    slotCells2.forEach((lx, i) => { prop(lx, 10); decor('slot_machine' + ((i + 1) % 3), cx(lx), M(10) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(11), name: 'Slot machine' }); });
-    const tbl = (kind, lxA, ly, game, name) => { prop(lxA, ly); prop(lxA + 1, ly); decor(kind, L(lxA + 1) * TILE, M(ly) * TILE + 40); stations.push({ game, x: L(lxA + 1) * TILE, y: cy(ly + 1), name }); };
-    tbl('bj_table', 8, 9, 'blackjack', 'Blackjack table'); tbl('bj_table', 12, 9, 'blackjack', 'Blackjack table');
-    tbl('dice_table', 8, 12, 'dice', 'Poker dice table'); tbl('dice_table', 12, 12, 'dice', 'Poker dice table');
-    [[8, 10], [9, 10], [12, 10], [13, 10], [8, 13], [9, 13], [12, 13], [13, 13]].forEach(([lx, ly]) => decor('bar_stool', cx(lx), M(ly) * TILE + 30));
+    // ---- waiting lounge (top, open) with sofas, coffee tables and plants
+    prop(11, 1); prop(12, 1); decor('lounge_sofa', L(12) * TILE, M(1) * TILE + 34);
+    prop(13, 1); prop(14, 1); decor('lounge_sofa', L(14) * TILE, M(1) * TILE + 34);
+    solid(12, 3, T.table); solid(14, 3, T.table); prop(11, 4); decor('palm_pot', cx(11), M(4) * TILE + 34); prop(15, 4); decor('palm_pot', cx(15), M(4) * TILE + 34);
+    ground[M(2)][L(12)] = T.carpet;
+    // ---- the grand staircase to the VIP level (top-right) behind a velvet rope, with its own guard
+    for (let lx = 17; lx <= 19; lx++) { prop(lx, 1); prop(lx, 2); }
+    decor('casino_stairs', L(18) * TILE + 16, M(3) * TILE + 8);
+    prop(16, 4); decor('vip_rope', cx(16), M(4) * TILE + 30);
+    const stationUp = { game: 'stairs', dir: 'up', x: cx(18), y: cy(4), name: 'Stairs to the VIP level' };
 
-    // ---- reception, cashier, bar, lounge
-    stations.push({ game: 'hub', x: cx(14), y: cy(10), name: 'Cashier' });
-    for (let lx = 3; lx <= 5; lx++) solid(lx, 15, T.counter);
-    for (let ly = 9; ly <= 11; ly++) solid(15, ly, T.counter);
-    for (let lx = 12; lx <= 16; lx++) solid(lx, 15, T.counter);
-    for (let lx = 12; lx <= 16; lx++) decor('bar_stool', cx(lx), M(14) * TILE + 28);
-    prop(15, 16); prop(16, 16); decor('bottle_shelf', L(16) * TILE, M(16) * TILE + 36);
-    prop(2, 13); prop(3, 13); decor('lounge_sofa', L(3) * TILE, M(13) * TILE + 34);
-    prop(5, 13); prop(6, 13); decor('lounge_sofa', L(6) * TILE, M(13) * TILE + 34);
-    solid(4, 14, T.table); decor('palm_pot', cx(1), M(15) * TILE + 34); prop(1, 15);
-    decor('palm_pot', cx(16), M(12) * TILE + 34); prop(16, 12);
-    decor('casino_poster0', cx(11), M(16) * TILE + 30); prop(11, 16);
+    // ---- gambling floor: slot banks on the left, six tables in the middle
+    const stations = [stationUp];
+    [1, 2, 3, 4, 5, 6].forEach((lx, i) => { prop(lx, 7); decor('slot_machine' + (i % 3), cx(lx), M(7) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(8), name: 'Slot machine' }); });
+    [1, 2, 3, 4, 5, 6].forEach((lx, i) => { prop(lx, 11); decor('slot_machine' + ((i + 1) % 3), cx(lx), M(11) * TILE + 36); stations.push({ game: 'slots', x: cx(lx), y: cy(12), name: 'Slot machine' }); });
+    const tbl = (kind, lxA, ly, game, name, chips) => {
+      prop(lxA, ly); prop(lxA + 1, ly); decor(kind, L(lxA + 1) * TILE, M(ly) * TILE + 40); decor(chips, L(lxA + 1) * TILE - 18, M(ly) * TILE + 36);
+      decor('bar_stool', cx(lxA), M(ly + 1) * TILE + 30); decor('bar_stool', cx(lxA + 1), M(ly + 1) * TILE + 30);
+      stations.push({ game, x: L(lxA + 1) * TILE, y: cy(ly + 1), name });
+    };
+    tbl('bj_table', 8, 8, 'blackjack', 'Blackjack table', 'chipstack_a'); tbl('bj_table', 12, 8, 'blackjack', 'Blackjack table', 'chipstack_b'); tbl('baccarat_table', 16, 8, 'baccarat', 'Baccarat table', 'chipstack_c');
+    tbl('dice_table', 8, 13, 'dice', 'Poker dice table', 'chipstack_b'); tbl('dice_table', 12, 13, 'dice', 'Poker dice table', 'chipstack_a'); tbl('baccarat_table', 16, 13, 'baccarat', 'Baccarat table', 'chipstack_a');
+
+    // ---- cashier / chip exchange cage + two ATMs (right wall)
+    stations.push({ game: 'hub', x: cx(18), y: cy(9), name: 'Cashier' });
+    for (let ly = 7; ly <= 11; ly++) solid(19, ly, T.counter);
+    prop(20, 13); decor('atm', cx(20), M(13) * TILE + 38); stations.push({ game: 'atm', x: cx(19), y: cy(13), name: 'ATM' });
+    prop(20, 15); decor('atm', cx(20), M(15) * TILE + 38); stations.push({ game: 'atm', x: cx(19), y: cy(15), name: 'ATM' });
+    // ---- reception desk (bottom-left) and the bar (bottom-right)
+    for (let lx = 3; lx <= 7; lx++) solid(lx, 17, T.counter);
+    for (let lx = 14; lx <= 19; lx++) solid(lx, 17, T.counter);
+    for (let lx = 14; lx <= 19; lx++) decor('bar_stool', cx(lx), M(16) * TILE + 28);
+    prop(18, 19); prop(19, 19); decor('bottle_shelf', L(19) * TILE, M(19) * TILE + 36);
+    prop(1, 16); decor('palm_pot', cx(1), M(16) * TILE + 34); prop(1, 19); decor('palm_pot', cx(1), M(19) * TILE + 34);
+    prop(13, 19); decor('casino_poster0', cx(13), M(19) * TILE + 30); prop(20, 19); decor('casino_poster1', cx(20), M(19) * TILE + 30);
+    prop(1, 13); decor('casino_poster2', cx(1), M(13) * TILE + 30);
 
     // ---- storefront dressing + valet plaza
-    for (let ly = 121; ly <= 126; ly++) { ground[ly][L(8)] = T.carpet; ground[ly][L(9)] = T.carpet; }
-    [[2, 'palm_pot'], [5, 'palm_pot'], [12, 'palm_pot'], [15, 'palm_pot']].forEach(([lx, k]) => { prop(lx, 18); decor(k, cx(lx), (fy + 1) * TILE + 34); });
-    [[7, 122], [10, 122], [7, 125], [10, 125]].forEach(([lx, y]) => decor('stanchion', cx(lx), y * TILE + 28));
-    prop(4, 19); decor('valet_stand', cx(4), (fy + 3) * TILE + 36);
-    decor('casino_poster1', cx(13) + 8, (fy + 1) * TILE + 30); decor('casino_poster2', cx(14) + 24, (fy + 1) * TILE + 30);
-    [[2, 24], [15, 24]].forEach(([lx, dy]) => { prop(lx, 21); decor('outdoor_table', cx(lx), (fy + 4) * TILE + 38); obj[fy + 4][L(lx) - 1] = T.chair; obj[fy + 4][L(lx) + 1] = T.chair; });
-    for (let x = 199; x <= 218; x += 3) if (obj[97][x] === -1) decor('bush', px(x), 98 * TILE + 28);       // hedge row behind the casino
+    for (let ly = 121; ly <= 126; ly++) { ground[ly][L(10)] = T.carpet; ground[ly][L(11)] = T.carpet; }
+    [[2, 'palm_pot'], [6, 'palm_pot'], [15, 'palm_pot'], [19, 'palm_pot']].forEach(([lx, k]) => { prop(lx, 21); decor(k, cx(lx), (fy + 1) * TILE + 34); });
+    [[8, 122], [13, 122], [8, 125], [13, 125]].forEach(([lx, y]) => decor('stanchion', cx(lx), y * TILE + 28));
+    prop(4, 22); decor('valet_stand', cx(4), (fy + 2) * TILE + 36);
+    decor('casino_poster1', cx(14) + 8, (fy + 1) * TILE + 30); decor('casino_poster2', cx(16) + 24, (fy + 1) * TILE + 30);
+    [[2, 24], [19, 24]].forEach(([lx]) => { prop(lx, 23); decor('outdoor_table', cx(lx), (fy + 4) * TILE + 38); obj[fy + 4][L(lx) - 1] = T.chair; obj[fy + 4][L(lx) + 1] = T.chair; });
+    for (let x = 196; x <= 219; x += 3) if (obj[97][x] === -1) decor('bush', px(x), 98 * TILE + 28);       // hedge row behind the casino
     vehicle('luxury', 0, px(L(5)), 126 * TILE - 2, 0, 'parked');
-    vehicle('luxury', 1, px(L(12)), 126 * TILE - 2, 0, 'parked');
-    vehicle('luxury', 2, px(L(13)), (fy + 2) * TILE + 12, Math.PI, 'parked');
-    registerBuilding(X, Y, W, H, 'tower', { kind: 'casino', lift: 36, colorIdx: 3 });
+    vehicle('luxury', 1, px(L(16)), 126 * TILE - 2, 0, 'parked');
+    vehicle('luxury', 2, px(L(15)), (fy + 2) * TILE + 12, Math.PI, 'parked');
+    registerBuilding(X, Y, W, H, 'tower', { kind: 'casino', lift: 36, colorIdx: 3, look: 'casino' });       // look: dark plum glass, neon roof edge
     addPoi('casino', 'Casino', X, Y, W, H);
+    // ---- exterior dressing: a grand entrance (columns, canopy, red carpet, bollards) - nothing on the door lane or the guards' spots
+    prop(9, 21); decor('casino_column', cx(9), (fy + 1) * TILE + 26); prop(12, 21); decor('casino_column', cx(12), (fy + 1) * TILE + 26);
+    out.rugs.push({ key: 'casino_walk', x: px(L(10)) + 16, y: 121 * TILE + 96 });
+    [[9, 123], [12, 123], [9, 126], [12, 126]].forEach(([lx, ty]) => decor('casino_bollard', cx(lx), ty * TILE + 30));
 
-    // ---- people
+    // ---- people on the first floor
     const guard = (lx, ly, role, extra = {}) => out.enemies.push({ x: cx(lx), y: cy(ly), role, type: 'pistol', mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 20, route: extra.route || null, hostility: 'provoked', hideout: true, crew: 'casino', ...extra });
     const pt = (lx, ly) => ({ x: cx(lx), y: cy(ly) });
-    guard(7, fy + 1 - Y, 'casino_guard', { fixedFace: Math.PI / 2 }); guard(10, fy + 1 - Y, 'casino_guard', { fixedFace: Math.PI / 2 });
-    guard(14, 8, 'casino_guard2', { fixedFace: Math.PI / 2 });
-    guard(10, 8, 'casino_guard2', { route: [pt(10, 8), pt(11, 12), pt(10, 15), pt(7, 14), pt(7, 11), pt(7, 8)] });
-    guard(11, 16, 'casino_guard', { route: [pt(11, 16), pt(14, 12), pt(14, 8), pt(11, 9)] });
+    guard(8, 21, 'casino_guard', { fixedFace: Math.PI / 2 }); guard(13, 21, 'casino_guard', { fixedFace: Math.PI / 2 });
+    guard(18, 12, 'casino_guard2', { fixedFace: Math.PI });
+    guard(19, 4, 'casino_guard', { fixedFace: Math.PI });                               // the staircase guard
+    guard(11, 6, 'casino_guard2', { route: [pt(11, 6), pt(11, 10), pt(11, 15), pt(7, 15), pt(7, 10), pt(7, 6)] });
+    guard(15, 6, 'casino_guard', { route: [pt(15, 6), pt(15, 11), pt(18, 14), pt(15, 15), pt(15, 11)] });
     guard(2, 3, 'casino_guard2', { sit: true, fixedFace: -Math.PI / 2 });
     const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, ...extra });
     const UP = -Math.PI / 2, DOWN = Math.PI / 2;
-    [1, 2, 4, 5, 7].forEach((lx, i) => pat(lx, 7, 'slots', { face: UP, seed: i }));
-    [1, 3, 5].forEach((lx, i) => pat(lx, 11, 'slots', { face: UP, seed: 5 + i }));
-    [[8, 10], [9, 10], [12, 10], [13, 10]].forEach(([lx, ly], i) => pat(lx, ly, 'cards', { sit: true, face: UP, seed: i }));
-    [[8, 13], [9, 13], [12, 13]].forEach(([lx, ly], i) => pat(lx, ly, 'dice', { sit: true, face: UP, seed: i }));
-    pat(9, 8, 'dealer', { face: DOWN, role: 'dealer' }); pat(12, 8, 'dealer', { face: DOWN, role: 'dealer' });
-    pat(8, 11, 'dealer', { face: DOWN, role: 'dealer' }); pat(13, 11, 'dealer', { face: DOWN, role: 'dealer' });
-    [12, 14, 16].forEach((lx, i) => pat(lx, 14, 'bar', { sit: true, face: DOWN, seed: i }));
-    pat(13, 16, 'bartend', { face: UP, role: 'bartender' }); pat(16, 10, 'cashier', { face: Math.PI, role: 'cashier' });
-    pat(2, 14, 'lounge', { sit: true, face: DOWN }); pat(6, 14, 'lounge', { sit: true, face: DOWN });
-    [12, 13, 14].forEach((lx, i) => pat(lx, 4, 'cards', { sit: true, face: UP, seed: 7 + i, vip: true })); pat(13, 2, 'dealer', { face: DOWN, role: 'dealer' });
-    pat(1, 21, 'smoke', { sit: true, face: 0 }); pat(16, 21, 'smoke', { sit: true, face: Math.PI });
+    [1, 2, 4, 5].forEach((lx, i) => pat(lx, 8, 'slots', { face: UP, seed: i }));
+    [2, 3, 5].forEach((lx, i) => pat(lx, 12, 'slots', { face: UP, seed: 4 + i }));
+    [[8, 9], [9, 9], [12, 9], [13, 9], [16, 9], [17, 9], [16, 14], [17, 14]].forEach(([lx, ly], i) => pat(lx, ly, 'cards', { sit: true, face: UP, seed: i }));
+    [[8, 14], [9, 14], [12, 14]].forEach(([lx, ly], i) => pat(lx, ly, 'dice', { sit: true, face: UP, seed: i }));
+    [[9, 7], [13, 7], [17, 7]].forEach(([lx, ly]) => pat(lx, ly, 'dealer', { face: DOWN, role: 'dealer' }));
+    [[9, 12], [13, 12], [17, 12]].forEach(([lx, ly]) => pat(lx, ly, 'dealer', { face: DOWN, role: 'dealer' }));
+    [15, 17, 19].forEach((lx, i) => pat(lx, 16, 'bar', { sit: true, face: DOWN, seed: i }));
+    pat(16, 18, 'bartend', { face: UP, role: 'bartender' }); pat(20, 9, 'cashier', { face: Math.PI, role: 'cashier' });
+    pat(12, 2, 'lounge', { sit: true, face: DOWN }); pat(14, 2, 'lounge', { sit: true, face: DOWN });
+    pat(18, 11, 'chat', { face: Math.PI, seed: 3 }); pat(18, 7, 'chat', { face: Math.PI, seed: 4 });
+    pat(1, 22, 'smoke', { sit: true, face: 0 }); pat(20, 22, 'smoke', { sit: true, face: Math.PI });
     out.civilians.push({ x: cx(5), y: (fy + 3) * TILE, kind: 'patron', act: 'chat', face: 0, seed: 1 }, { x: cx(6) - 14, y: (fy + 3) * TILE, kind: 'patron', act: 'chat', face: Math.PI, seed: 2 });
     out.civilians.push({ x: cx(6), y: (fy + 3) * TILE + 6, kind: 'patron', act: 'valet', face: 0, role: 'valet' });
-    const door = { x: cx(8) + 16, y: (fy + 1) * TILE };
+    const door = { x: cx(10) + 16, y: (fy + 1) * TILE };
     const walk = (seed, route) => out.civilians.push({ x: route[0].x, y: route[0].y, kind: 'patron', act: 'walk', route, seed });
-    walk(1, [{ x: door.x, y: 127 * TILE + 16 }, { x: door.x, y: (fy + 1) * TILE }, { x: cx(8) + 16, y: cy(15) }, { x: cx(10), y: cy(11) }, { x: cx(10), y: cy(8) }, { x: cx(10), y: cy(12) }, { x: cx(8) + 16, y: cy(16) }, { x: door.x, y: (fy + 2) * TILE }]);
-    walk(2, [{ x: cx(7), y: cy(9) }, { x: cx(7), y: cy(12) }, { x: cx(10), y: cy(15) }, { x: cx(7), y: cy(15) }, { x: cx(7), y: cy(8) }]);
-    walk(3, [{ x: cx(14), y: cy(12) }, { x: cx(14), y: cy(8) }, { x: cx(11), y: cy(9) }, { x: cx(11), y: cy(14) }]);
-    walk(4, [{ x: door.x - 160, y: 127 * TILE + 16 }, { x: door.x - 20, y: (fy + 2) * TILE }, { x: door.x, y: (fy + 1) * TILE }, { x: cx(8) + 16, y: cy(14) }, { x: door.x, y: (fy + 1) * TILE }, { x: door.x - 160, y: 127 * TILE + 16 }]);
+    walk(1, [{ x: door.x, y: 127 * TILE + 16 }, { x: door.x, y: (fy + 1) * TILE }, { x: door.x, y: cy(18) }, { x: cx(11), y: cy(15) }, { x: cx(11), y: cy(10) }, { x: cx(11), y: cy(6) }, { x: cx(11), y: cy(15) }, { x: door.x, y: cy(19) }, { x: door.x, y: (fy + 2) * TILE }]);
+    walk(2, [{ x: cx(7), y: cy(9) }, { x: cx(7), y: cy(15) }, { x: cx(10), y: cy(15) }, { x: cx(7), y: cy(15) }, { x: cx(7), y: cy(8) }]);
+    walk(3, [{ x: cx(15), y: cy(11) }, { x: cx(15), y: cy(6) }, { x: cx(11), y: cy(6) }, { x: cx(11), y: cy(11) }]);
+    walk(4, [{ x: door.x - 160, y: 127 * TILE + 16 }, { x: door.x - 20, y: (fy + 2) * TILE }, { x: door.x, y: (fy + 1) * TILE }, { x: door.x, y: cy(17) }, { x: door.x, y: (fy + 1) * TILE }, { x: door.x - 160, y: 127 * TILE + 16 }]);
 
     const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    const li = (x, y, col, extra = {}) => lt(x, y, col, { indoor: true, ...extra });                 // interior glows only show while you are inside (not through the roof)
     out.casino = {
       X, Y, W, H,
       door: { x: door.x, y: (fy + 1) * TILE + 20 },
       sign: { x: door.x, y: fy * TILE + 4 },
-      sean: { x: cx(6), y: cy(15) },
-      jiro: { x: cx(11), y: cy(8) },
-      vipGate: { x: L(13), y: M(7) },
-      vipRoom: { x0: L(11), y0: M(1), x1: L(16), y1: M(6) },
-      interior: { x0: L(1), y0: M(1), x1: L(16), y1: M(16) },
+      sean: { x: cx(5), y: cy(16) },
+      jiro: { x: 0, y: 0 },                                       // set by casinoWing() (the VIP management office upstairs)
+      stairsUp: { x: cx(18), y: cy(5), at: stationUp },
+      gates: [],                                                  // locked doors: { x, y, level } (private rooms upstairs)
+      interior: { x0: L(1), y0: M(1), x1: L(20), y1: M(19) },
       stations,
       neons: [
-        { key: 'neon_sec', x: cx(3), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_wc', x: cx(8), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_vip', x: cx(13), y: M(7) * TILE + 30, sy: -46 },
-        { key: 'neon_slots', x: cx(5), y: M(1) * TILE + 6, sy: -20 }, { key: 'neon_cards', x: cx(9) + 16, y: M(1) * TILE + 6, sy: -20, noWall: true },
-        { key: 'neon_cash', x: cx(16), y: M(8) * TILE + 20, sy: -30 }, { key: 'neon_bar', x: cx(14), y: M(16) * TILE + 20, sy: -40 }, { key: 'neon_lounge', x: cx(3), y: M(16) * TILE + 20, sy: -40 },
-        { key: 'neon_welcome', x: door.x, y: fy * TILE + 12, sy: -36 }
+        { key: 'neon_sec', x: cx(3), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_wc', x: cx(8), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_stairs', x: cx(18), y: M(4) * TILE + 20, sy: -78 },
+        { key: 'neon_slots', x: cx(4), y: M(5) * TILE + 6, sy: -20 }, { key: 'neon_cards', x: cx(12) + 16, y: M(6) * TILE + 6, sy: -20, noWall: true },
+        { key: 'neon_baccarat', x: cx(17), y: M(6) * TILE + 6, sy: -20, noWall: true }, { key: 'neon_cash', x: cx(20), y: M(6) * TILE + 20, sy: -30 }, { key: 'neon_atm', x: cx(20), y: M(12) * TILE + 20, sy: -40 },
+        { key: 'neon_bar', x: cx(16), y: M(16) * TILE + 20, sy: -40 }, { key: 'neon_reception', x: cx(5), y: M(16) * TILE + 20, sy: -40 }, { key: 'neon_lounge', x: cx(13), y: M(1) * TILE + 20, sy: -10 },
+        { key: 'neon_welcome', x: door.x, y: fy * TILE + 12, sy: -36 },
+        // ---- exterior: glimpses of the interior behind the glass, neon strips on the pillars and corners, the canopy over the doors
+        ...[1, 2, 3, 4, 6, 7, 8, 9, 12, 13, 14, 15, 17, 18, 19, 20].map((lx, i) => ({ key: 'casino_win_' + (i % 4), x: cx(lx), y: (fy + 1) * TILE - 2, sy: -2, dz: 8, ext: true })),
+        { key: 'casino_vs_0', x: cx(5) - 11, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true }, { key: 'casino_vs_1', x: cx(5) + 11, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true },
+        { key: 'casino_vs_2', x: cx(16) - 11, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true }, { key: 'casino_vs_3', x: cx(16) + 11, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true },
+        { key: 'casino_vs_0', x: cx(0) + 10, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true }, { key: 'casino_vs_3', x: cx(0) + 22, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true },
+        { key: 'casino_vs_2', x: cx(21) - 22, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true }, { key: 'casino_vs_1', x: cx(21) - 10, y: (fy + 1) * TILE - 2, sy: -2, dz: 9, ext: true },
+        { key: 'casino_canopy', x: door.x, y: (fy + 1) * TILE - 2, sy: -36, dz: 30, ext: true }
       ],
-      chandeliers: [[4, 8.2], [10.5, 8.2], [4.5, 12.5], [10.5, 12.5], [14, 5], [8.5, 15.5]].map(([lx, ly]) => ({ x: L(0) * TILE + lx * TILE + 16, y: M(0) * TILE + ly * TILE })),
+      chandeliers: [[4, 8.2], [11, 6.2], [11, 11], [15, 11], [4, 14.5], [8, 17.5], [18, 8], [15, 2.2]].map(([lx, ly]) => ({ x: L(0) * TILE + lx * TILE + 16, y: M(0) * TILE + ly * TILE })),
       lights: [
-        lt(cx(5), cy(8), 0xffe8b0), lt(cx(11), cy(8), 0xffe8b0), lt(cx(5), cy(12), 0xffdca0), lt(cx(11), cy(12), 0xffdca0), lt(cx(8), cy(15), 0xfff0d0),
-        lt(cx(3), cy(7), 0xff4a8a, { neon: true }), lt(cx(8), cy(6), 0xffd24a, { neon: true }), lt(cx(15), cy(13), 0x3ad8ff, { neon: true }), lt(cx(13), cy(4), 0xff9a4a), lt(cx(14), cy(10), 0xffd24a, { neon: true }),
+        li(cx(5), cy(8), 0xffe8b0), li(cx(11), cy(8), 0xffe8b0), li(cx(15), cy(8), 0xffe8b0), li(cx(5), cy(13), 0xffdca0), li(cx(11), cy(13), 0xffdca0), li(cx(15), cy(13), 0xffdca0), li(cx(8), cy(18), 0xfff0d0), li(cx(12), cy(18), 0xfff0d0),
+        li(cx(3), cy(7), 0xff4a8a, { neon: true }), li(cx(18), cy(3), 0xffd24a, { neon: true }), li(cx(19), cy(12), 0x3aff8a, { neon: true }), li(cx(15), cy(18), 0x3ad8ff, { neon: true }), li(cx(13), cy(2), 0xff9a4a), li(cx(20), cy(9), 0xffd24a, { neon: true }),
+        li(cx(5), cy(16), 0xff4a8a, { neon: true }),
         lt(door.x, (fy + 1) * TILE + 10, 0xffd24a, { neon: true }), lt(door.x - 130, (fy + 1) * TILE, 0xff4a8a, { neon: true }), lt(door.x + 130, (fy + 1) * TILE, 0x3ad8ff, { neon: true }),
-        lt(door.x, (fy - 4) * TILE, 0xff5a9a, { neon: true }), lt(cx(2), cy(2), 0xc8e8ff)
+        lt(door.x - 260, (fy + 1) * TILE, 0xffd24a, { neon: true }), lt(door.x + 260, (fy + 1) * TILE, 0xff4a8a, { neon: true }),
+        lt(door.x, (fy - 4) * TILE, 0xff5a9a, { neon: true }), li(cx(2), cy(2), 0xc8e8ff),
+        lt(cx(3), (fy + 1) * TILE + 6, 0xff3a5a, { neon: true }), lt(cx(8), (fy + 1) * TILE + 6, 0xb06aff, { neon: true }), lt(cx(13), (fy + 1) * TILE + 6, 0x3ad8ff, { neon: true }), lt(cx(18), (fy + 1) * TILE + 6, 0xffd24a, { neon: true }),
+        lt(cx(5), (fy + 1) * TILE - 24, 0xffd24a, { neon: true }), lt(cx(16), (fy + 1) * TILE - 24, 0xb06aff, { neon: true }), lt(door.x, (fy + 1) * TILE + 60, 0xffc890, { neon: true })
       ]
     };
+  }
+
+  // The VIP tower (floor 2): a sealed building south of the road, reached ONLY by the casino staircase (no doors, no windows). Built last.
+  // Its stations, people, lights and private-room doors are added to out.casino so everything about the casino stays in one place.
+  function casinoWing(cleared) {
+    const cs = out.casino; if (!cs) return;
+    const X = 197, Y = 133, W = 22, H = 18, fy = Y + H - 1;
+    const L = (lx) => X + lx, M = (ly) => Y + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    for (let y = 131; y <= 152; y++) for (let x = 196; x <= 219; x++) { if (!inb(x, y)) continue; obj[y][x] = -1; ground[y][x] = T.grass1; }
+    cleared.push([196, 131, 219, 152]);
+    out.trees = out.trees.filter((t) => !(t.x / TILE >= 196 && t.x / TILE < 220 && (t.y - 26) / TILE >= 131 && (t.y - 26) / TILE < 153));
+    fillBuildingShell(X, Y, W, H, T.wall2, T.carpet);
+    const prop = (lx, ly) => { obj[M(ly)][L(lx)] = T.prop; };
+    const decor = (kind, x, y) => out.decor.push({ kind, x, y });
+    const solid = (lx, ly, idx) => { if (obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = idx; };
+    const wallV = (lx, y0, y1) => { for (let y = y0; y <= y1; y++) obj[M(y)][L(lx)] = T.wall2; };
+    const wallH = (x0, x1, ly) => { for (let x = x0; x <= x1; x++) obj[M(ly)][L(x)] = T.wall2; };
+    const gate = (lx, ly, level) => { obj[M(ly)][L(lx)] = T.doorClosed; out.doors.push({ x: L(lx), y: M(ly) }); cs.gates.push({ x: L(lx), y: M(ly), level }); };
+    const stations = cs.stations;
+
+    // ---- two private gaming rooms (VIP Gold), the lounge, and the management office
+    wallV(5, 1, 5); wallH(1, 5, 5); gate(3, 5, 2);                // room A (Texas Hold'em, high stakes)
+    wallV(10, 1, 5); wallH(6, 10, 5); gate(8, 5, 2);              // room B (Baccarat, high stakes)
+    for (let ly = 1; ly <= 4; ly++) for (let lx = 1; lx <= 9; lx++) if (lx !== 5) ground[M(ly)][L(lx)] = T.wood;
+    prop(2, 2); prop(3, 2); decor('holdem_table', L(3) * TILE, M(2) * TILE + 40); decor('chipstack_c', L(3) * TILE - 18, M(2) * TILE + 36); decor('bar_stool', cx(2), M(3) * TILE + 30); decor('bar_stool', cx(3), M(3) * TILE + 30);
+    stations.push({ game: 'holdem', x: L(3) * TILE, y: cy(3), name: "Private Hold'em table", level: 2, stakes: 'high' });
+    prop(7, 2); prop(8, 2); decor('vbac_table', L(8) * TILE, M(2) * TILE + 40); decor('chipstack_c', L(8) * TILE - 18, M(2) * TILE + 36); decor('bar_stool', cx(7), M(3) * TILE + 30); decor('bar_stool', cx(8), M(3) * TILE + 30);
+    stations.push({ game: 'baccarat', x: L(8) * TILE, y: cy(3), name: 'Private Baccarat table', level: 2, stakes: 'high', vip: true });
+    // VIP lounge (open) + Jiro's office
+    prop(11, 1); prop(12, 1); decor('lounge_sofa', L(12) * TILE, M(1) * TILE + 34); prop(13, 1); prop(14, 1); decor('lounge_sofa', L(14) * TILE, M(1) * TILE + 34);
+    solid(12, 3, T.table); solid(14, 3, T.table); prop(11, 4); decor('palm_pot', cx(11), M(4) * TILE + 34); prop(15, 4); decor('armchair', cx(15), M(4) * TILE + 30);
+    for (let lx = 11; lx <= 15; lx++) ground[M(2)][L(lx)] = T.carpet;
+    wallV(16, 1, 5); wallH(17, 20, 5); obj[M(5)][L(18)] = T.doorOpen;
+    for (let ly = 1; ly <= 4; ly++) for (let lx = 17; lx <= 20; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
+    solid(17, 2, T.desk); solid(18, 2, T.desk); solid(19, 2, T.desk); decor('desk_pc_1', cx(18), M(2) * TILE + 34); solid(20, 1, T.cabinet); solid(17, 1, T.locker); prop(20, 4); decor('palm_pot', cx(20), M(4) * TILE + 34);
+
+    // ---- the VIP gaming floor: blackjack + hold'em in the front row, baccarat behind, exclusive cashier and terminal on the right
+    const tbl = (kind, lxA, ly, game, name, chips, extra = {}) => {
+      prop(lxA, ly); prop(lxA + 1, ly); decor(kind, L(lxA + 1) * TILE, M(ly) * TILE + 40); decor(chips, L(lxA + 1) * TILE - 18, M(ly) * TILE + 36);
+      decor('bar_stool', cx(lxA), M(ly + 1) * TILE + 30); decor('bar_stool', cx(lxA + 1), M(ly + 1) * TILE + 30);
+      stations.push({ game, x: L(lxA + 1) * TILE, y: cy(ly + 1), name, ...extra });
+    };
+    tbl('vbj_table', 3, 8, 'blackjack', 'VIP Blackjack table', 'chipstack_c', { vip: true }); tbl('vbj_table', 7, 8, 'blackjack', 'VIP Blackjack table', 'chipstack_b', { vip: true });
+    tbl('holdem_table', 12, 8, 'holdem', "Texas Hold'em table", 'chipstack_a', { stakes: 'vip' }); tbl('holdem_table', 16, 8, 'holdem', "Texas Hold'em table", 'chipstack_c', { stakes: 'vip' });
+    tbl('vbac_table', 8, 13, 'baccarat', 'VIP Baccarat table', 'chipstack_c', { vip: true }); tbl('vbac_table', 12, 13, 'baccarat', 'VIP Baccarat table', 'chipstack_b', { vip: true });
+    stations.push({ game: 'hub', x: cx(18), y: cy(8), name: 'VIP Cashier', vip: true });
+    for (let ly = 7; ly <= 10; ly++) solid(19, ly, T.counter);
+    prop(20, 12); decor('atm', cx(20), M(12) * TILE + 38); stations.push({ game: 'atm', x: cx(19), y: cy(12), name: 'VIP banking terminal' });
+    prop(20, 14); decor('atm', cx(20), M(14) * TILE + 38); stations.push({ game: 'atm', x: cx(19), y: cy(14), name: 'VIP banking terminal' });
+    // the staircase down (bottom-left)
+    for (let lx = 2; lx <= 4; lx++) { prop(lx, 15); prop(lx, 16); }
+    decor('casino_stairs_down', L(3) * TILE + 16, M(16) * TILE + 30);
+    const stationDown = { game: 'stairs', dir: 'down', x: cx(3), y: cy(14), name: 'Stairs to the main floor' };
+    stations.push(stationDown);
+    prop(1, 13); decor('palm_pot', cx(1), M(13) * TILE + 34); prop(20, 16); decor('palm_pot', cx(20), M(16) * TILE + 34); prop(14, 16); decor('casino_poster0', cx(14), M(16) * TILE + 30); prop(17, 16); decor('casino_poster2', cx(17), M(16) * TILE + 30);
+    prop(6, 16); decor('palm_pot', cx(6), M(16) * TILE + 34);
+
+    registerBuilding(X, Y, W, H, 'tower', { kind: 'casino', lift: 36, colorIdx: 3 });
+    cs.wing = { X, Y, W, H, interior: { x0: L(1), y0: M(1), x1: L(20), y1: M(16) } };
+    cs.stairsDown = { x: cx(3), y: cy(13), at: stationDown };
+    cs.privateRooms = [{ x0: L(1), y0: M(1), x1: L(4), y1: M(4), exit: { x: cx(3), y: cy(6) } }, { x0: L(6), y0: M(1), x1: L(9), y1: M(4), exit: { x: cx(8), y: cy(6) } }];
+    cs.jiro = { x: cx(18), y: cy(3) };
+
+    // ---- people upstairs
+    const guard = (lx, ly, role, extra = {}) => out.enemies.push({ x: cx(lx), y: cy(ly), role, type: 'pistol', mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 20, route: extra.route || null, hostility: 'provoked', hideout: true, crew: 'casino', ...extra });
+    const pt = (lx, ly) => ({ x: cx(lx), y: cy(ly) });
+    guard(5, 14, 'casino_guard', { fixedFace: 0 }); guard(18, 10, 'casino_guard2', { fixedFace: Math.PI }); guard(8, 6, 'casino_guard', { fixedFace: Math.PI / 2 });
+    guard(10, 7, 'casino_guard2', { route: [pt(10, 7), pt(10, 11), pt(6, 11), pt(6, 7)] });
+    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, ...extra });
+    const UP = -Math.PI / 2, DOWN = Math.PI / 2;
+    [[3, 9], [4, 9], [7, 9], [12, 9], [13, 9], [16, 9], [8, 14], [9, 14], [12, 14], [2, 3], [3, 3], [8, 3]].forEach(([lx, ly], i) => pat(lx, ly, 'cards', { sit: true, face: UP, seed: 20 + i, vip: true }));
+    [[4, 7], [8, 7], [13, 7], [17, 7], [9, 12], [13, 12], [3, 1], [8, 1]].forEach(([lx, ly]) => pat(lx, ly, 'dealer', { face: DOWN, role: 'dealer' }));
+    pat(12, 2, 'lounge', { sit: true, face: DOWN, vip: true }); pat(14, 2, 'lounge', { sit: true, face: DOWN, vip: true });
+    pat(20, 8, 'cashier', { face: Math.PI, role: 'cashier' }); pat(18, 11, 'chat', { face: Math.PI, seed: 6, vip: true });
+    out.civilians.push({ x: cx(10), y: cy(10), kind: 'patron', act: 'walk', seed: 8, vip: true, route: [pt(10, 10), pt(10, 15), pt(6, 15), pt(6, 10), pt(10, 6), pt(15, 6), pt(15, 11), pt(10, 11)] });
+    // lights, neons, chandeliers, and the sign on the tower's blank face
+    const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    cs.lights.push(lt(cx(5), cy(8), 0xffd8f0), lt(cx(10), cy(10), 0xffe0f0), lt(cx(14), cy(10), 0xffd8f0), lt(cx(6), cy(14), 0xffe8d0), lt(cx(13), cy(14), 0xffe8d0), lt(cx(3), cy(2), 0xc8a8ff), lt(cx(8), cy(2), 0xc8a8ff), lt(cx(13), cy(2), 0xffd0f0), lt(cx(18), cy(3), 0xffe8b0),
+      lt(cx(19), cy(9), 0xd8b0ff, { neon: true }), lt(cx(19), cy(13), 0x3aff8a, { neon: true }), lt(cx(3), cy(14), 0xffd24a, { neon: true }), lt(cx(11), cy(4), 0xc88aff, { neon: true }),
+      lt((L(10)) * TILE + 16, (fy + 1) * TILE + 6, 0xd8b0ff, { neon: true }), lt((L(5)) * TILE, (fy + 1) * TILE + 6, 0xffd24a, { neon: true }), lt((L(15)) * TILE, (fy + 1) * TILE + 6, 0xff4a8a, { neon: true }));
+    cs.neons.push({ key: 'neon_private', x: cx(3), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_private', x: cx(8), y: M(5) * TILE + 30, sy: -46 }, { key: 'neon_office', x: cx(18), y: M(5) * TILE + 30, sy: -46 },
+      { key: 'neon_viplounge', x: cx(13), y: M(1) * TILE + 20, sy: -10 }, { key: 'neon_vipcash', x: cx(20), y: M(6) * TILE + 20, sy: -30 }, { key: 'neon_atm', x: cx(20), y: M(11) * TILE + 20, sy: -40 },
+      { key: 'neon_cards', x: cx(5), y: M(6) * TILE + 6, sy: -20, noWall: true }, { key: 'neon_holdem', x: cx(14) + 16, y: M(6) * TILE + 6, sy: -20, noWall: true },
+      { key: 'casino_sign_vip', x: (L(11)) * TILE, y: fy * TILE + 6, sy: -30 });
+    [[4, 8.2], [12, 6.2], [10, 11], [16, 11], [14, 2.2], [18, 3]].forEach(([lx, ly]) => cs.chandeliers.push({ x: L(0) * TILE + lx * TILE + 16, y: M(0) * TILE + ly * TILE }));
   }
 
   function commercial(b) {
@@ -1897,9 +2010,158 @@ export function generateWorld(seed = 20240) {
         out.decor.push({ kind: 'gang_wall_red', x: px(tx), y: ty * TILE + 12 }); tags++;
       });
     }
+    casinoWing(cleared);                                                                      // the VIP tower (floor 2) is built last
     out.trees = out.trees.filter((t) => !cleared.some(([x0, y0, x1, y1]) => t.x / TILE >= x0 && t.x / TILE < x1 + 1 && (t.y - 26) / TILE >= y0 && (t.y - 26) / TILE < y1 + 1));      // the tree sprites were already made: drop the ones inside the compounds
     out.enemies.push(...specs);
     rng = mainRng;
+  }
+
+  /* ---------------- PORT CITY TRUST: the robbable bank. It REPLACES the west end of the bottom shop row on Market Street (block 1 / 3, the
+     two or three shops that stood there are removed together with everything that belonged to them); nothing else is touched and no
+     random numbers are drawn, so the rest of the world is exactly as before. FOOTPRINT 26 x 16 (interior 24 x 14):
+       PUBLIC HALL (south):  queue, ATMs, kiosks, banking desks, waiting sofas, entrance (double door, lx 12-13)
+       TELLER COUNTER (row 9) with a staff-only door (lx 23)
+       STAFF CORRIDOR (rows 7-8): tellers, a patrolling guard; north rooms open onto it through row 6:
+         manager's office (lx 1-5) | employee workstations (lx 7-11, open doorway) | security room (lx 13-16, restricted door) | VAULT (lx 18-24, vault door lx 20-21) ---- */
+  {
+    const BX = 25, BW = 26, BH = 16, BFY = 123, BY = BFY - BH + 1;
+    const L = (lx) => BX + lx, M = (ly) => BY + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    // 1. the shops that stood here go (every shop of that row touching the footprint, whole)
+    let wx0 = BX - 1, wx1 = BX + BW;
+    shopRects.filter((s) => s.y + s.h - 1 === BFY && s.x <= wx1 && s.x + s.w - 1 >= wx0).forEach((s) => { wx0 = Math.min(wx0, s.x - 1); wx1 = Math.max(wx1, s.x + s.w); });
+    const wy0 = BY - 1, wy1 = BFY + 3;
+    const inR = (tx, ty) => tx >= wx0 && tx <= wx1 && ty >= wy0 && ty <= wy1;
+    const inRpx = (x, y) => inR(Math.floor(x / TILE), Math.floor(y / TILE));
+    for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) { obj[y][x] = -1; ground[y][x] = T.plaza; occ[y][x] = false; }
+    out.buildings = out.buildings.filter((b) => !(b.x <= wx1 && b.x + b.w - 1 >= wx0 && b.y <= wy1 && b.y + b.h - 1 >= wy0));
+    out.doors = out.doors.filter((d) => !inR(d.x, d.y)); out.containers = out.containers.filter((c) => !inR(c.tx, c.ty));
+    out.pois = out.pois.filter((p) => !(p.tx <= wx1 && p.tx + p.w - 1 >= wx0 && p.ty <= wy1 && p.ty + p.h - 1 >= wy0));
+    ['publicDoors', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => { if (Array.isArray(out[k])) out[k] = out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))); });
+    out.trees = out.trees.filter((t) => !inRpx(t.x, t.y - 26));
+    for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) if (inb(x, y)) occ[y][x] = false;
+    mark(wx0, wy0, wx1 - wx0 + 1, wy1 - wy0 + 1, 0);
+
+    // 2. the shell
+    fillBuildingShell(BX, BY, BW, BH, T.wall2, T.tileFloor);
+    const fy = BFY;
+    const prop = (lx, ly) => { if (obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = T.prop; };
+    const decor = (kind, x, y) => out.decor.push({ kind, x, y });
+    const doorT = (lx, ly, open) => { obj[M(ly)][L(lx)] = open ? T.doorOpen : T.doorClosed; if (!open) out.doors.push({ x: L(lx), y: M(ly) }); };
+    const floor = (lx0, ly0, lx1, ly1, t) => { for (let y = ly0; y <= ly1; y++) for (let x = lx0; x <= lx1; x++) ground[M(y)][L(x)] = t; };
+    // front: glass between four stone pillars, a double door in the middle
+    for (let lx = 1; lx <= 24; lx++) obj[fy][L(lx)] = [4, 9, 16, 21].includes(lx) ? T.wall2 : T.glass;
+    doorT(12, 15, true); doorT(13, 15, true);
+    // row 6: the wall in front of the four back rooms, with their doors
+    for (let lx = 1; lx <= 24; lx++) obj[M(6)][L(lx)] = T.wall2;
+    for (const lx of [6, 12, 17]) for (let ly = 1; ly <= 5; ly++) obj[M(ly)][L(lx)] = T.wall2;
+    doorT(3, 6, false);                                                       // manager's office
+    doorT(9, 6, true); doorT(10, 6, true);                                    // the employees' open doorway
+    doorT(14, 6, false);                                                      // security room (restricted)
+    doorT(20, 6, false); doorT(21, 6, false);                                 // the VAULT door (two tiles wide)
+    doorT(23, 9, false);                                                      // the staff-only door in the counter line
+    floor(1, 1, 5, 5, T.carpet); floor(7, 1, 11, 5, T.carpet); floor(18, 1, 24, 5, T.concrete); floor(1, 7, 24, 8, T.tileFloor);
+    // 3. teller counter (row 9): marble top, glass partitions, one section per teller
+    for (let lx = 1; lx <= 22; lx++) prop(lx, 9);
+    prop(24, 9);
+    [2, 5, 8, 11, 14, 17, 20].forEach((lx) => decor('bank_counter', cx(lx), M(9) * TILE + 36));
+    decor('bank_counter_end', cx(22), M(9) * TILE + 36); decor('bank_counter_end', cx(24), M(9) * TILE + 36);
+    // 4. public hall
+    prop(1, 11); decor('atm', cx(1), M(11) * TILE + 38); prop(1, 13); decor('atm', cx(1), M(13) * TILE + 38);
+    prop(3, 13); decor('bank_kiosk', cx(3), M(13) * TILE + 38); prop(5, 13); decor('bank_kiosk', cx(5), M(13) * TILE + 38);
+    [[1, 10], [24, 10], [1, 14], [24, 14]].forEach(([lx, ly]) => { prop(lx, ly); decor('bank_plant', cx(lx), M(ly) * TILE + 34); });
+    prop(20, 11); prop(21, 11); decor('lounge_sofa', L(21) * TILE, M(11) * TILE + 34);
+    prop(23, 11); prop(24, 11); decor('lounge_sofa', L(24) * TILE, M(11) * TILE + 34);
+    [[14, 15], [18, 19]].forEach(([a, b]) => { prop(a, 12); prop(b - 0, 12); decor('bank_desk', L(b) * TILE, M(12) * TILE + 36); decor('bank_chair', cx(b), M(11) * TILE + 30); decor('bank_chair', cx(b), M(13) * TILE + 30); });
+    [[6, 10], [8, 10], [6, 12], [8, 12]].forEach(([lx, ly]) => decor('stanchion', cx(lx) - 2, M(ly) * TILE + 34));                // the queue lane
+    // 5. manager's office, workstations, security room
+    prop(2, 2); prop(3, 2); decor('bank_desk', L(3) * TILE, M(2) * TILE + 36); decor('bank_chair', cx(3), M(1) * TILE + 30);
+    prop(1, 1); decor('bank_cabinet', cx(1), M(1) * TILE + 36); prop(5, 1); decor('bank_plant', cx(5), M(1) * TILE + 34); prop(5, 4); decor('bank_plant', cx(5), M(4) * TILE + 34);
+    prop(7, 1); prop(8, 1); decor('bank_shelf', L(8) * TILE, M(1) * TILE + 38);
+    prop(10, 1); prop(11, 1); decor('bank_cabinet', cx(10), M(1) * TILE + 36); decor('bank_cabinet', cx(11), M(1) * TILE + 36);
+    prop(7, 3); prop(8, 3); decor('bank_desk', L(8) * TILE, M(3) * TILE + 36); decor('bank_chair', cx(8), M(4) * TILE + 30);
+    prop(10, 3); prop(11, 3); decor('bank_desk', L(11) * TILE, M(3) * TILE + 36); decor('bank_chair', cx(11), M(4) * TILE + 30);
+    prop(14, 1); prop(15, 1); decor('bank_monitors', L(15) * TILE, M(1) * TILE + 36);
+    prop(16, 2); decor('bank_panel', cx(16), M(2) * TILE + 36);
+    prop(14, 3); prop(15, 3); decor('bank_desk', L(15) * TILE, M(3) * TILE + 36); decor('bank_chair', cx(14), M(4) * TILE + 30);
+    obj[M(1)][L(13)] === -1 && (obj[M(1)][L(13)] = T.locker);
+    // 6. the vault: deposit boxes along the back, cash shelves, pallets - and the stacks you can take
+    prop(18, 1); prop(19, 1); prop(20, 1); decor('vault_boxes', cx(19), M(1) * TILE + 34);
+    prop(22, 1); prop(23, 1); decor('vault_shelf', L(23) * TILE, M(1) * TILE + 36);
+    prop(19, 3); prop(20, 3); decor('vault_pallet', L(20) * TILE, M(3) * TILE + 38);
+    prop(23, 3); prop(24, 3); decor('vault_pallet', L(24) * TILE, M(3) * TILE + 38);
+    const loot = [[18, 2, 'bag', 500], [19, 2, 'cash', 450], [20, 2, 'cash', 450], [22, 2, 'cash', 600], [23, 2, 'cash', 600], [24, 2, 'bag', 500], [21, 2, 'gold', 900],
+      [18, 4, 'cash', 500], [20, 4, 'bag', 550], [22, 4, 'cash', 650], [24, 4, 'gold', 900], [19, 5, 'cash', 450], [21, 5, 'gold', 900], [23, 5, 'cash', 500]]
+      .map(([lx, ly, kind, value], i) => ({ id: 'l' + i, x: cx(lx), y: cy(ly) + 4, kind, value }));
+    // 7. the street side: awning + columns, two ATMs, planters, benches, parked cars, an entrance mat
+    prop(11, 16); decor('bank_column', cx(11), (fy + 1) * TILE + 26); prop(14, 16); decor('bank_column', cx(14), (fy + 1) * TILE + 26);
+    prop(2, 16); decor('atm', cx(2), (fy + 1) * TILE + 38); prop(23, 16); decor('atm', cx(23), (fy + 1) * TILE + 38);
+    [[6, 'planter'], [19, 'planter']].forEach(([lx, k]) => { prop(lx, 16); decor(k, cx(lx), (fy + 1) * TILE + 34); });
+    [4, 21].forEach((lx) => { obj[fy + 2][L(lx)] = T.bench; out.benches.push({ x: cx(lx), y: (fy + 2) * TILE + 24 }); });
+    [[9, fy + 3], [16, fy + 3]].forEach(([lx, ty]) => decor('casino_bollard', cx(lx), ty * TILE + 30));
+    out.rugs.push({ key: 'bank_walk', x: cx(12) + 16, y: (fy + 1) * TILE + 48 });
+    vehicle('sedan', 2, cx(4), (BFY + 3) * TILE + 6, 0, 'parked'); vehicle('van', 1, cx(20), (BFY + 3) * TILE + 6, 0, 'parked');
+    registerBuilding(BX, BY, BW, BH, 'tower', { kind: 'bank', tall: true, colorIdx: 1, look: 'bank' });
+    addPoi('bank', 'Port City Trust', BX, BY, BW, BH);
+    publicDoor(L(12), fy, 'bank', 'Port City Trust');
+    const door = { x: cx(12) + 16, y: (fy + 1) * TILE };
+
+    // 8. people. Guards are real armed guards (hostile only once the robbery starts / they are attacked); staff and customers are patrons.
+    const guard = (lx, ly, role, extra = {}) => out.enemies.push({ x: cx(lx), y: cy(ly), role, type: 'pistol', mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 20, route: extra.route || null, hostility: 'provoked', bank: true, crew: 'bank', ...extra });
+    const pt = (lx, ly) => ({ x: cx(lx), y: cy(ly) });
+    guard(10, 14, 'bank_guard', { fixedFace: -Math.PI / 2 });                                                   // the door guard
+    guard(3, 10, 'bank_guard2', { route: [pt(3, 10), pt(10, 10), pt(10, 14), pt(3, 14)] });                    // patrols the public hall
+    guard(3, 7, 'bank_guard', { route: [pt(3, 7), pt(21, 7)] });                                               // patrols the staff corridor
+    guard(14, 4, 'bank_guard2', { sit: true, fixedFace: -Math.PI / 2 });                                        // watches the monitors
+    guard(18, 8, 'bank_guard', { fixedFace: -Math.PI / 2 });                                                    // the vault guard
+    const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, bank: true, ...extra });
+    const UP = -Math.PI / 2, DOWN = Math.PI / 2, LEFT = Math.PI;
+    [2, 5, 8, 14, 17].forEach((lx, i) => pat(lx, 8, 'teller', { face: DOWN, role: 'bank_teller', seed: i }));
+    pat(3, 1, 'manager', { sit: true, face: DOWN, role: 'bank_manager' });
+    pat(8, 4, 'typing', { sit: true, face: UP, role: 'bank_clerk', seed: 1 }); pat(11, 4, 'typing', { sit: true, face: UP, role: 'bank_clerk', seed: 2 });
+    pat(15, 11, 'typing', { sit: true, face: DOWN, role: 'bank_clerk', seed: 3 }); pat(19, 11, 'typing', { sit: true, face: DOWN, role: 'bank_teller', seed: 4 });
+    pat(15, 13, 'chat', { sit: true, face: UP, seed: 5 }); pat(19, 13, 'chat', { sit: true, face: UP, seed: 6 });
+    [[7, 10], [7, 11], [7, 12]].forEach(([lx, ly], i) => pat(lx, ly, 'queue', { face: UP, seed: 7 + i }));
+    pat(2, 11, 'atmuse', { face: LEFT, seed: 3 }); pat(2, 13, 'atmuse', { face: LEFT, seed: 5 });
+    pat(20, 12, 'lounge', { sit: true, face: DOWN, seed: 4 }); pat(23, 12, 'lounge', { sit: true, face: DOWN, seed: 6 });
+    pat(2, 17, 'atmuse', { face: UP, seed: 2 });
+    out.civilians.push({ x: door.x, y: door.y + 70, kind: 'patron', act: 'walk', seed: 1, bank: true, route: [{ x: door.x, y: door.y + 70 }, { x: door.x, y: door.y }, { x: cx(12), y: cy(12) }, { x: cx(11), y: cy(10) }, { x: cx(11), y: cy(13) }, { x: door.x, y: door.y - 4 }, { x: door.x, y: door.y + 70 }] });
+    out.civilians.push({ x: cx(10), y: cy(11), kind: 'patron', act: 'walk', seed: 2, bank: true, route: [{ x: cx(10), y: cy(11) }, { x: cx(16), y: cy(14) }, { x: cx(22), y: cy(14) }, { x: cx(22), y: cy(10) }, { x: cx(16), y: cy(10) }] });
+
+    // 9. what the game needs to know (see BankHeist.js)
+    const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    const li = (x, y, col, extra = {}) => lt(x, y, col, { indoor: true, ...extra });
+    const wallY = (ty) => (ty + 1) * TILE - 2;
+    out.bank = {
+      X: BX, Y: BY, W: BW, H: BH,
+      door: { x: door.x, y: (fy + 1) * TILE + 20 },
+      sign: { x: door.x, y: fy * TILE + 4 },
+      interior: { x0: L(1), y0: M(1), x1: L(24), y1: M(14) },
+      vaultRect: { x0: L(18), y0: M(1), x1: L(24), y1: M(5) },
+      staffRect: { x0: L(1), y0: M(1), x1: L(24), y1: M(8) },
+      doors: { staff: { tx: L(23), ty: M(9) }, security: { tx: L(14), ty: M(6) }, vault: [{ tx: L(20), ty: M(6) }, { tx: L(21), ty: M(6) }] },
+      vaultDoor: { x: L(21) * TILE, y: (M(6) + 1) * TILE - 1 },
+      desk: { x: cx(11), y: cy(10) },                                           // the counter spot where a robbery is started
+      loot,
+      stations: [
+        { game: 'atm', x: cx(2), y: cy(11), name: 'Port City Trust ATM' }, { game: 'atm', x: cx(2), y: cy(13), name: 'Port City Trust ATM' },
+        { game: 'atm', x: cx(2), y: (fy + 2) * TILE + 14, name: 'Port City Trust ATM' }, { game: 'atm', x: cx(23), y: (fy + 2) * TILE + 14, name: 'Port City Trust ATM' },
+        { game: 'rob', x: cx(11), y: cy(10), name: 'Teller counter' }
+      ],
+      neons: [
+        { key: 'bank_awning', x: door.x, y: (fy + 1) * TILE - 2, sy: -34, dz: 30, ext: true },
+        ...[1, 2, 3, 5, 6, 7, 8, 10, 11, 14, 15, 17, 18, 19, 20, 22, 23, 24].map((lx, i) => ({ key: 'bank_win_' + (i % 4), x: cx(lx), y: (fy + 1) * TILE - 2, sy: -2, dz: 8, ext: true })),
+        ...[4, 9, 16, 21].map((lx) => ({ key: 'bank_lamp', x: cx(lx), y: (fy + 1) * TILE - 2, sy: -6, dz: 10, ext: true })),
+        { key: 'bank_cam', x: cx(1) + 6, y: (fy + 1) * TILE - 2, sy: -26, dz: 10, ext: true }, { key: 'bank_cam', x: cx(24) - 6, y: (fy + 1) * TILE - 2, sy: -26, dz: 10, ext: true }, { key: 'bank_cam', x: cx(11) - 8, y: (fy + 1) * TILE - 2, sy: -28, dz: 10, ext: true },
+        { key: 'bank_clock', x: cx(8), y: wallY(M(6)), sy: -10, dz: 10 }, { key: 'bank_board', x: cx(12) - 4, y: wallY(M(6)), sy: -6, dz: 10 }, { key: 'bank_poster', x: cx(5), y: wallY(M(6)), sy: -4, dz: 10 },
+        { key: 'bank_cam', x: cx(18) + 4, y: wallY(M(6)), sy: -26, dz: 10 }, { key: 'bank_cam', x: cx(2), y: wallY(M(6)), sy: -26, dz: 10 }
+      ],
+      lights: [
+        li(cx(5), cy(11), 0xfff0d8), li(cx(11), cy(11), 0xfff4e0), li(cx(17), cy(11), 0xfff0d8), li(cx(22), cy(12), 0xfff0d8), li(cx(6), cy(7), 0xe8f0ff), li(cx(18), cy(7), 0xe8f0ff),
+        li(cx(3), cy(3), 0xffe8c8), li(cx(9), cy(3), 0xf4f4ff), li(cx(15), cy(3), 0x9ad0ff), li(cx(21), cy(3), 0xc8ffd8),
+        lt(door.x, (fy + 1) * TILE + 20, 0xffe0a0, { neon: true }), lt(cx(4), (fy + 1) * TILE + 6, 0xffe8b0), lt(cx(9), (fy + 1) * TILE + 6, 0xffe8b0), lt(cx(16), (fy + 1) * TILE + 6, 0xffe8b0), lt(cx(21), (fy + 1) * TILE + 6, 0xffe8b0),
+        lt(cx(2), (fy + 2) * TILE, 0x6aff9a), lt(cx(23), (fy + 2) * TILE, 0x6aff9a), lt(door.x, (fy - 3) * TILE, 0xffd870, { neon: true })
+      ]
+    };
   }
 
   /* ------------------------------------------------ wall faces vs. cap tiles */
@@ -1917,6 +2179,7 @@ export function generateWorld(seed = 20240) {
     const sx = Math.floor(out.spawn.x / TILE), sy = Math.floor(out.spawn.y / TILE);
     const seen = new Uint8Array(W * H);
     const st = [[sx, sy]]; seen[sy * W + sx] = 1;
+    if (out.casino && out.casino.stairsDown) { const wx = Math.floor(out.casino.stairsDown.x / TILE), wy = Math.floor(out.casino.stairsDown.y / TILE); seen[wy * W + wx] = 1; st.push([wx, wy]); }      // the VIP floor is only reachable by the staircase: its people and furniture are real, too
     while (st.length) {
       const [cx, cy] = st.pop();
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {

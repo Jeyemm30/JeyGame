@@ -3,7 +3,8 @@ import { label, button, uiK, FONT } from '../ui/widgets.js';
 import { profile } from '../systems/Profile.js';
 import { sfx } from '../systems/Audio.js';
 import * as C from '../systems/Casino.js';
-import { HOSTS, pickLine } from '../story/casinoTalk.js';
+import { HOSTS, pickLine, greeting } from '../story/casinoTalk.js';
+import { CardGames } from './CasinoCards.js';
 
 /* The casino game screens: lobby, slots, blackjack, poker dice and the cashier / VIP desk.
    All rules and money handling live in systems/Casino.js; this file is presentation + flow.
@@ -12,26 +13,32 @@ import { HOSTS, pickLine } from '../story/casinoTalk.js';
 
 const GOLD = 0xffd24a, GOLD_S = '#ffd24a';
 const GAMES = [
-  { id: 'slots', name: 'SLOT MACHINE', blurb: '3 reels, 6 symbols, rare 777 jackpot', art: ['sym_seven', 'sym_bell', 'sym_cherry'] },
+  { id: 'slots', name: 'SLOTS', blurb: '3 reels, rare 777 jackpot', art: ['sym_seven', 'sym_bell'] },
   { id: 'blackjack', name: 'BLACKJACK', blurb: 'Beat the dealer to 21. Pays 3:2', art: ['card_AS', 'card_KH'] },
-  { id: 'dice', name: 'POKER DICE', blurb: '5 dice, 2 re-rolls, make a hand', art: ['die_5', 'die_5', 'die_3'] }
+  { id: 'dice', name: 'POKER DICE', blurb: '5 dice, 2 re-rolls, make a hand', art: ['die_5', 'die_3'] },
+  { id: 'baccarat', name: 'BACCARAT', blurb: 'Player, Banker or Tie. Banker pays 0.95:1', art: ['card_9H', 'card_KS'] },
+  { id: 'holdem', name: "HOLD'EM", blurb: 'Texas Hold\'em vs 3 AI players', art: ['card_AS', 'card_AH'] }
 ];
 const HOW = {
-  lobby: 'Pick a game from the left or the cards below.\n\nBets are virtual money only. Minimum $10, maximum $500. VIP members can bet up to $5,000 and use the VIP room.\n\nA round takes your bet right away and pays out exactly once. Leaving the table in the middle of a blackjack or dice round forfeits that bet.',
+  lobby: 'Pick a game from the left or the cards below.\n\nEverything is played with casino CHIPS (virtual only): swap cash for chips at the cashier, 1 chip = $1 both ways. Minimum 10 chips, maximum 500 (VIP 5,000, VIP Gold 25,000). The ATM only moves cash between your wallet and your bank account.\n\nA round takes your bet right away and pays out exactly once. Leaving the table in the middle of a round forfeits that bet.',
   slots: 'SLOTS\n\nChoose a bet and press SPIN (or SPACE). Three reels stop one after another.\n\nThree matching symbols pay the amount in the table (three 7s is the jackpot). Two cherries pay x2.5. Anything else loses.\n\nEvery spin is random and independent: the machine never looks at your past wins or losses.',
   blackjack: 'BLACKJACK\n\nGet closer to 21 than the dealer without going over. Number cards count their number, J/Q/K count 10, an Ace counts 11 or 1.\n\nHIT takes a card, STAND ends your turn. The dealer must hit up to 16 and stands on every 17. A natural blackjack (Ace + 10-card) pays 3:2, a win pays 1:1, a tie (push) returns your bet.',
   dice: 'POKER DICE\n\nPress ROLL for five dice. Click dice (or keys 1-5) to HOLD the ones you like, then REROLL the rest. You get 2 re-rolls, then the hand is paid.\n\nFive of a Kind x15, Four x1.5, Straight x1.25, Full House x0.75, Three x0.25, Two Pair x0.15, One Pair x0.1.',
-  cashier: 'CASHIER\n\nVIP membership raises your maximum bet and opens the VIP room. Buy it for $5,000 or earn it automatically at 150 casino reputation.\n\nReputation grows with every bet you place. Rewards unlock at certain reputation levels and are free to claim.'
+  cashier: 'CASHIER - CHIP EXCHANGE\n\nBUY CHIPS turns cash from your wallet into casino chips, CASH OUT turns chips back into cash. The rate is always 1 chip = $1. Type an amount or use the quick buttons.\n\nChips are shown as colour-coded stacks: white 10, red 50, green 100, blue 500, black 1,000, purple 5,000 (and small coins for the rest).',
+  vip: 'VIP & REWARDS\n\nVIP opens the staircase to the VIP level and raises your maximum bet to 5,000. Get it for $5,000 at the cashier, at 150 casino reputation, or as an invitation from Sean (60 reputation). VIP Gold (250 reputation, or Jiro invites you at 160) opens the private rooms and a 25,000 limit.\n\nReputation grows with every bet you place. Rewards unlock at certain reputation levels and are free to claim.',
+  baccarat: 'BACCARAT\n\nClick a chip, then click PLAYER, BANKER or TIE to place it (you can bet on several). Press DEAL, or wait for the timer. Cards count 0 for 10/J/Q/K, 1 for Ace, face value for 2-9, and a hand is the total modulo 10 - 9 is best.\n\nOn 8 or 9 (a natural) nobody draws; otherwise the standard third-card rules decide. Player pays 1:1, Banker pays 0.95:1 (5% commission), Tie pays 8:1. Player and Banker bets are returned on a tie.',
+  holdem: "TEXAS HOLD'EM\n\nYou get two private cards, five community cards come in three steps (flop, turn, river), and the best five-card hand wins the pot. Betting happens before the flop and after each step: CHECK, CALL, RAISE or FOLD.\n\nThree AI players sit with you: Marcus is tight, Lina bets aggressively, Old Sal calls everything. They only see their own cards and the table, just like you. Chips you buy in with are returned when you STAND UP.",
 };
 const rnd = (n) => Math.floor(Math.random() * n);
-const money = (n) => '$' + Math.round(n).toLocaleString();
+const money = (n) => Math.round(n).toLocaleString() + ' ch';          // bets, stakes and winnings are CHIPS
+const usd = (n) => '$' + Math.round(n).toLocaleString();
 let lastBet = { slots: 50, blackjack: 50, dice: 50 };
 
 export default class CasinoScene extends Phaser.Scene {
   constructor() { super('Casino'); }
 
   init(data) {
-    this.hostId = (data && data.host) || 'sean';
+    this.hostId = (data && data.host) || 'sean'; this.table = (data && data.table) || null; this.xAmt = '';
     this.startMode = (data && data.game) || 'lobby';
     this.mode = null; this.cur = []; this.busy = false; this.pending = null; this.leaveWarn = 0; this.howOpen = null; this.shownMoney = null;
   }
@@ -49,8 +56,9 @@ export default class CasinoScene extends Phaser.Scene {
     for (let i = 0; i < 34; i++) this.add.rectangle(46 + i * 36, 22, 6, 6, [0xffd24a, 0xff4a8a, 0x3ad8ff][i % 3]);
     label(this, 640, 50, 'CASINO', 34, GOLD_S, 0.5, 0.5);
     label(this, 640, 76, 'VIRTUAL MONEY ONLY  •  PLAY RESPONSIBLY', 10, '#ff8ac0', 0.5, 0.5);
-    this.moneyText = label(this, 1236, 44, '', 24, '#8affb0', 1, 0.5);
-    this.repText = label(this, 1236, 72, '', 12, '#c8b0ff', 1, 0.5);
+    this.moneyText = label(this, 1236, 34, '', 22, '#e8d0ff', 1, 0.5);
+    this.walletText = label(this, 1236, 56, '', 11, '#8affb0', 1, 0.5);
+    this.repText = label(this, 1236, 74, '', 11, '#c8b0ff', 1, 0.5);
 
     // host (left column)
     this.add.rectangle(150, 198, 210, 224, 0x1a1030).setStrokeStyle(2, 0x6a4a9a);
@@ -59,16 +67,17 @@ export default class CasinoScene extends Phaser.Scene {
     label(this, 150, 298, H.name + '  •  ' + H.title, 10, H.color, 0.5, 0.5);
     this.bubbleBg = this.add.rectangle(150, 372, 210, 112, 0x24143c).setStrokeStyle(2, 0xff4a8a);
     this.bubble = this.add.text(52, 322, '', { fontFamily: FONT, fontSize: Math.round(12 * uiK()) + 'px', color: '#ffeeb0', fontStyle: 'bold', wordWrap: { width: 196 } });
-    const nav = [['LOBBY', 'lobby'], ['SLOTS', 'slots'], ['BLACKJACK', 'blackjack'], ['POKER DICE', 'dice'], ['CASHIER / VIP', 'cashier']];
-    this.navBtns = nav.map(([t, m], i) => button(this, 150, 450 + i * 40, t, () => this.go(m), { w: 200, h: 34, size: 14 }));
-    button(this, 80, 668, '?  HOW TO PLAY', () => this.toggleHow(), { w: 140, h: 34, size: 11 });
-    button(this, 218, 668, 'EXIT', () => this.leave(), { w: 100, h: 34, size: 14 });
+    const nav = [['LOBBY', 'lobby'], ['SLOTS', 'slots'], ['BLACKJACK', 'blackjack'], ['POKER DICE', 'dice'], ['BACCARAT', 'baccarat'], ["TEXAS HOLD'EM", 'holdem'], ['CHIPS / CASHIER', 'cashier'], ['VIP & REWARDS', 'vip']];
+    this.navBtns = nav.map(([t, m], i) => button(this, 150, 444 + i * 31, t, () => this.go(m), { w: 200, h: 28, size: 12 }));
+    button(this, 80, 692, '?  HOW TO PLAY', () => this.toggleHow(), { w: 140, h: 28, size: 10 });
+    button(this, 218, 692, 'EXIT', () => this.leave(), { w: 100, h: 28, size: 13 });
     this.input.keyboard.on('keydown-ESC', () => this.leave());
     this.input.keyboard.on('keydown-SPACE', () => { if (this.mode === 'slots') this.spin(); });
     for (let i = 1; i <= 5; i++) this.input.keyboard.on('keydown-' + ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE'][i - 1], () => { if (this.mode === 'dice') this.toggleHold(i - 1); });
+    this.input.keyboard.on('keydown', (e) => this.onTypeKey(e));
     this.events.once('shutdown', () => { this.settleOnExit(); });
 
-    this.say(pickLine(first ? H.first : H.again));
+    this.say(greeting(this.hostId, C.vipLevel(), first));
     this.go(this.startMode);
     this.refreshHud(true);
   }
@@ -76,12 +85,13 @@ export default class CasinoScene extends Phaser.Scene {
   update() { this.refreshHud(); }
 
   refreshHud(force) {
-    const m = Math.round(profile.money);
+    const m = Math.round(profile.money) * 1e6 + C.state().chips;
     if (!force && m === this.shownMoney) return;
     this.shownMoney = m;
-    this.moneyText.setText(money(m));
+    this.moneyText.setText('CHIPS ' + Math.round(C.state().chips).toLocaleString());
+    this.walletText.setText('wallet ' + usd(profile.money));
     const s = C.state();
-    this.repText.setText(`${C.title()}  •  rep ${s.rep}  •  ${s.vip ? 'VIP MEMBER' : 'Guest'}  •  max bet ${money(C.maxBet())}`);
+    this.repText.setText(`${C.title()}  •  rep ${s.rep}  •  ${C.vipName().toUpperCase()}  •  max bet ${money(C.maxBet())}`);
     if (this.betText) this.betText.setText(money(this.bet || 0));
   }
 
@@ -93,6 +103,7 @@ export default class CasinoScene extends Phaser.Scene {
   img(x, y, key, sc = 1) { return this.keep(this.add.image(x, y, key).setScale(sc)); }
 
   clearMode() {
+    this.cleanupGames();
     this.cur.forEach((o) => { if (o && o.destroy) o.destroy(); });
     this.cur = []; this.betText = null; this.banner = null; this.rows = null;
   }
@@ -100,25 +111,25 @@ export default class CasinoScene extends Phaser.Scene {
   go(mode) {
     if (this.busy || C.roundActive()) { this.say('Finish this round first.'); sfx.click(); return; }
     this.clearMode(); this.mode = mode; this.leaveWarn = 0;
-    ({ lobby: () => this.buildLobby(), slots: () => this.buildSlots(), blackjack: () => this.buildBlackjack(), dice: () => this.buildDice(), cashier: () => this.buildCashier() })[mode]();
+    ({ lobby: () => this.buildLobby(), slots: () => this.buildSlots(), blackjack: () => this.buildBlackjack(), dice: () => this.buildDice(), cashier: () => this.buildCashier(), vip: () => this.buildCashierVip(), baccarat: () => this.buildBaccarat(), holdem: () => this.buildHoldem() })[mode]();
     this.refreshHud(true);
   }
 
   /* ================================================================ shared pieces */
   // bet bar: - / + / MIN / MAX / chips. Locked while a round is running.
   betBar(game, x, y) {
-    this.bet = C.clampBet(lastBet[game] || 50); lastBet[game] = this.bet;
+    this.bet = C.clampBet(lastBet[game] || 50, this.minB()); lastBet[game] = this.bet;
     this.box(x, y, 560, 70, 0x1d0f2c, 0x6a4a9a);
     this.txt(x - 270, y - 22, 'BET', 12, '#c8b0ff', 0, 0.5);
     this.betText = this.txt(x - 270, y + 6, money(this.bet), 26, GOLD_S, 0, 0.5);
-    this.txt(x - 270, y + 28, `min ${money(C.minBet())}  max ${money(C.maxBet())}`, 9, '#9a8ab8', 0, 0.5);
-    const set = (n) => { if (this.locked()) { this.say('The bet is locked while the round is running.'); return; } this.bet = C.clampBet(n); lastBet[game] = this.bet; sfx.chip(); this.refreshHud(true); };
+    this.txt(x - 270, y + 28, `min ${money(this.minB())}  max ${money(C.maxBet())}`, 9, '#9a8ab8', 0, 0.5);
+    const set = (n) => { if (this.locked()) { this.say('The bet is locked while the round is running.'); return; } this.bet = C.clampBet(n, this.minB()); lastBet[game] = this.bet; sfx.chip(); this.refreshHud(true); };
     const step = () => (this.bet < 100 ? 10 : this.bet < 500 ? 50 : this.bet < 2000 ? 250 : 500);
     this.btn(x - 100, y, '-', () => set(this.bet - step()), 44, 36, 20);
     this.btn(x - 52, y, '+', () => set(this.bet + step()), 44, 36, 20);
-    this.btn(x + 6, y - 18, 'MIN', () => set(C.minBet()), 60, 28, 11);
+    this.btn(x + 6, y - 18, 'MIN', () => set(this.minB()), 60, 28, 11);
     this.btn(x + 6, y + 18, 'MAX', () => set(C.maxBet()), 60, 28, 11);
-    [10, 50, 100, 500].forEach((v, i) => this.btn(x + 78 + i * 52, y, '+' + v, () => set(this.bet + v), 48, 36, 11));
+    [10, 50, 100, 500].forEach((v, i) => { const cx = x + 100 + i * 52, im = this.img(cx, y, 'chip_' + v, 1.15).setInteractive({ useHandCursor: true }); im.on('pointerup', () => { if (!this.howOpen) set(this.bet + v); }); this.txt(cx, y + 24, '+' + v, 8, '#d8c8f0'); });
   }
 
   locked() { return this.busy || C.roundActive(); }
@@ -143,15 +154,15 @@ export default class CasinoScene extends Phaser.Scene {
     if (!h.length) this.txt(x, y + 40, 'No rounds yet', 11, '#8a7aa8');
     h.forEach((r, i) => {
       const col = r.net > 0 ? '#8affb0' : r.net < 0 ? '#ff8a8a' : '#e0e0a0';
-      this.txt(x - 104, y + 22 + i * 24, ({ slots: 'Slots', blackjack: 'Blackjack', dice: 'Dice' })[r.game] || r.game, 10, '#d8c8f0', 0, 0.5);
+      this.txt(x - 104, y + 22 + i * 24, ({ slots: 'Slots', blackjack: 'Blackjack', dice: 'Dice', baccarat: 'Baccarat', holdem: "Hold'em" })[r.game] || r.game, 10, '#d8c8f0', 0, 0.5);
       this.txt(x + 104, y + 22 + i * 24, (r.net > 0 ? '+' : r.net < 0 ? '-' : '') + money(Math.abs(r.net)), 11, col, 1, 0.5);
     });
     this.histObjs = this.cur.slice(first);
   }
 
-  showBanner(str, col, size = 38) {
+  showBanner(str, col, size = 38, y = 330) {
     if (this.banner) this.banner.destroy();
-    this.banner = this.keep(label(this, 620, 330, str, size, col, 0.5, 0.5).setDepth(50).setScale(0.3).setAlpha(0));
+    this.banner = this.keep(label(this, 620, y, str, size, col, 0.5, 0.5).setDepth(50).setScale(0.3).setAlpha(0));
     this.tweens.add({ targets: this.banner, scale: 1, alpha: 1, duration: 260, ease: 'Back.Out' });
   }
 
@@ -173,21 +184,32 @@ export default class CasinoScene extends Phaser.Scene {
 
   /* ================================================================ LOBBY */
   buildLobby() {
-    this.txt(760, 128, 'WELCOME TO THE FLOOR', 22, GOLD_S);
+    const lvl = C.vipLevel(), H = HOSTS[this.hostId];
+    this.txt(760, 128, this.table ? this.table.name.toUpperCase() : 'WELCOME TO THE FLOOR', 22, GOLD_S);
     GAMES.forEach((g, i) => {
-      const x = 440 + i * 240, y = 330;
-      this.box(x, y, 220, 340, 0x1d0f2c, 0x6a4a9a, 3);
-      g.art.forEach((k, j) => this.img(x + (j - (g.art.length - 1) / 2) * 52, y - 90 + (k.startsWith('card') ? 0 : 0), k, k.startsWith('card') ? 1.2 : k.startsWith('die') ? 0.9 : 1));
-      this.txt(x, y - 10, g.name, 17, GOLD_S);
-      this.txt(x, y + 24, g.blurb, 11, '#d8c8f0').setWordWrapWidth(190).setAlign('center');
-      this.txt(x, y + 78, `Bets ${money(C.minBet())} - ${money(C.maxBet())}`, 11, '#9a8ab8');
-      this.btn(x, y + 128, 'PLAY', () => this.go(g.id), 150, 40, 18);
+      const x = 440 + i * 172, y = 320;
+      this.box(x, y, 160, 320, 0x1d0f2c, 0x6a4a9a, 3);
+      g.art.forEach((k, j) => this.img(x + (j - (g.art.length - 1) / 2) * 48, y - 96, k, k.startsWith('card') ? 1.1 : k.startsWith('die') ? 0.85 : 0.95));
+      this.txt(x, y - 24, g.name, 14, GOLD_S);
+      this.txt(x, y + 14, g.blurb, 10, '#d8c8f0').setWordWrapWidth(142).setAlign('center');
+      this.txt(x, y + 70, `Bets ${money(C.minBet())} - ${money(C.maxBet())}`, 9, '#9a8ab8');
+      this.btn(x, y + 116, 'PLAY', () => this.go(g.id), 120, 36, 16);
     });
     const s = C.state();
-    this.txt(760, 540, `Rounds ${s.stats.rounds}   Wagered ${money(s.stats.wagered)}   Biggest win ${money(s.stats.best)}`, 12, '#9a8ab8');
-    this.btn(560, 600, 'ABOUT THE GAMES', () => this.say(HOSTS[this.hostId].games), 220, 36, 12);
-    this.btn(800, 600, 'BETTING & VIP', () => this.say(HOSTS[this.hostId].betting + ' ' + HOSTS[this.hostId].vip), 220, 36, 12);
-    if (profile.money < C.minBet()) this.say(HOSTS[this.hostId].noMoney);
+    this.txt(760, 500, `Rounds ${s.stats.rounds}   Wagered ${money(s.stats.wagered)}   Biggest win ${money(s.stats.best)}`, 12, '#9a8ab8');
+    this.txt(760, 524, `Your status: ${C.vipName()}  (${s.rep} casino reputation)`, 12, lvl ? GOLD_S : '#d8c8f0');
+    this.btn(520, 580, 'ABOUT THE GAMES', () => this.say(H.games), 190, 34, 12);
+    this.btn(730, 580, 'BETTING & CHIPS', () => this.say(H.betting), 190, 34, 12);
+    this.btn(940, 580, 'MY VIP STATUS', () => this.say(H.info[['guest', 'vip', 'gold'][lvl]](s.rep)), 190, 34, 12);
+    const isSean = this.hostId === 'sean', can = isSean ? lvl < 1 : lvl >= 1 && lvl < 2;
+    if (can) this.btn(730, 628, isSean ? 'ASK FOR A VIP INVITATION' : 'ASK FOR A GOLD INVITATION', () => {
+      const r = isSean ? C.inviteVip() : C.inviteGold();
+      if (r.error) { const need = isSean ? C.INVITE_REP : C.GOLD_INVITE_REP; this.say(H.inviteNo(need, s.rep)); sfx.lose(); return; }
+      sfx.bigWin(); this.say(H.inviteOk); this.gs.events.emit('toast', isSean ? 'VIP invitation granted: the VIP level is open' : 'VIP Gold granted: private rooms unlocked'); this.refreshHud(true); this.go('lobby');
+    }, 330, 34, 12);
+    else if (isSean ? lvl >= 1 : lvl >= 2) this.txt(730, 628, H.inviteHave, 11, '#8affb0');
+    if (C.state().chips < C.minBet() && profile.money >= 10) this.say(H.noChips);
+    else if (profile.money < C.minBet() && C.state().chips < C.minBet()) this.say(H.noMoney);
   }
 
   /* ================================================================ SLOTS */
@@ -212,7 +234,7 @@ export default class CasinoScene extends Phaser.Scene {
 
   spin() {
     if (this.mode !== 'slots' || this.locked()) return;
-    const r = C.startRound('slots', this.bet);
+    const r = C.startRound('slots', this.bet, this.minB());
     if (r.error) { this.say(r.error); this.statusTxt.setText(r.error).setColor('#ff8a8a'); sfx.lose(); return; }
     this.busy = true; sfx.chip();
     const result = C.spinReels(), res = C.slotResult(result);
@@ -256,7 +278,7 @@ export default class CasinoScene extends Phaser.Scene {
   }
 
   historyRefresh() { /* history panels are rebuilt on mode change; keep the visible one in sync */
-    if (!this.mode || this.mode === 'lobby' || this.mode === 'cashier') return;
+    if (!this.mode || this.mode === 'lobby' || this.mode === 'cashier' || this.mode === 'vip' || this.mode === 'holdem' && !this.histPos) return;
     if (this.histObjs) this.histObjs.forEach((o) => o.destroy());
     this.historyPanel(...(this.histPos || [1090, 330]));
   }
@@ -315,7 +337,7 @@ export default class CasinoScene extends Phaser.Scene {
   bjDeal() {
     const b = this.bj;
     if (this.busy || (b.stage !== 'idle' && b.stage !== 'done')) return;
-    const r = C.startRound('blackjack', this.bet);
+    const r = C.startRound('blackjack', this.bet, this.minB());
     if (r.error) { this.say(r.error); this.statusTxt.setText(r.error).setColor('#ff8a8a'); sfx.lose(); return; }
     this.busy = true; this.bjClear(); sfx.chip();
     b.round = r.round; b.bet = this.bet; b.stage = 'dealing';
@@ -431,7 +453,7 @@ export default class CasinoScene extends Phaser.Scene {
   diceRoll() {
     const d = this.dice;
     if (this.locked() || (d.stage !== 'idle' && d.stage !== 'done')) return;
-    const r = C.startRound('dice', this.bet);
+    const r = C.startRound('dice', this.bet, this.minB());
     if (r.error) { this.say(r.error); this.statusTxt.setText(r.error).setColor('#ff8a8a'); sfx.lose(); return; }
     if (this.banner) { this.banner.destroy(); this.banner = null; }
     d.round = r.round; d.bet = this.bet; d.rerolls = 0; d.held = [false, false, false, false, false]; d.vals = C.rollDice(); d.stage = 'rolling';
@@ -464,23 +486,23 @@ export default class CasinoScene extends Phaser.Scene {
   }
 
   /* ================================================================ CASHIER / VIP / REWARDS */
-  buildCashier() {
+  buildCashierVip() {
     const s = C.state();
     this.box(540, 160, 420, 150, 0x1d0f2c, s.vip ? GOLD : 0x6a4a9a, 3);
-    this.txt(540, 108, s.vip ? 'VIP MEMBER' : 'GUEST', 24, s.vip ? GOLD_S : '#d8c8f0');
-    this.txt(540, 138, s.vip ? `via ${s.vipBy === 'purchase' ? 'membership purchase' : 'casino reputation'}` : 'No VIP membership yet', 11, '#9a8ab8');
-    this.txt(540, 164, `Max bet ${money(C.maxBet())}   •   VIP room ${s.vip ? 'OPEN' : 'LOCKED'}`, 12, '#e8f2e0');
+    this.txt(540, 108, C.vipName().toUpperCase(), 24, s.vip ? GOLD_S : '#d8c8f0');
+    this.txt(540, 138, s.vip ? `via ${({ purchase: 'membership purchase', invitation: 'a host invitation', reputation: 'casino reputation' })[s.vipBy] || 'membership'}${C.vipLevel() >= 2 ? '  •  Gold' : ''}` : 'No VIP membership yet', 11, '#9a8ab8');
+    this.txt(540, 164, `Max bet ${money(C.maxBet())}   •   VIP level ${s.vip ? 'OPEN' : 'LOCKED'}   •   private rooms ${C.vipLevel() >= 2 ? 'OPEN' : 'LOCKED'}`, 12, '#e8f2e0');
     // reputation bar
     const need = C.VIP_REP, frac = Math.min(1, s.rep / need);
     this.box(540, 196, 360, 16, 0x0a0610, 0x6a4a9a);
     this.keep(this.add.rectangle(360 + 1, 196, Math.max(2, 358 * frac), 12, 0xc88aff).setOrigin(0, 0.5));
-    this.txt(540, 214, `Casino reputation ${s.rep}  (${C.title()})   VIP at ${need}`, 10, '#c8b0ff');
+    this.txt(540, 214, `Casino reputation ${s.rep}  (${C.title()})   VIP at ${need}, Gold at ${C.GOLD_REP}`, 10, '#c8b0ff');
     this.statusTxt = this.txt(540, 250, '', 13, '#ffeeb0');
-    if (!s.vip) this.btn(540, 284, `BUY VIP  ${money(C.VIP_PRICE)}`, () => {
+    if (!s.vip) this.btn(540, 284, `BUY VIP  ${usd(C.VIP_PRICE)} cash`, () => {
       const r = C.buyVip();
       if (r.error) { this.statusTxt.setText(r.error).setColor('#ff8a8a'); sfx.lose(); this.say(profile.money < C.VIP_PRICE ? HOSTS[this.hostId].noMoney : r.error); return; }
-      sfx.bigWin(); this.say(HOSTS[this.hostId].vipNew); this.gs.events.emit('toast', 'VIP membership purchased - the VIP room is open');
-      this.go('cashier');
+      sfx.bigWin(); this.say(HOSTS[this.hostId].vipNew); this.gs.events.emit('toast', 'VIP membership purchased - the VIP level is open');
+      this.go('vip');
     }, 260, 40, 16);
     else this.txt(540, 284, 'Thank you for being a member.', 12, '#8affb0');
     // stats
@@ -498,7 +520,7 @@ export default class CasinoScene extends Phaser.Scene {
       this.txt(300, y - 10, r.name + (r.vip ? '   [VIP]' : ''), 13, owned ? '#8affb0' : '#e8f2e0', 0, 0.5);
       this.txt(300, y + 10, r.desc, 10, '#9a8ab8', 0, 0.5);
       if (owned) this.btn(1130, y, 'WEAR', () => { this.gs.applyOutfit(r.set); sfx.pickup(); this.say(`Wearing: ${r.name}. Looking sharp.`); this.statusTxt && this.statusTxt.setText(`Now wearing ${r.name}`).setColor('#8affb0'); }, 120, 34, 13);
-      else if (st === 'ready') this.btn(1130, y, 'CLAIM', () => { const c = C.claimReward(r); if (c.ok) { sfx.win(); this.say('A little something from the house.'); this.go('cashier'); } }, 120, 34, 13);
+      else if (st === 'ready') this.btn(1130, y, 'CLAIM', () => { const c = C.claimReward(r); if (c.ok) { sfx.win(); this.say('A little something from the house.'); this.go('vip'); } }, 120, 34, 13);
       else this.txt(1190, y, st, 11, '#ff9a8a', 1, 0.5);
     });
   }
@@ -517,6 +539,8 @@ export default class CasinoScene extends Phaser.Scene {
   // if a round is still running when the player leaves: slots settle with the result already drawn, blackjack / dice forfeit
   settleOnExit() {
     try { if (this.pending && !this.pending.done) this.settleSlots(); } catch (e) { /* the scene may already be torn down */ }
+    try { if (this.bac && this.bac.pending && !this.bac.pending.done) this.settleBaccarat(); } catch (e) { /* torn down */ }
+    try { if (this.hd && this.hd.seatTok) this.leaveHoldem(true); } catch (e) { /* torn down */ }
     if (C.roundActive()) C.abandonRound('left the table');
     this.busy = false;
   }
@@ -536,3 +560,5 @@ export default class CasinoScene extends Phaser.Scene {
     this.gs.input.setDefaultCursor(this.gs.player.vehicle ? 'default' : 'crosshair');
   }
 }
+
+Object.assign(CasinoScene.prototype, CardGames);

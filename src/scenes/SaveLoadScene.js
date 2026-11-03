@@ -15,8 +15,8 @@ export default class SaveLoadScene extends Phaser.Scene {
   create() {
     this.input.setDefaultCursor('default');
     this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.8).setInteractive();
-    this.add.rectangle(640, 360, 980, 640, 0x141d12).setStrokeStyle(4, 0x6b8f5a);
-    label(this, 640, 66, this.mode === 'save' ? 'SAVE GAME' : 'LOAD GAME', 34, '#f2e08a', 0.5, 0.5);
+    this.add.rectangle(640, 360, 980, 640, 0x14161c).setStrokeStyle(3, 0xff6a2a);
+    label(this, 640, 66, this.mode === 'save' ? 'SAVE GAME' : 'LOAD GAME', 34, '#ffb070', 0.5, 0.5);
     this.msg = label(this, 640, 628, '', 18, '#9fe8a0', 0.5, 0.5);
     button(this, 640, 668, 'BACK', () => this.close(), { w: 180, h: 42, size: 18 });
     this.input.keyboard.on('keydown-ESC', () => this.close());
@@ -29,9 +29,9 @@ export default class SaveLoadScene extends Phaser.Scene {
     this.objs = [];
     listSlots().forEach(({ slot, data }) => {
       const y = 100 + slot * 128;
-      const bg = this.add.rectangle(180, y, 920, 114, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(3, 0x44603c);
+      const bg = this.add.rectangle(180, y, 920, 114, 0x1d2027).setOrigin(0, 0).setStrokeStyle(2, 0x3a3d46);
       this.objs.push(bg);
-      this.objs.push(label(this, 200, y + 12, slot === 0 ? 'AUTOSAVE (updates after every mission)' : `SLOT ${slot}`, 22, '#f2e08a'));
+      this.objs.push(label(this, 200, y + 12, slot === 0 ? 'AUTOSAVE (updates after every mission)' : `SLOT ${slot}`, 22, '#ffb070'));
       if (data) {
         const s = data.summary;
         this.objs.push(label(this, 200, y + 48, `Play time ${fmtTime(s.time)}   Money $${s.money}   ${repTitle(s.rep)} (${s.rep >= 0 ? '+' : ''}${s.rep})`, 16, '#ffffff'));

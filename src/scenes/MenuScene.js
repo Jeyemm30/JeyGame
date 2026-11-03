@@ -1,56 +1,56 @@
 import Phaser from 'phaser';
-import { button, label, controlsPanel } from '../ui/widgets.js';
+import { controlsPanel, FONT, fs } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
 import { latestSlot, loadGameInto } from '../systems/Save.js';
 import { resetProfile } from '../systems/Profile.js';
 import { goImmersive } from '../systems/Touch.js';
+import { GAME_TITLE, TH, buildLogo, cityBackdrop, menuList, confirmBox, exitFlow } from '../ui/menuUi.js';
 
+/* The main menu: the title logo over an animated dusk view of the city (real game tiles, cars, lamps), a keyboard / mouse menu list on the left. */
 export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create() {
     this.input.setDefaultCursor('default');
-    this.add.rectangle(640, 360, 1280, 720, 0x0e150c);
-    // pixel-grass backdrop
-    const g = this.add.graphics();
-    const cols = [0x1a2a17, 0x213520, 0x182614, 0x2a3f24];
-    for (let y = 0; y < 720; y += 16) for (let x = 0; x < 1280; x += 16) {
-      g.fillStyle(cols[Math.floor(Math.random() * cols.length)], 1).fillRect(x, y, 16, 16);
-    }
-    g.fillStyle(0x000000, 0.4).fillRect(0, 0, 1280, 720);
-    // skyline silhouette
-    g.fillStyle(0x0a0f0a, 1);
-    for (let x = 0; x < 1280; x += 48) g.fillRect(x, 560 - ((x * 37) % 140), 40, 300);
-
-    label(this, 646, 96, 'JeyGame', 92, '#000000', 0.5, 0.5);
-    label(this, 640, 90, 'JeyGame', 92, '#c9e6a0', 0.5, 0.5).setStroke('#1d3a14', 10);
-    label(this, 640, 156, 'OPEN-WORLD CITY STORY', 22, '#f2e08a', 0.5, 0.5);
-
-    // animated survivor between the two button columns
-    const sol = this.add.sprite(640, 470, 'char_player', 'd0').setOrigin(0.5, 0.9).setScale(4);
-    const dirs = ['d', 'r', 'u', 'r'];
-    let step = 0;
-    this.time.addEvent({ delay: 140, loop: true, callback: () => { step++; const d = dirs[Math.floor(step / 24) % 4]; sol.setFlipX(false); sol.setFrame(d + (1 + (step % 4))); } });
-
+    this.cameras.main.setBackgroundColor('#05060a');
+    cityBackdrop(this);
+    this.cameras.main.fadeIn(600, 0, 0, 0);
     this.input.once('pointerup', () => goImmersive(this.game));
+
+    // title
+    const logo = this.add.image(54, 34, buildLogo(this)).setOrigin(0, 0).setScale(0.64).setDepth(40).setAlpha(0);
+    this.tweens.add({ targets: logo, alpha: 1, x: 62, duration: 700, ease: 'Quad.Out' });
+    this.add.rectangle(66, 190, 150, 3, TH.accent).setOrigin(0, 0).setDepth(40); this.add.rectangle(220, 190, 80, 3, TH.cyan).setOrigin(0, 0).setDepth(40);
+    const tag = this.add.text(66, 200, 'OPEN-WORLD  CITY  SANDBOX', { fontFamily: FONT, fontSize: fs(13) + 'px', color: '#8fd8e0', fontStyle: 'bold' }).setDepth(40);
+    if (tag.setLetterSpacing) tag.setLetterSpacing(4);
+
     const save = latestSlot();
-    const W = { w: 330, h: 54, size: 22 };
-    const cont = button(this, 400, 250, 'CONTINUE', () => { if (save) { sfx.unlock(); loadGameInto(this, save.data); } }, { ...W, size: 24 });
-    if (!save) { cont.list[0].setFillStyle(0x181c18).setStrokeStyle(3, 0x3a4438); cont.list[1].setColor('#5d6a5a'); cont.list[0].disableInteractive(); }
-    else label(this, 400, 286, `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}: $${save.data.summary.money}, ${save.data.summary.completed}/15 missions`, 12, '#9db890', 0.5, 0);
-    button(this, 400, 330, 'NEW GAME', () => { sfx.unlock(); resetProfile(); this.registry.set('mapMarkers', []); this.scene.start('Character', { mode: 'new' }); }, W);
-    button(this, 400, 400, 'LOAD GAME', () => { this.scene.pause(); this.scene.launch('SaveLoad', { mode: 'load', from: 'Menu' }); }, W);
-    button(this, 400, 470, 'CHARACTER', () => this.scene.start('Character', { mode: 'edit' }), W);
+    const sub = save ? `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}  -  $${save.data.summary.money}  -  ${save.data.summary.completed}/15 missions` : '';
+    const startNew = () => { sfx.unlock(); resetProfile(); this.registry.set('mapMarkers', []); this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => this.scene.start('Character', { mode: 'new' })); };
+    const items = [
+      { text: 'CONTINUE', sub, disabled: !save, fn: () => { sfx.unlock(); this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => loadGameInto(this, save.data)); } },
+      { text: 'NEW GAME', fn: () => { if (save) confirmBox(this, { title: 'START A NEW GAME?', text: 'Your saved slots are kept, but anything you did not save will be lost. The autosave is replaced as soon as you complete a mission.', yes: 'START NEW GAME', no: 'GO BACK', onYes: startNew, list: this.menu, danger: true }); else startNew(); } },
+      { text: 'LOAD GAME', fn: () => { this.scene.pause(); this.scene.launch('SaveLoad', { mode: 'load', from: 'Menu' }); } },
+      { text: 'CHARACTER', fn: () => { this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => this.scene.start('Character', { mode: 'edit' })); } },
+      { text: 'SETTINGS', fn: () => { this.scene.pause(); this.scene.launch('Settings', { from: 'Menu' }); } },
+      { text: 'CREDITS', fn: () => this.scene.start('Credits', { back: 'Menu' }) },
+      { text: 'EXIT GAME', fn: () => confirmBox(this, { title: 'EXIT GAME?', text: 'Close City of Chaos? Progress you saved stays in your save slots.', yes: 'EXIT', no: 'STAY', onYes: () => this.exitGame(), list: this.menu, danger: true }), accent: 0x8a8d96 }
+    ];
+    this.menu = menuList(this, items, 66 + 200, 262, { w: 410, h: 46, gap: 8, size: 20 });
+    this.menu.items.forEach((b, i) => { b.c.setAlpha(0); this.tweens.add({ targets: b.c, alpha: 1, duration: 360, delay: 250 + i * 60 }); });
 
-    button(this, 880, 250, 'STORY MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'COMPLETED', from: 'Menu' }); }, W);
-    button(this, 880, 330, 'SIDE MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'JOBS', from: 'Menu' }); }, W);
-    button(this, 880, 400, 'SETTINGS', () => { this.scene.pause(); this.scene.launch('Settings', { from: 'Menu' }); }, W);
-    button(this, 880, 470, 'CREDITS', () => this.scene.start('Credits', { back: 'Menu' }), W);
-
-    button(this, 520, 580, 'CONTROLS', () => controlsPanel(this), { w: 220, h: 44, size: 18 });
-    button(this, 760, 580, 'FULLSCREEN', () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); }, { w: 220, h: 44, size: 18 });
-    label(this, 640, 690, 'Explore Port City. Drive. Dodge the police. Uncover the ledger.', 16, '#9db890', 0.5, 0.5);
-
-    this.input.keyboard.once('keydown-ENTER', () => { sfx.unlock(); if (save) loadGameInto(this, save.data); else { resetProfile(); this.scene.start('Character', { mode: 'new' }); } });
+    // smaller extras along the bottom
+    const extras = [['STORY MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'COMPLETED', from: 'Menu' }); }], ['SIDE MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'JOBS', from: 'Menu' }); }], ['CONTROLS', () => controlsPanel(this)], ['FULLSCREEN', () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); }]];
+    extras.forEach(([t, fn], i) => {
+      const x = 66 + 100 + i * 208, bg = this.add.rectangle(x, 678, 196, 30, TH.panel, 0.84).setStrokeStyle(1, TH.line).setDepth(30).setInteractive({ useHandCursor: true });
+      const tx = this.add.text(x, 678, t, { fontFamily: FONT, fontSize: fs(11) + 'px', color: TH.dim, fontStyle: 'bold' }).setOrigin(0.5).setDepth(31);
+      bg.on('pointerover', () => { bg.setStrokeStyle(1, TH.accent).setFillStyle(TH.panelHi, 0.95); tx.setColor('#ffffff'); });
+      bg.on('pointerout', () => { bg.setStrokeStyle(1, TH.line).setFillStyle(TH.panel, 0.84); tx.setColor(TH.dim); });
+      bg.on('pointerup', () => { if (!this.menu.locked) { sfx.click(); fn(); } });
+    });
+    this.add.text(1262, 684, 'Created by John Mark V. Espineda', { fontFamily: FONT, fontSize: fs(12) + 'px', color: '#ffb070', fontStyle: 'bold' }).setOrigin(1, 1).setDepth(30);
+    this.add.text(1262, 702, 'Explore Port City. Drive. Dodge the police. Uncover the ledger.', { fontFamily: FONT, fontSize: fs(11) + 'px', color: '#c8b8a8' }).setOrigin(1, 1).setDepth(30).setAlpha(0.8);
   }
+
+  exitGame() { this.menu.locked = true; exitFlow(this, () => this.scene.restart()); }
 }

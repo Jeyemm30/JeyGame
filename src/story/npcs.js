@@ -1,4 +1,5 @@
 import { GUARDS } from './gangs.js';
+import { ystate, YOSEN_NAME } from './yosen.js';
 // Named story characters. `where(state)` decides when/where each one stands in the city.
 export const STORY_NPCS = {
   marla: {
@@ -30,6 +31,8 @@ export const STORY_NPCS = {
   dante: { name: 'Dante "Frost" Reyes', title: 'Cobalt Wolves boss', color: '#8ab8ff', where: () => null },
   vex: { name: 'Lilith "Madame" Vex', title: 'Violet Vultures boss', color: '#d0a0ff', where: () => null },
   moss: { name: 'Tomas "Moss" Okafor', title: 'Emerald Vipers boss', color: '#8affb0', where: () => null },
+  // Yosen is called "Stranger" until the player has seen who he is (the map "?" turns into his marker at that moment)
+  yosen: { get name() { return ystate().found ? YOSEN_NAME : 'Stranger'; }, get title() { return ystate().found ? 'Quiet favours' : 'Smoking in the alley'; }, color: '#6ee0ee', where: () => ({ place: 'yosen', off: [0, 0] }) },
   shade: { name: 'Shade', title: 'Unknown watcher', color: '#8a8aa0', where: () => null } // spawned by mission 12
 };
 Object.values(GUARDS).forEach((G) => { STORY_NPCS[G.id] = { name: G.name, title: G.title, color: G.color, where: () => null }; });      // the named gang gate guards (dialogue portraits)

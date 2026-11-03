@@ -111,12 +111,6 @@ export function drawWiseArt(scene) {
   const mk = (key, w, h, fn) => makeCanvas(scene, key, w, h, fn);
   const font = (c, size, col) => { c.font = `bold ${size}px "Courier New", monospace`; c.fillStyle = col; c.textBaseline = 'middle'; c.textAlign = 'center'; };
 
-  mk('wise_sign', 168, 46, (c) => {
-    R(c, 0, 0, 168, 46, '#0c0c14'); R(c, 2, 2, 164, 42, '#16162a'); R(c, 0, 0, 168, 2, '#ff3a8a'); R(c, 0, 44, 168, 2, '#3ad8ff'); R(c, 0, 0, 2, 46, '#ff3a8a'); R(c, 166, 0, 2, 46, '#3ad8ff');
-    font(c, 22, '#000000'); c.fillText('WISE SOLE', 86, 18); font(c, 22, '#ffe27a'); c.fillText('WISE SOLE', 84, 16);
-    font(c, 8, '#8ad8ff'); c.fillText('STEP SMART. DRESS SHARP.', 84, 36);
-    R(c, 12, 10, 4, 4, '#ff3a8a'); R(c, 152, 10, 4, 4, '#3ad8ff');
-  });
   mk('poster_board0', 26, 40, (c) => {
     ellipse(c, 13, 37, 11, 3, 'rgba(0,0,0,0.3)'); R(c, 11, 28, 4, 9, '#5a5a62'); R(c, 1, 2, 24, 28, '#1a1a22'); R(c, 2, 3, 22, 26, '#ff3a8a'); R(c, 4, 6, 18, 12, '#16162a'); R(c, 7, 9, 4, 6, '#ffe27a'); R(c, 13, 9, 6, 2, '#fff'); R(c, 13, 13, 6, 2, '#fff'); R(c, 4, 21, 18, 4, '#ffe27a'); R(c, 6, 22, 14, 2, '#16162a');
   });

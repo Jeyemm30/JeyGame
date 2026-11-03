@@ -49,7 +49,7 @@ export function snapshot(gs) {
       money: Math.round(profile.money), rep: profile.rep, flags: profile.flags, missions: profile.missions,
       ownedVehicles: gs.collectOwnedVehicles(), outfits: profile.outfits, safehouse: profile.safehouse,
       searched: profile.searched, opened: profile.opened, killedSpawns: profile.killedSpawns, takenItems: profile.takenItems,
-      stats: { ...profile.stats, time: Math.round(gs.gt), kills: gs.kills }, lastVehicleId: profile.lastVehicleId
+      stats: { ...profile.stats, time: Math.round(gs.gt), kills: gs.kills }, lastVehicleId: profile.lastVehicleId, bank: profile.bank
     },
     summary: {
       time: Math.round(gs.gt / 1000), money: Math.round(profile.money), rep: profile.rep,

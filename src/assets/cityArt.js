@@ -1,6 +1,6 @@
 // Art for the open-world city expansion: extra tiles, vehicles, NPC outfits, melee
 // weapons, map icons, roof patterns and street props. Everything is generated in code.
-import { T, R, shade, disc, ellipse, makeCanvas, generateCharacter, randomAppearance } from './textures.js';
+import { T, R, shade, disc, ellipse, makeCanvas, generateCharacter, generateSmoker, randomAppearance } from './textures.js';
 import { mulberry32 } from '../systems/Rng.js';
 import { drawArms, drawGraffitiTiles } from './armsArt.js';
 import { drawWiseArt } from './wiseArt.js';
@@ -8,6 +8,7 @@ import { drawCasinoArt } from './casinoArt.js';
 import { drawHomeArt } from './homeArt.js';
 import { drawGangArt } from './gangArt.js';
 import { drawWiseStoreArt } from './wiseStoreArt.js';
+import { drawBankArt } from './bankArt.js';
 
 /* ------------------------------------------------------------- outfits */
 // indexes into the option / colour lists in textures.js
@@ -20,6 +21,11 @@ export const ROLE_LOOKS = {
   valet: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 14, shirt: 1, shirtColor: 14, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
   casino_guard: { skin: 2, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, necklace: 0, backpack: 0, backpackColor: 4, armband: '#c9a227' },
   casino_guard2: { skin: 3, hair: 0, hairColor: 0, hat: 0, hatColor: 4, shirt: 1, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4, armband: '#c9a227' },
+  bank_guard: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 4, shirt: 1, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, backpack: 0, backpackColor: 4, armband: '#d4a82a' },
+  bank_guard2: { skin: 3, hair: 0, hairColor: 0, hat: 1, hatColor: 4, shirt: 1, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#d4a82a' },
+  bank_teller: { skin: 0, hair: 3, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, necklace: 0 },
+  bank_clerk: { skin: 2, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4 },
+  bank_manager: { skin: 1, hair: 2, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4 },
   guard: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 4, shirt: 1, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#e8e8e8' },
   gang: { skin: 3, hair: 2, hairColor: 0, hat: 2, hatColor: 1, shirt: 2, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 4, backpack: 0, backpackColor: 4, armband: '#c0392b' },
   criminal: { skin: 0, hair: 5, hairColor: 2, hat: 0, hatColor: 4, shirt: 2, shirtColor: 3, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 0, backpack: 1, backpackColor: 4, armband: null },
@@ -51,6 +57,8 @@ export const STORY_LOOKS = {
   sean: { skin: 1, hair: 6, hairColor: 4, hat: 0, hatColor: 4, shirt: 5, shirtColor: 4, pants: 4, pantsColor: 4, shoes: 2, shoeColor: 1, shoeAccent: 11, glasses: 0, watch: 2, necklace: 2, backpack: 0, backpackColor: 5, build: 'slim', pierceBrow: true, pierceNose: true, pierceLip: true, earring: 1, rings: 1 },
   jiro: { skin: 0, hair: 3, hairColor: 0, hat: 0, hatColor: 4, shirt: 8, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 0, watch: 3, necklace: 1, backpack: 0, backpackColor: 4, build: 'big', earring: 3, rings: 2 },
   kenny: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 6, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, build: 'chubby', glasses: true },
+  // Yosen Blackthorn: a thin young guy with a tall black curly mop, a teal hoodie, navy jeans and orange sneakers
+  yosen: { skin: 2, hair: 7, hairColor: 0, hat: 0, hatColor: 4, shirt: 2, shirtColor: 12, pants: 0, pantsColor: 15, shoes: 2, shoeColor: 7, shoeAccent: 1, watch: 3, backpack: 0, backpackColor: 4, build: 'slim' },
   fare: { skin: 1, hair: 1, hairColor: 3, hat: 0, hatColor: 5, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 3, backpack: 2, backpackColor: 9 }
 };
 
@@ -348,7 +356,7 @@ function drawProps(scene) {
   mk('siren_b', 10, 10, (c) => { disc(c, 5, 5, 5, 'rgba(60,110,255,0.8)'); });
 }
 
-export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker'];
+export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker', 'bank', 'yosen_q', 'yosen'];
 function drawIcons(scene) {
   const n = MAP_ICON_NAMES.length;
   const tex = makeCanvas(scene, 'mapicons', 18 * n, 18, (c) => {
@@ -378,6 +386,9 @@ function drawIcons(scene) {
     i = MAP_ICON_NAMES.indexOf('tower'); badge(i, '#2a9aa8'); R(c, o(i) + 6, 3, 6, 12, '#ffffff'); for (let k = 0; k < 4; k++) R(c, o(i) + 7, 4 + k * 3, 1, 1, '#2a9aa8'), R(c, o(i) + 10, 4 + k * 3, 1, 1, '#2a9aa8');
     i = MAP_ICON_NAMES.indexOf('player'); c.fillStyle = '#101410'; c.beginPath(); c.moveTo(o(i) + 9, 1); c.lineTo(o(i) + 16, 16); c.lineTo(o(i) + 9, 12); c.lineTo(o(i) + 2, 16); c.closePath(); c.fill();
     c.fillStyle = '#40ff70'; c.beginPath(); c.moveTo(o(i) + 9, 3); c.lineTo(o(i) + 14, 14); c.lineTo(o(i) + 9, 11); c.lineTo(o(i) + 4, 14); c.closePath(); c.fill();
+    i = MAP_ICON_NAMES.indexOf('bank'); badge(i, '#1c3a62'); R(c, o(i) + 3, 12, 12, 2, '#ffe27a'); R(c, o(i) + 4, 6, 2, 6, '#ffffff'); R(c, o(i) + 8, 6, 2, 6, '#ffffff'); R(c, o(i) + 12, 6, 2, 6, '#ffffff'); c.fillStyle = '#ffe27a'; c.beginPath(); c.moveTo(o(i) + 2, 6); c.lineTo(o(i) + 9, 2); c.lineTo(o(i) + 16, 6); c.closePath(); c.fill();
+    i = MAP_ICON_NAMES.indexOf('yosen_q'); badge(i, '#e0a020'); c.font = 'bold 14px "Courier New", monospace'; c.fillStyle = '#1a1206'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('?', o(i) + 9, 10);
+    i = MAP_ICON_NAMES.indexOf('yosen'); badge(i, '#2ac0d0'); c.font = 'bold 12px "Courier New", monospace'; c.fillStyle = '#06222a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Y', o(i) + 9, 10); R(c, o(i) + 11, 13, 4, 1, '#ff7a1a');
     i = MAP_ICON_NAMES.indexOf('marker'); R(c, o(i) + 4, 1, 2, 16, '#101410'); R(c, o(i) + 5, 2, 10, 7, '#101410'); R(c, o(i) + 5, 2, 2, 15, '#ffd23a'); R(c, o(i) + 6, 3, 8, 5, '#ff4a3a');
   });
   MAP_ICON_NAMES.forEach((name, i) => { if (!tex.has(name)) tex.add(name, 0, i * 18, 0, 18, 18); });
@@ -391,6 +402,9 @@ function drawQuestIcons(scene) {
   mk('q_ledger', 20, 20, (c) => { R(c, 3, 3, 14, 15, '#3a2a5a'); R(c, 3, 3, 14, 2, '#6a4a9a'); R(c, 5, 7, 10, 1, '#e8e0f0'); R(c, 5, 10, 10, 1, '#e8e0f0'); R(c, 5, 13, 7, 1, '#e8e0f0'); });
   mk('q_documents', 20, 20, (c) => { R(c, 3, 4, 14, 13, '#d8c890'); R(c, 3, 4, 6, 3, '#e8d8a0'); R(c, 5, 9, 10, 1, '#555'); R(c, 5, 12, 10, 1, '#555'); R(c, 5, 15, 6, 1, '#555'); R(c, 12, 11, 4, 4, '#c03030'); });
   mk('q_key', 20, 20, (c) => { disc(c, 6, 8, 4, '#e8c030'); disc(c, 6, 8, 2, '#0b0f0b'); R(c, 9, 7, 9, 3, '#e8c030'); R(c, 14, 10, 2, 3, '#e8c030'); R(c, 17, 10, 2, 3, '#e8c030'); });
+  mk('q_lighter', 20, 20, (c) => { R(c, 6, 4, 8, 13, '#c8ccd4'); R(c, 6, 4, 8, 2, '#f2f4f8'); R(c, 6, 10, 8, 1, '#7a808a'); R(c, 8, 2, 4, 3, '#8a9099'); R(c, 9, 0, 2, 3, '#ff9a2a'); });
+  mk('q_tape', 20, 20, (c) => { R(c, 2, 5, 16, 11, '#2a2d34'); R(c, 2, 5, 16, 1, '#5a5f6a'); R(c, 4, 7, 12, 6, '#d8d0b8'); R(c, 6, 9, 3, 3, '#2a2d34'); R(c, 11, 9, 3, 3, '#2a2d34'); R(c, 7, 14, 6, 2, '#8a8f98'); });
+  mk('q_photo', 20, 20, (c) => { R(c, 3, 3, 14, 14, '#f4f0e4'); R(c, 4, 4, 12, 9, '#6a8aa8'); R(c, 5, 8, 3, 5, '#2a2d34'); R(c, 9, 7, 3, 6, '#3a4a5a'); R(c, 13, 8, 2, 5, '#2a2d34'); R(c, 5, 5, 2, 2, '#e8c070'); });
   mk('q_food', 20, 20, (c) => { R(c, 3, 8, 14, 9, '#e8e0d0'); R(c, 3, 8, 14, 2, '#fff'); R(c, 4, 4, 12, 5, '#d98a2a'); R(c, 6, 5, 3, 2, '#f0c060'); R(c, 11, 5, 3, 2, '#f0c060'); });
   mk('q_wallet', 20, 20, (c) => { R(c, 3, 6, 14, 10, '#4a2f1c'); R(c, 3, 6, 14, 2, '#6b4a2c'); R(c, 12, 9, 5, 4, '#d8b040'); });
   mk('q_stash', 20, 20, (c) => { R(c, 3, 6, 14, 11, '#4a5a3c'); R(c, 3, 6, 14, 2, '#6a7c58'); R(c, 8, 10, 4, 3, '#e8c030'); });
@@ -491,8 +505,9 @@ export function generateCityArt(scene) {
   drawHomeArt(scene);
   drawGangArt(scene);
   drawWiseStoreArt(scene);
+  drawBankArt(scene);
   drawQuestIcons(scene);
-  Object.keys(STORY_LOOKS).forEach((k) => generateCharacter(scene, 'story_' + k, STORY_LOOKS[k]));
+  Object.keys(STORY_LOOKS).forEach((k) => (k === 'yosen' ? generateSmoker : generateCharacter)(scene, 'story_' + k, STORY_LOOKS[k]));
   Object.keys(ROLE_LOOKS).forEach((k) => generateCharacter(scene, 'npc_' + k, ROLE_LOOKS[k]));
   for (let i = 0; i < CIV_VARIANTS; i++) generateCharacter(scene, 'civ' + i, civilianAppearance(i));
 }

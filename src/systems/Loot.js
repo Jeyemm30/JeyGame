@@ -13,7 +13,7 @@ Object.keys(AMMO_TYPES).forEach((k) => {
 });
 WEAPON_ORDER.forEach((id) => { ITEMS['w_' + id] = { label: WEAPONS[id].name, tex: WEAPONS[id].gun, kind: 'weapon', weapon: id }; });
 // quest items (story + side jobs); they live in profile.flags.qitems, not in the weapon inventory
-const QUEST = { q_package: ['Package', 'q_package'], q_locket: ["Hal's locket", 'q_locket'], q_ledger: ['Ledger', 'q_ledger'], q_documents: ['Reyes document', 'q_documents'], q_key: ['Safehouse key', 'q_key'], q_food: ['Food order', 'q_food'], q_wallet: ['Wallet', 'q_wallet'], q_stash: ["Rico's stash", 'q_stash'] };
+const QUEST = { q_package: ['Package', 'q_package'], q_locket: ["Hal's locket", 'q_locket'], q_ledger: ['Ledger', 'q_ledger'], q_documents: ['Reyes document', 'q_documents'], q_key: ['Safehouse key', 'q_key'], q_food: ['Food order', 'q_food'], q_wallet: ['Wallet', 'q_wallet'], q_stash: ["Rico's stash", 'q_stash'], q_lighter: ['Lighter', 'q_lighter'], q_tape: ['Cassette tape', 'q_tape'], q_photo: ['Old photograph', 'q_photo'] };
 Object.keys(QUEST).forEach((id) => { ITEMS[id] = { label: QUEST[id][0], tex: QUEST[id][1], kind: 'quest' }; });
 // melee weapons are items too: id "m_<weapon>"
 MELEE_ORDER.filter((id) => id !== 'fists').forEach((id) => {

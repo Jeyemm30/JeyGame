@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { label, button } from '../ui/widgets.js';
 
 const LINES = [
-  'JEYGAME', 'Open-World City Sandbox', '',
+  'CITY OF CHAOS', 'Open-World City Sandbox', '',
+  'CREATED BY', 'John Mark V. Espineda', '',
   'GAME DESIGN & CODE', 'Built with Phaser 3, JavaScript and Vite', '',
   'ART', 'All sprites, tiles and icons are generated in code', 'Pixel-art style: procedural canvas textures', '',
   'AUDIO', 'Synthesised with the Web Audio API', '',
@@ -19,10 +20,10 @@ export default class CreditsScene extends Phaser.Scene {
 
   create() {
     this.input.setDefaultCursor('default');
-    this.add.rectangle(640, 360, 1280, 720, 0x080c08).setInteractive();
+    this.add.rectangle(640, 360, 1280, 720, 0x07080b).setInteractive();
     this.texts = LINES.map((l, i) => {
       const heading = l && l === l.toUpperCase() && l.length > 3;
-      return label(this, 640, 760 + i * 46, l, i === 0 ? 64 : heading ? 26 : 20, i === 0 ? '#c9e6a0' : heading ? '#f2e08a' : '#e8f2e0', 0.5, 0.5);
+      return label(this, 640, 760 + i * 46, l, i === 0 ? 64 : heading ? 26 : 20, i === 0 ? '#ff8a3a' : heading ? '#ffb070' : '#e8f2e0', 0.5, 0.5);
     });
     button(this, 1170, 664, 'BACK', () => this.close(), { w: 130, h: 40, size: 18 });
     this.input.keyboard.on('keydown-ESC', () => this.close());

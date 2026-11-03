@@ -9,9 +9,9 @@ export default class SettingsScene extends Phaser.Scene {
   init(data) { this.from = data.from; }
 
   create() {
-    this.add.rectangle(640, 360, 1280, 720, 0x0e150c).setInteractive();
-    this.add.rectangle(640, 360, 700, 600, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
-    label(this, 640, 98, 'SETTINGS', 40, '#f2e08a', 0.5, 0.5);
+    this.add.rectangle(640, 360, 1280, 720, 0x0b0c10).setInteractive();
+    this.add.rectangle(640, 360, 700, 600, 0x14161c).setStrokeStyle(3, 0xff6a2a);
+    label(this, 640, 98, 'SETTINGS', 40, '#ffb070', 0.5, 0.5);
 
     const row = (y, name, build) => {
       label(this, 330, y, name, 24, '#e8f2e0', 0, 0.5);

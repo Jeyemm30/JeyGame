@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Top-down pixel-art survival shooter built with Phaser 3 and Vite",
+  "description": "CITY OF CHAOS - an open-world pixel-art city sandbox built with Phaser 3 and Vite",
   "scripts": {
     "dev": "vite",
     "dev:phone": "vite --host",

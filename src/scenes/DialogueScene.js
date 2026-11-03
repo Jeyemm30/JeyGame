@@ -79,7 +79,8 @@ export default class DialogueScene extends Phaser.Scene {
     const isPlayer = who === 'player';
     const npc = STORY_NPCS[who];
     const tex = isPlayer ? 'char_player' : 'story_' + who;
-    this.portrait.setTexture(this.textures.exists(tex) ? tex : 'civ0', 'd0').setCrop(0, 0, 32, 27);
+    this.portrait.setTexture(this.textures.exists(tex) ? tex : 'civ0', 'd0').setCrop(0, 0, 32, who === 'yosen' ? 46 : 27);
+    this.fullBody = who === 'yosen';                       // Yosen is shown head to toe (his slim build looked cut off at the chest)
     this.nameText.setText(isPlayer ? 'You' : npc ? npc.name : who).setColor(isPlayer ? '#9fe8a0' : '#f2e08a');
     this.roleText.setText(isPlayer ? '' : npc ? npc.title : '');
     this.full = typeof node.text === 'function' ? node.text(state) : node.text;
@@ -127,7 +128,7 @@ export default class DialogueScene extends Phaser.Scene {
     const top = H - MARGIN - panelH, bottom = H - MARGIN;
     this.panel.setPosition(this.cx, top + panelH / 2).setSize(pw, panelH);
     this.pFrame.setPosition(left + 120, top + 22 + 92).setSize(150, Math.min(180, panelH - 44));
-    this.portrait.setPosition(left + 120, top + 30).setScale(Math.min(4.4, (panelH - 70) / 36));
+    this.portrait.setPosition(left + 120, top + (this.fullBody ? 24 : 30)).setScale(this.fullBody ? Math.min(3.6, (Math.min(180, panelH - 44) - 8) / 46) : Math.min(4.4, (panelH - 70) / 36));
     const tx = left + 240;
     this.nameText.setPosition(tx, top + 16); this.roleText.setPosition(tx, top + 46);
     this.body.setPosition(tx, top + 22 + headH - 14);
