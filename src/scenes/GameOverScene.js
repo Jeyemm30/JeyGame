@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { music } from '../systems/Music.js';
 import { button, label } from '../ui/widgets.js';
 import { latestSlot, loadGameInto } from '../systems/Save.js';
 
@@ -8,6 +9,7 @@ export default class GameOverScene extends Phaser.Scene {
   init(data) { this.stats = data; }
 
   create() {
+    music.set(null);
     this.gs = this.scene.get('Game');
     this.input.setDefaultCursor('default');
     this.add.rectangle(640, 360, 1280, 720, 0x1a0000, 0.78).setInteractive();

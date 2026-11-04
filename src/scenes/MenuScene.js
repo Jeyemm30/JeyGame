@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { music } from '../systems/Music.js';
 import { controlsPanel, FONT, fs } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
 import { latestSlot, loadGameInto } from '../systems/Save.js';
@@ -11,6 +12,7 @@ export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create() {
+    music.set('menu');
     this.input.setDefaultCursor('default');
     this.cameras.main.setBackgroundColor('#05060a');
     cityBackdrop(this);

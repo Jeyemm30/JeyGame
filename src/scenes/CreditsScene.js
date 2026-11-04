@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { music } from '../systems/Music.js';
 import { label, button } from '../ui/widgets.js';
 
 const LINES = [
@@ -19,6 +20,7 @@ export default class CreditsScene extends Phaser.Scene {
   init(data) { this.back = data.back || 'Menu'; this.resumeKey = data.resume || null; }
 
   create() {
+    music.set('menu');
     this.input.setDefaultCursor('default');
     this.add.rectangle(640, 360, 1280, 720, 0x07080b).setInteractive();
     this.texts = LINES.map((l, i) => {

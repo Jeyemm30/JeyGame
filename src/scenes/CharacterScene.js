@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { music } from '../systems/Music.js';
 import { fs, FONT } from '../ui/widgets.js';
 import { sfx } from '../systems/Audio.js';
 import { patchLatestAppearance } from '../systems/Save.js';
@@ -35,6 +36,7 @@ export default class CharacterScene extends Phaser.Scene {
   init(data) { this.mode = (data && data.mode) || 'new'; }
 
   create() {
+    music.set('menu');
     this.input.setDefaultCursor('default');
     let saved = this.registry.get('appearance');
     if (!saved) { try { saved = JSON.parse(sessionStorage.getItem('jeygame-appearance') || 'null'); } catch (e) { saved = null; } }

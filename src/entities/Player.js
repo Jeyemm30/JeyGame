@@ -273,9 +273,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.animT += dt;
       this.stepT += dt;
       const interval = this.sprinting ? 260 : 380;
-      if (!this.crouching && this.stepT > interval) {
+      // a step only counts while the body really moves (not while pushing against a wall) and on foot
+      const moved = Math.abs(this.body.velocity.x) + Math.abs(this.body.velocity.y) > 30;
+      if (!this.crouching && this.stepT > interval && moved) {
         this.stepT = 0;
-        sfx.step(this.sprinting ? 1 : 0.6);
+        sfx.step(this.sprinting ? 1 : 0.6, this.sprinting);
         this.scene.alertNoise(this.x, this.y, this.sprinting ? 150 : 55, 'step');
       }
     } else this.animT = 0;

@@ -6,7 +6,8 @@ import { T, SOLID, LOS_BLOCK, BULLET_PASS, WALL_FAMILY, defaultAppearance, gener
 import { generateWorld } from '../systems/WorldGen.js';
 import Combat from '../systems/Combat.js';
 import { ITEMS, rollTier, rollNpcDrop, giveItem } from '../systems/Loot.js';
-import { sfx, engine, introAudio } from '../systems/Audio.js';
+import { sfx, engine, introAudio, ambience, setMusicDuck } from '../systems/Audio.js';
+import { music } from '../systems/Music.js';
 import { settings } from '../systems/Settings.js';
 import Wanted, { CRIME } from '../systems/Wanted.js';
 import Player, { CHEST } from '../entities/Player.js';
@@ -301,8 +302,19 @@ export default class GameScene extends Phaser.Scene {
       engine.stop();
       engine.siren(0);
       introAudio.stop(0.1);
+      ambience.stop();
+      setMusicDuck(1);
+      this.events.off('pause', this.onGamePause);
+      this.events.off('resume', this.onGameResume);
       if (this.scene.isActive('Intro')) this.scene.stop('Intro');
     });
+    // any menu that pauses the game (pause, map, shop, casino ...): engine and siren loops go quiet, the music ducks; both come back on resume
+    this.onGamePause = () => { engine.hush(); setMusicDuck(0.4); };
+    this.onGameResume = () => setMusicDuck(1);
+    this.events.on('pause', this.onGamePause);
+    this.events.on('resume', this.onGameResume);
+    ambience.start();
+    this.audioT = 0; this.musicHold = 0; this.combatUntil = 0;
 
     if (this.scene.isActive('UI') || this.scene.isPaused('UI')) this.scene.stop('UI');
     this.scene.launch('UI');
@@ -988,7 +1000,7 @@ export default class GameScene extends Phaser.Scene {
     this.refreshCell(tx, ty);
     if (this.wiseDoor && tx === this.wiseDoor.tx && ty === this.wiseDoor.ty) this.animWiseDoor(open);
     if (quiet) return;
-    sfx.door();
+    if (Math.hypot(this.player.x - (tx * TILE + 16), this.player.y - (ty * TILE + 16)) < 480) (open ? sfx.door() : sfx.doorClose());      // only doors you could actually hear
     this.alertNoise(tx * TILE + 16, ty * TILE + 16, 90, 'step');
   }
 
@@ -1016,7 +1028,7 @@ export default class GameScene extends Phaser.Scene {
     d.evs.forEach((e) => e.remove(false)); d.evs = [];
     d.state = open ? 'opening' : 'closing'; d.nearAt = this.gt;
     this.setDoor(d.t0.tx, d.t0.ty, open, true); this.setDoor(d.t1.tx, d.t1.ty, open, true);
-    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) sfx.door();
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
     const seq = open ? [1, 2, 3] : [2, 1, 0];
     seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => { if (d.img && d.img.scene) d.img.setTexture('casino_door_' + fr); if (i === seq.length - 1) d.state = open ? 'open' : 'closed'; })));
   }
@@ -2847,6 +2859,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.wanted.update(dt, now);
     this.updatePoliceResponse(now);
     this.updateSirenAudio();
+    this.audioTick(now, dt);
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
@@ -3004,7 +3017,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     p.stamina = Math.min(100, p.stamina + dt * 0.02);
     this.lastAimWorld = { x: v.x + Math.cos(v.heading) * 120, y: v.y + Math.sin(v.heading) * 120 };
     const frac = Math.abs(v.speed) / v.cfg.max;
-    engine.set(frac, Math.max(0, throttle));
+    const vt = String(v.vtype);
+    engine.set(frac, Math.max(0, throttle), /moto|bike|scoot/.test(vt) ? 1.5 : /truck|bus|delivery/.test(vt) ? 0.78 : /sports/.test(vt) ? 1.12 : 1);
+    const hardBrake = (throttle < -0.3 && v.speed > 110) || (throttle > 0.3 && v.speed < -110), slide = v.cmd.handbrake && Math.abs(v.speed) > 130;
+    engine.skid(slide || hardBrake ? Math.min(1, Math.abs(v.speed) / v.cfg.max + 0.25) : 0);
     this.alertVehicleNoise = (this.alertVehicleNoise || 0) - dt;
     if (frac > 0.5 && this.alertVehicleNoise <= 0) { this.alertVehicleNoise = 800; this.alertNoise(v.x, v.y, 200, 'step'); }
     if (p.dead) engine.stop();
@@ -3027,6 +3043,39 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const spot = this.offscreenSpot(420, 560);
       if (spot) { s.setPosition(spot.x, spot.y); s.body.reset(spot.x, spot.y); }
     }
+  }
+
+  // 4x a second: feed the ambience (where you are, weather, time of day) and pick the music for the situation.
+  // Priority: police chase > combat (a hostile armed NPC within 650 px, held 6 s) > driving > casino > danger (gang turf / restricted zone) > exploring.
+  // Calm moods are held at least 6 s so the music never flip-flops; chase / combat / silence switch at once. Same mood = no restart (music.set ignores it).
+  audioTick(now, dt) {
+    this.audioAcc = (this.audioAcc || 0) + dt;
+    if (this.audioAcc < 250) return;
+    const d = this.audioAcc; this.audioAcc = 0;
+    const p = this.player, cb = this.currentBuilding();
+    const b = cb >= 0 ? this.wd.buildings.find((x) => x.id === cb) : null;
+    const place = this.casinoFloor > 0 || (b && b.look === 'casino') ? 'casino' : b && b.look === 'bank' ? 'bank' : null;
+    let crowd = 0;
+    this.civilians.children.iterate((c) => { if (c && c.active && Math.abs(c.x - p.x) < 420 && Math.abs(c.y - p.y) < 320) crowd++; });
+    ambience.update(d, { indoor: cb >= 0, rain: this.atmo.weather === 'rain', night: this.atmo.dark > 0.55, inCar: !!p.vehicle, place, crowd: Math.min(1, crowd / 8) });
+
+    let hostileNear = false, gangNear = false;
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active || e.dead) return;
+      const dd = Math.hypot(e.x - p.x, e.y - p.y);
+      if (dd < 650 && e.isHostile(now)) hostileNear = true;
+      if (e.hideout && dd < 520) gangNear = true;
+    });
+    if (hostileNear) this.combatUntil = now + 6000;
+    let want = 'explore';
+    if (this.cine || p.dead || this.over) want = null;
+    else if (this.wanted.level >= 1) want = 'chase';
+    else if (now < this.combatUntil) want = 'combat';
+    else if (p.vehicle) want = 'driving';
+    else if (place === 'casino') want = 'casino';
+    else if (gangNear || this.inRestricted(p.x, p.y)) want = 'danger';
+    const cur = music.mode, urgent = !want || want === 'chase' || want === 'combat' || cur === 'chase' || cur === 'combat';
+    if (want !== cur && (urgent || now >= this.musicHold)) { music.set(want); this.musicHold = now + 6000; }
   }
 
   updateSirenAudio() {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { music } from '../systems/Music.js';
 import { label, button } from '../ui/widgets.js';
 import { profile, flag, repTitle } from '../systems/Profile.js';
 
@@ -42,6 +43,7 @@ export default class EndingScene extends Phaser.Scene {
   constructor() { super('Ending'); }
 
   create() {
+    music.set('menu');
     this.input.setDefaultCursor('default');
     this.gs = this.scene.get('Game');
     this.key = endingFor();

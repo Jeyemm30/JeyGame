@@ -44,7 +44,8 @@ export function resolveVehicles(scene, a, b) {
     if (impact > 25 && now - Math.max(a.hitAt || 0, b.hitAt || 0) > 220) {
       a.hitAt = b.hitAt = now;
       a.crashHit(impact * (mb / (ma + mb)) * 1.6, b); b.crashHit(impact * (ma / (ma + mb)) * 1.6, a);
-      sfx.crash(Math.min(1, impact / 200));
+      const hear = Math.max(0, 1 - Math.hypot(a.scene.player.x - a.x, a.scene.player.y - a.y) / 900);      // crashes far from the player are inaudible
+      if (hear > 0.05) sfx.crash(Math.min(1, impact / 200) * hear);
     }
   }
   // positional separation split by mass, so they never stay overlapped (heavier = moves less)
@@ -240,7 +241,8 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         const pv = this.scene.player.vehicle;
         const pnear = pv && pv !== this && Math.hypot(pv.x - this.x, pv.y - this.y) < 140;
         this.takeDamage(this.driver === 'ai' && !pnear ? Math.min(impact * 0.1, Math.max(0, this.hp - this.maxHp * 0.25)) : impact * 0.1);
-        sfx.crash(Math.min(1, impact / 220));
+        const hear = Math.max(0, 1 - Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) / 900);
+        if (hear > 0.05) sfx.crash(Math.min(1, impact / 220) * hear);
         if (this.driver === 'player') {
           this.scene.cameras.main.shake(140, Math.min(0.01, impact / 30000));
           if (impact > 120) this.scene.player.takeDamage(impact * 0.035, true);

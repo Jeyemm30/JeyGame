@@ -94,7 +94,7 @@ export default class DialogueScene extends Phaser.Scene {
       delay: 16, loop: true, callback: () => {
         this.typed += 2;
         this.body.setText(this.full.slice(0, this.typed));
-        if (this.typed % 6 === 0 && !isPlayer) sfx.click();
+        if (this.typed % 6 === 0 && !isPlayer) sfx.type();
         if (this.typed >= this.full.length) this.finishTyping();
       }
     });

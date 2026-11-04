@@ -61,7 +61,7 @@ export default class MissionManager {
     this.persist();
     if (!opts.restoring) {
       this.gs.events.emit('banner', { title: def.title.toUpperCase(), sub: def.side ? 'JOB STARTED' : `MISSION STARTED${this.replay ? ' (REPLAY)' : ''}`, color: '#f2e08a' });
-      sfx.pickup();
+      sfx.missionStart();
     }
     this.beginStep();
     return true;
@@ -102,7 +102,7 @@ export default class MissionManager {
     this.cleanupStep();
     this.step++;
     this.data = this.data.bonus ? { bonus: this.data.bonus } : {};
-    sfx.pickup();
+    sfx.objective();
     this.beginStep();
   }
 
@@ -124,7 +124,7 @@ export default class MissionManager {
       if (def.onComplete) def.onComplete(gs);
     }
     gs.events.emit('banner', { title: 'MISSION PASSED', sub: `${def.title.toUpperCase()}   +$${money}${rep ? '   +' + rep + ' REP' : ''}`, color: '#7aff9a' });
-    sfx.heal();
+    sfx.missionDone();
     this.cleanup();
     const next = def.autoNext;
     this.def = null; this.id = null; this.obj = null; this.step = 0;
@@ -146,7 +146,7 @@ export default class MissionManager {
     const def = this.def;
     if (!def.side) profile.missions.failed[def.id] = (profile.missions.failed[def.id] || 0) + 1;
     this.gs.events.emit('banner', { title: 'MISSION FAILED', sub: reason || def.title.toUpperCase(), color: '#ff6a5a' });
-    sfx.die();
+    sfx.missionFail();
     this.abort(true);
   }
 

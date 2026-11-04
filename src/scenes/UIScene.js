@@ -192,6 +192,7 @@ export default class UIScene extends Phaser.Scene {
   openPause() {
     if (this.modalActive() || this.game_.over) return;
     if (this.invOpen) this.toggleInventory();
+    sfx.menu();
     this.scene.pause('Game');
     this.scene.launch('Pause');
   }
@@ -199,6 +200,7 @@ export default class UIScene extends Phaser.Scene {
   openMap() {
     if (this.modalActive() || this.game_.over || this.p.dead) return;
     if (this.invOpen) this.toggleInventory();
+    sfx.menu();
     this.scene.pause('Game');
     this.scene.launch('Map');
   }
@@ -206,6 +208,7 @@ export default class UIScene extends Phaser.Scene {
   openMissions() {
     if (this.modalActive() || this.game_.over || this.p.dead) return;
     if (this.invOpen) this.toggleInventory();
+    sfx.menu();
     this.scene.pause('Game');
     this.scene.launch('Missions', { mode: 'game' });
   }
