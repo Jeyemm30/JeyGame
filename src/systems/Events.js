@@ -19,7 +19,7 @@ export default class RandomEvents {
     }
     if (now < this.next) return;
     const p = gs.player;
-    const busy = gs.dialogueActive || p.dead || gs.wanted.level > 0 || (p.vehicle && Math.abs(p.vehicle.speed) > 160) ||
+    const busy = gs.dialogueActive || gs.cine || p.dead || gs.wanted.level > 0 || (p.vehicle && Math.abs(p.vehicle.speed) > 160) ||
       (gs.missions.obj && ['losewanted', 'fare', 'observe'].includes(gs.missions.obj.type));
     if (busy) { this.next = now + 8000; return; }
     const kinds = ['mugging', 'wallet', 'policeStop'];

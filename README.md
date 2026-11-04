@@ -245,3 +245,27 @@ A thin young man with a tall black curly mop, a teal hoodie, navy jeans and oran
 - **Mission screen**: his current quest is the first card on the SIDE MISSIONS tab (giver, description, objectives with progress, reward, difficulty). It can be continued or aborted there, but it can only be started by talking to him. Objectives use the normal waypoints, minimap markers, quest items and dialogue.
 - **Saving**: progress is saved in profile.flags.yosen (found / met / quests done / declined) and the running quest uses the normal mission save. Rewards are paid once, and only the quest that is actually next can advance the chain.
 - **Files**: `src/story/yosen.js` (quests, dialogue, state), the `yosen` entry in `src/story/side.js`, `updateYosen` in `src/entities/Civilian.js`, hair style 7 and `generateSmoker` in `src/assets/textures.js`.
+
+## Vehicle variety and traffic
+
+The city now has 20 vehicle families instead of 8. The old ones are unchanged; the new ones are in `src/assets/vehicleSpecs.js` (sizes, speed, turning) and `src/assets/vehicleArt.js` (the pictures).
+
+- **New families**: compact car, sports car, SUV, pickup truck, minivan, delivery van, taxi, city bus, fire engine, plus a third motorcycle (a scooter). Every family has its own shape (hood, cabin and tail lines, wheel size, roof gear) and is drawn in the side, front and back views with headlights, tail lights, glass, mirrors, door seams and handles, bumpers, grilles, tyres and license plates. Sedan variants 3-5 and the luxury cars were redrawn too, so same type no longer means same sprite.
+- **Collision**: every family has its own footprint (compact 46x22, SUV 58x27, delivery van 70x29, bus 90x31, motorcycle 34x14 ...) and mass, so small cars get pushed around and buses and fire engines barely move.
+- **Where they appear** (decided by the area, with its own random stream so the rest of the world is unchanged): residential blocks get compacts, sedans, SUVs, minivans and pickups; shopping streets get taxis, delivery vans and mixed traffic; downtown gets taxis, luxury and sports cars; industrial areas get pickups, vans and trucks; the fire engines are at the fire stations. Two city buses drive the obstacle-free downtown / midtown loops. There are 18 extra road vehicles (no new vehicles are spawned while you play) and emergency vehicles stay rare.
+- **Variety rules**: the same model is never parked within about 11 tiles of itself, parked footprints never overlap, and big vehicles (bus, truck, fire engine) are never squeezed into a parking row. Wide vehicles only drive road loops that have no barricades or other fixed obstacles; narrow cars can use all of them.
+- **Driving**: traffic uses the existing road AI, stuck detection and recovery. Long vehicles start their turns earlier so the body does not sweep wide at corners. Entering, exiting, parking, driving and recovery work for every family, including player-owned vehicles.
+
+## Casino grand entrance
+
+The casino's front door is now a proper high-end entrance: two tall reflective glass panels in a dark bronze frame with gold art-deco trim (zig-zag header, ruby diamonds), vertical gold handles, a gold kick plate and a thin red (left) and purple (right) neon edge. An illuminated CASINO plaque hangs on the canopy's valance right above it, with the gold columns and neon strips already beside the doors.
+
+- **Animation**: the panels slide apart into the frame (four frames, about a quarter of a second) when the player, a guest or a guard comes within about two tiles, and slide shut roughly a second and a half after the last one has left. They stay open while somebody stands in the doorway, so they never flap.
+- **Collision**: the two door tiles are solid while the doors are closed and open the moment the panels start to part, so entering is never delayed. The entrance position, the interior transition and the way out are unchanged, there is no other way in, and NPC pathing and vehicles are unaffected. The guards standing beside the doors do not hold them open.
+- **Code**: art in `src/assets/casinoArt.js` (`casino_door_0..3`, the canopy plaque), the door tiles in the casino block of `src/systems/WorldGen.js`, and `casinoDoorTick` / `casinoDoorSet` in `src/scenes/GameScene.js`.
+
+## Opening cutscene
+- A new game starts with an ~18 s in-engine cinematic (no video): a wide dusk-lit view of the city pans in and zooms to the player at the real spawn, holds on the idle character, then pulls back to the normal gameplay camera while the CITY OF CHAOS title shows and fades. Letterbox bars, a warm evening tint, fade-in, and a synthesised traffic ambience + short pad music (scaled by Settings volume, so volume 0 mutes it). Same tilted camera, no rotation.
+- **Skip**: SKIP button, Space, Enter or Esc. Skipping cuts to the normal camera at the same spot. While it plays the player cannot move, attack, interact, pause or open the bag/map, and random events are held off; mission 1 starts when it ends.
+- Plays only for a New Game (never when loading a save). The finished/skipped state is stored in `profile.flags.introDone`, so it is saved and it is not replayed after death, respawn or going back to the menu with a save; starting a fresh New Game resets the profile and plays it again.
+- Code: `cinePose` / `endCine` in `GameScene.js`, overlay in `src/scenes/IntroScene.js`, `introAudio` in `src/systems/Audio.js`.

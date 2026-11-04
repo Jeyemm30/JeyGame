@@ -9,6 +9,7 @@ import { drawHomeArt } from './homeArt.js';
 import { drawGangArt } from './gangArt.js';
 import { drawWiseStoreArt } from './wiseStoreArt.js';
 import { drawBankArt } from './bankArt.js';
+import { drawNewVehicles } from './vehicleArt.js';
 
 /* ------------------------------------------------------------- outfits */
 // indexes into the option / colour lists in textures.js
@@ -312,6 +313,7 @@ function drawVehicles(scene) {
     mk(`veh_moto${i}_f`, 20, 40, (c) => motoFB(c, 20, 40, col));
     mk(`veh_moto${i}_b`, 20, 40, (c) => motoFB(c, 20, 40, col));
   });
+  drawNewVehicles(scene, mk);                  // the traffic-variety families (+ redrawn sedan variants 3-5 and luxury cars)
 }
 
 /* ------------------------------------------------ melee, props, icons */

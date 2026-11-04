@@ -179,6 +179,7 @@ export default class UIScene extends Phaser.Scene {
 
   /* ----------------------------------------------------------- state toggles */
   modalActive() {
+    if (this.game_.cine) return true;                  // opening cutscene: no pause / map / inventory until it ends or is skipped
     return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
   }
 
@@ -218,6 +219,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   toggleInventory() {
+    if (this.game_.cine) return;
     if (this.modalActive() || this.game_.over || this.p.dead) return;
     this.invOpen = !this.invOpen;
     this.inv.setVisible(this.invOpen);

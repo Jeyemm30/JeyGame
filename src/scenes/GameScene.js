@@ -6,7 +6,7 @@ import { T, SOLID, LOS_BLOCK, BULLET_PASS, WALL_FAMILY, defaultAppearance, gener
 import { generateWorld } from '../systems/WorldGen.js';
 import Combat from '../systems/Combat.js';
 import { ITEMS, rollTier, rollNpcDrop, giveItem } from '../systems/Loot.js';
-import { sfx, engine } from '../systems/Audio.js';
+import { sfx, engine, introAudio } from '../systems/Audio.js';
 import { settings } from '../systems/Settings.js';
 import Wanted, { CRIME } from '../systems/Wanted.js';
 import Player, { CHEST } from '../entities/Player.js';
@@ -35,6 +35,7 @@ const CHUNK = 512;
 // Lower, angled camera: the ground plane is tilted away from the viewer. TILT is the vertical foreshortening of the
 // ground (1 = straight top-down, smaller = lower camera). Upright things (walls, characters, trees...) are NOT
 // foreshortened: they are pre-stretched by 1/TILT so the camera's ground tilt cancels out on them.
+const INTRO_MS = 18000;                  // opening cutscene length
 const TILT = 0.62;
 const UPY = 1 / TILT;
 const WALL_PX = 40;        // on-screen height of a wall face (the 32px wall art is stretched up to this)
@@ -270,7 +271,9 @@ export default class GameScene extends Phaser.Scene {
     this.initCamera(cam);
     cam.setBackgroundColor('#0b0f0b');
     this.atmo = new Atmosphere(this, this.startHour ?? 9.5);
-    cam.fadeIn(500);
+    // opening cutscene: only for a brand-new game (never a loaded save) that has not shown it yet; the flag lives in profile.flags so it is saved
+    this.cine = !load && this.startData.newGame && !profile.flags.introDone ? { t: 0, dur: INTRO_MS, zEnd: this.zoomTarget } : null;
+    cam.fadeIn(this.cine ? 1600 : 500);
 
     // ---- input
     this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,G,Q,X,V,C,Z,M,L,J,K,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
@@ -279,6 +282,7 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-Y', () => { if (this.atmo) { this.atmo.skipHours(3); this.events.emit('toast', 'Time ' + this.atmo.timeText); } });
     this.input.setDefaultCursor('crosshair');
     this.input.on('wheel', (p, objs, dx, dy) => {
+      if (this.cine) return;
       this.zoomTarget = Phaser.Math.Clamp(this.zoomTarget - Math.sign(dy) * 0.15, 0.7, 3);
     });
     this.onBlur = () => { if (!this.over && this.scene.isActive('Game')) this.events.emit('request-pause'); };
@@ -296,15 +300,20 @@ export default class GameScene extends Phaser.Scene {
       this.input.off('wheel');
       engine.stop();
       engine.siren(0);
+      introAudio.stop(0.1);
+      if (this.scene.isActive('Intro')) this.scene.stop('Intro');
     });
 
     if (this.scene.isActive('UI') || this.scene.isPaused('UI')) this.scene.stop('UI');
     this.scene.launch('UI');
+    if (this.cine) { this.scene.launch('Intro'); introAudio.start(); }
 
-    // ---- story: spawn the cast, then resume or begin the first mission
+    // ---- story: spawn the cast, then resume or begin the first mission (after the opening cutscene, when there is one)
     this.syncStoryNpcs();
     if (load && profile.missions.active) this.missions.restore(profile.missions.active);
-    if (!load && !profile.missions.active && !profile.missions.completed.m1) {
+    if (this.cine) {
+      // endCine() begins the first mission
+    } else if (!load && !profile.missions.active && !profile.missions.completed.m1) {
       this.time.delayedCall(900, () => { if (!this.missions.active) this.missions.start('m1'); });
     } else {
       this.time.delayedCall(500, () => this.events.emit('toast', load ? 'Game loaded' : 'Welcome back to Port City'));
@@ -336,6 +345,34 @@ export default class GameScene extends Phaser.Scene {
     cam.setZoom(this.zoomTarget);
     cam.roundPixels = false;
     // (camera rotation was removed: the view stays at one fixed angle, camRot is always 0)
+  }
+
+  /* ------------------------------------------------------- opening cutscene (new game only)
+     Same world, same camera tilt; only the camera centre and zoom are driven here (no rotation). Timeline (ms):
+     0-11500 wide city -> the neighbourhood -> close on the player, 11500-13000 hold on the character, 13000-18000 pull back to the
+     gameplay camera while the title shows and fades. The player and every NPC / vehicle keep their normal behaviour. */
+  cinePose() {
+    const c = this.cine, t = c.t, p = this.player;
+    const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * Phaser.Math.Clamp(u, 0, 1));
+    const u = ease(t / 11500);
+    const ox = Phaser.Math.Linear(820, 0, u), oy = Phaser.Math.Linear(-520, -6, u);
+    let z = Math.exp(Phaser.Math.Linear(Math.log(0.78), Math.log(2.0), u));
+    if (t > 11500) z = 2.0 + 0.06 * Phaser.Math.Clamp((t - 11500) / 1500, 0, 1);
+    if (t > 13000) z = Phaser.Math.Linear(2.06, c.zEnd, ease((t - 13000) / 5000));
+    return { x: p.x + ox, y: p.y + oy, zoom: z };
+  }
+
+  endCine(skipped) {
+    const c = this.cine; if (!c) return;
+    this.cine = null;
+    profile.flags.introDone = true;
+    introAudio.stop(skipped ? 0.35 : 1.2);
+    const cam = this.cameras.main;
+    if (skipped) { cam.fadeIn(450); this.camSnap = true; }          // straight to the normal player camera
+    this.camOff.x = 0; this.camOff.y = 0;
+    this.scene.setVisible(true, 'UI');
+    if (this.scene.isActive('Intro')) this.scene.stop('Intro');
+    this.time.delayedCall(skipped ? 500 : 700, () => { if (!this.missions.active && !profile.missions.completed.m1) this.missions.start('m1'); });
   }
 
   // a vector given in SCREEN terms -> the matching world vector
@@ -380,7 +417,8 @@ export default class GameScene extends Phaser.Scene {
     // ---- zoom (unchanged: wheel / buttons, eases back a little at speed)
     const speedFrac = v ? Math.min(1, Math.abs(v.speed) / v.cfg.max) : 0;
     const zoomWanted = this.zoomTarget * (1 - 0.22 * speedFrac);
-    cam.zoom += (zoomWanted - cam.zoom) * Math.min(1, dt / 120);
+    if (this.cine) cam.zoom = this.cinePose().zoom;
+    else cam.zoom += (zoomWanted - cam.zoom) * Math.min(1, dt / 120);
 
     // ---- follow: aim look-ahead / driving lead are WORLD vectors (smoothed); the player's place on screen is fixed in SCREEN space
     const look = v ? 0 : p.current === 'sniper' ? 0.55 : 0.2;
@@ -392,7 +430,8 @@ export default class GameScene extends Phaser.Scene {
     this.camOff.y += (oy + lead.y - this.camOff.y) * kk;
     const f = this.camFocus && this.camFocus.active ? this.camFocus : p;
     const goal = { x: f.x + this.camOff.x, y: f.y + this.camOff.y };
-    if (this.camSnap || Math.hypot(goal.x - this.camCenter.x, goal.y - this.camCenter.y) > 700) { this.camCenter.x = goal.x; this.camCenter.y = goal.y; this.camSnap = false; }
+    if (this.cine) { const cp = this.cinePose(); this.camCenter.x = cp.x; this.camCenter.y = cp.y; this.camSnap = false; }
+    else if (this.camSnap || Math.hypot(goal.x - this.camCenter.x, goal.y - this.camCenter.y) > 700) { this.camCenter.x = goal.x; this.camCenter.y = goal.y; this.camSnap = false; }
     else {
       const ks = 1 - Math.exp(-dt / (v ? 130 : 90));
       this.camCenter.x += (goal.x - this.camCenter.x) * ks;
@@ -675,6 +714,9 @@ export default class GameScene extends Phaser.Scene {
       this.casinoDecs = []; this.casinoExt = [];
       cs.neons.forEach((n) => (n.ext ? this.casinoExt : this.casinoDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
       cs.chandeliers.forEach((ch) => this.casinoDecs.push(dec('chandelier', ch.x, ch.y, 0, -86, 0.5, 0.5, 60)));
+      const dts = cs.doorTiles;                                // the grand entrance: two glass panels that slide apart (the two door tiles carry the collision)
+      dts.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
+      this.casinoDoor = { t0: dts[0], t1: dts[1], state: 'closed', evs: [], nearAt: 0, img: dec('casino_door_0', cs.doorSprite.x, cs.doorSprite.y, 0, 0, 0.5, 1, 6) };
     }
     if (wd.bank) {                                                // PORT CITY TRUST: sign, awning, window glimpses, lamps, cameras; the vault door is a sprite over its two door tiles
       const bk = wd.bank;
@@ -948,6 +990,35 @@ export default class GameScene extends Phaser.Scene {
     if (quiet) return;
     sfx.door();
     this.alertNoise(tx * TILE + 16, ty * TILE + 16, 90, 'step');
+  }
+
+  /* The casino's entrance doors slide open when anybody (the player, a guest, a guard) comes within ~2 tiles of them and close about a second and
+     a half after the last one has left, so they never flap while somebody stands in the doorway. The two door tiles change at once (the
+     collision opens when the panels start to part and closes only when nobody is in the doorway); the four-frame slide is only the picture. */
+  casinoDoorTick(now) {
+    const d = this.casinoDoor; if (!d || now - (d.chk || 0) < 110) return;
+    d.chk = now;
+    const cx = (d.t1.tx) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 62, R_HOLD = 76;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => { if (!hit && c && c.state !== 'inside' && near(c, r)) hit = true; });
+      if (!hit) this.enemies.children.iterate((e) => { if (!hit && e && near(e, r)) hit = true; });
+      return hit;
+    };
+    if (d.state === 'closed') { if (anyNear(R_OPEN)) this.casinoDoorSet(true); }
+    else if (d.state === 'open') { if (anyNear(R_HOLD)) d.nearAt = now; else if (now - d.nearAt > 1500) this.casinoDoorSet(false); }
+  }
+
+  casinoDoorSet(open) {
+    const d = this.casinoDoor; if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false)); d.evs = [];
+    d.state = open ? 'opening' : 'closing'; d.nearAt = this.gt;
+    this.setDoor(d.t0.tx, d.t0.ty, open, true); this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) sfx.door();
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => { if (d.img && d.img.scene) d.img.setTexture('casino_door_' + fr); if (i === seq.length - 1) d.state = open ? 'open' : 'closed'; })));
   }
 
   // the WISE SOLE glass door swings through three frames (the tile - and with it the collision - changes at once)
@@ -2753,7 +2824,14 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.atmo.update(dt);
     if ((this.chunkTick -= dt) <= 0) { this.chunkTick = 120; this.updateChunks(); }
 
-    if (p.vehicle) this.updateDriving(now, dt, tm);
+    if (this.cine) {
+      // cutscene: the player stands idle, no input of any kind reaches the game
+      this.cine.t += dt;
+      this.scene.setVisible(false, 'UI');
+      p.updatePlayer(now, dt, { left: false, right: false, up: false, down: false, sprint: false, aimX: p.x, aimY: p.y + 60 });
+      this.interact = null;
+      if (this.cine.t >= this.cine.dur) this.endCine(false);
+    } else if (p.vehicle) this.updateDriving(now, dt, tm);
     else this.updateOnFoot(now, dt, tm, ptr);
     const aimWorld = this.lastAimWorld || { x: ptr.worldX, y: ptr.worldY };
 
@@ -2772,7 +2850,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
-    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.casinoDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;

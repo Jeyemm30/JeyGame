@@ -129,6 +129,47 @@ sfx.bigWin = () => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => to
 sfx.lose = () => { tone(220, 0.22, { type: 'sawtooth', vol: 0.14, slideTo: 130 }); tone(165, 0.3, { type: 'sawtooth', vol: 0.12, slideTo: 90, delay: 0.16 }); };
 sfx.phone = () => { if (throttle('phone', 800)) { tone(880, 0.06, { type: 'square', vol: 0.1 }); tone(880, 0.06, { type: 'square', vol: 0.1, delay: 0.1 }); } };
 
+// Opening cutscene: distant city traffic rumble that swells now and then + a short four-chord pad with a soft arpeggio (~18 s).
+// Everything goes through one master gain scaled by settings.volume, so Settings -> volume 0 mutes it.
+export const introAudio = (() => {
+  let run = null;
+  const CH = [[110, 220, 261.63, 329.63], [87.31, 174.61, 220, 261.63], [130.81, 196, 261.63, 329.63], [98, 196, 246.94, 293.66]];
+  return {
+    start() {
+      const c = ac(); if (!c || run || settings.volume <= 0) return;
+      const t0 = c.currentTime, master = c.createGain();
+      master.gain.setValueAtTime(0, t0); master.gain.linearRampToValueAtTime(settings.volume * 0.9, t0 + 1.8);
+      master.connect(c.destination);
+      const srcs = [];
+      const rum = c.createBufferSource(); rum.buffer = noiseBuf; rum.loop = true;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240;
+      const rg = c.createGain(); rg.gain.value = 0.22;
+      const lfo = c.createOscillator(); lfo.frequency.value = 0.17; const lg = c.createGain(); lg.gain.value = 0.14;
+      lfo.connect(lg); lg.connect(rg.gain); rum.connect(lp); lp.connect(rg); rg.connect(master); rum.start(t0); lfo.start(t0);
+      srcs.push(rum, lfo);
+      const air = c.createBufferSource(); air.buffer = noiseBuf; air.loop = true;       // faint high city hiss
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.6;
+      const ag = c.createGain(); ag.gain.value = 0.012; air.connect(bp); bp.connect(ag); ag.connect(master); air.start(t0); srcs.push(air);
+      const note = (f, at, dur, vol, type) => {
+        const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0 + at); g.gain.linearRampToValueAtTime(vol, t0 + at + Math.min(1.2, dur * 0.4)); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + dur);
+        o.connect(g); g.connect(master); o.start(t0 + at); o.stop(t0 + at + dur + 0.05); srcs.push(o);
+      };
+      CH.forEach((ch, i) => {
+        ch.forEach((f) => note(f, i * 4.5, 5.4, 0.05, 'sine'));
+        [1, 2, 3, 2, 3, 2].forEach((k, j) => note(ch[k] * 2, i * 4.5 + 0.9 + j * 0.55, 1.2, 0.03, 'triangle'));
+      });
+      run = { c, master, srcs };
+    },
+    stop(fade = 0.6) {
+      if (!run) return;
+      const { c, master, srcs } = run; run = null;
+      const t = c.currentTime; master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t); master.gain.linearRampToValueAtTime(0, t + fade);
+      setTimeout(() => srcs.forEach((s) => { try { s.stop(); } catch (e) { /* already stopped */ } }), fade * 1000 + 100);
+    }
+  };
+})();
+
 // Looping engine drone driven by speed (0..1) and a looping two-tone siren
 export const engine = (() => {
   let osc = null, osc2 = null, gain = null, sirenOsc = null, sirenGain = null, sirenT = 0;

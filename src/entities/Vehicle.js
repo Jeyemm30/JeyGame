@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { sfx } from '../systems/Audio.js';
+import { NEW_VEHICLES, NEW_MASS } from '../assets/vehicleSpecs.js';
 
 // len/wid = ground footprint in px; max = top speed px/s; acc = px/s^2; steer = max turn rate (rad/s)
 export const VEHICLES = {
@@ -10,7 +11,8 @@ export const VEHICLES = {
   truck: { name: 'Truck', variants: 3, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
   gangcar: { name: 'Gang Car', variants: 4, max: 262, acc: 200, brake: 530, steer: 2.4, hp: 110, len: 54, wid: 24, reverse: 0.4, price: 0 },
   luxury: { name: 'Luxury Sedan', variants: 3, max: 275, acc: 205, brake: 540, steer: 2.4, hp: 110, len: 54, wid: 24, reverse: 0.4, price: 3500 },
-  moto: { name: 'Motorcycle', variants: 2, max: 335, acc: 290, brake: 600, steer: 3.3, hp: 60, len: 34, wid: 14, reverse: 0.25, price: 450 }
+  moto: { name: 'Motorcycle', variants: 3, max: 335, acc: 290, brake: 600, steer: 3.3, hp: 60, len: 34, wid: 14, reverse: 0.25, price: 450 },
+  ...NEW_VEHICLES                                  // compact, sports, suv, pickup, minivan, delivery, taxi, bus, firetruck
 };
 
 const wrap = Phaser.Math.Angle.Wrap;
@@ -18,7 +20,7 @@ const wrap = Phaser.Math.Angle.Wrap;
 /* ---- collision layer. Driving sets the velocity from heading x speed every frame, so plain Arcade separation made cars
    stick together. Instead every vehicle carries a "knock" velocity (kv) that collisions add to: it slides the car, decays with
    friction, and parked cars move with it too. Impulses use mass, closing speed and the impact point (which also spins the cars). */
-export const MASS = { sedan: 1, police: 1.15, gangcar: 1, luxury: 1.1, van: 1.55, ambulance: 1.6, truck: 3, moto: 0.35 };
+export const MASS = { sedan: 1, police: 1.15, gangcar: 1, luxury: 1.1, van: 1.55, ambulance: 1.6, truck: 3, moto: 0.35, ...NEW_MASS };
 let UID = 0;
 
 export function resolveVehicles(scene, a, b) {
@@ -483,7 +485,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     const fx = Math.cos(this.heading), fy = Math.sin(this.heading);
     let dist = Math.hypot(wp.x - this.cx, wp.y - this.cy);
     for (let guard = 0; guard < 4; guard++) {
-      const reach = wp.node >= 0 ? 52 + sp * 0.14 : 34;
+      const reach = (wp.node >= 0 ? 52 + sp * 0.14 : 34) + Math.max(0, (this.cfg.len - 54) * 0.8);       // long vehicles (bus, fire engine, vans) start their turn earlier, so the body does not sweep wide past the corner
       const passed = (wp.x - this.cx) * fx + (wp.y - this.cy) * fy < 0 && dist < 120;
       if (!(dist < reach || passed)) break;
       if (P.wp.length <= 1 && (!wander || P.locked)) break;       // keep the last waypoint until a new plan replaces it

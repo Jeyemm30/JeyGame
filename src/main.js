@@ -20,6 +20,7 @@ import SaveLoadScene from './scenes/SaveLoadScene.js';
 import CreditsScene from './scenes/CreditsScene.js';
 import EndingScene from './scenes/EndingScene.js';
 import SettingsScene from './scenes/SettingsScene.js';
+import IntroScene from './scenes/IntroScene.js';
 import { VIEW_W, VIEW_H } from './config.js';
 import { initTouch, touch } from './systems/Touch.js';
 
@@ -40,7 +41,7 @@ const config = {
   fps: { target: 60, smoothStep: true },
   input: { activePointers: 4 },
   // Order matters: later scenes render on top of earlier ones.
-  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, AtmScene, VaultScene, GangScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene]
+  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, AtmScene, VaultScene, GangScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene, IntroScene]
 };
 
 window.__game = new Phaser.Game(config);

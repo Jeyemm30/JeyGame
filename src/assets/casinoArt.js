@@ -303,10 +303,51 @@ export function drawCasinoArt(scene) {
   });
   mk('casino_canopy', 176, 52, (c) => {                                 // the grand entrance canopy: gold fascia, striped red / purple awning, scalloped edge with bulbs
     ellipse(c, 88, 47, 80, 4, 'rgba(0,0,0,0.3)');
-    R(c, 0, 0, 176, 9, '#c9a227'); R(c, 0, 0, 176, 2, '#fff0a0'); R(c, 0, 7, 176, 2, '#7a5a10'); bulbs(c, 4, 4, 172, 4, 8, ['#fff4b8', '#ff3a5a', '#fff4b8', '#b06aff']);
-    for (let i = 0; i < 16; i++) { const x = 4 + i * 10.7, col = i % 2 ? '#4a1a6a' : '#9a1830'; R(c, x, 9, 10.7, 26, col); R(c, x, 9, 1, 26, shade(col, 0.25)); ellipse(c, x + 5.3, 35, 5.3, 4, col); R(c, x + 4, 36, 3, 3, '#ffe27a'); }
-    R(c, 4, 9, 168, 2, 'rgba(0,0,0,0.35)'); R(c, 18, 40, 3, 8, '#ffe27a'); R(c, 155, 40, 3, 8, '#ffe27a'); c.globalAlpha = 0.25; ellipse(c, 19, 46, 8, 6, '#ffe27a'); ellipse(c, 156, 46, 8, 6, '#ffe27a'); c.globalAlpha = 1;
+    R(c, 0, 0, 176, 12, '#c9a227'); R(c, 0, 0, 176, 2, '#fff0a0'); R(c, 0, 10, 176, 2, '#7a5a10');
+    bulbs(c, 4, 6, 172, 6, 8, ['#fff4b8', '#ff3a5a', '#fff4b8', '#b06aff']);
+    for (let i = 0; i < 16; i++) { const x = 4 + i * 10.7, col = i % 2 ? '#4a1a6a' : '#9a1830'; R(c, x, 12, 10.7, 23, col); R(c, x, 12, 1, 23, shade(col, 0.25)); ellipse(c, x + 5.3, 35, 5.3, 4, col); R(c, x + 4, 36, 3, 3, '#ffe27a'); }
+    R(c, 4, 12, 168, 2, 'rgba(0,0,0,0.35)');
+    // the illuminated CASINO plaque on the awning's valance (the part that hangs right above the doors)
+    R(c, 52, 20, 72, 14, '#7a5a10'); R(c, 53, 21, 70, 12, '#1a0c24'); R(c, 53, 21, 70, 1, '#fff0a0'); R(c, 53, 32, 70, 1, '#c9a227');
+    c.globalAlpha = 0.4; R(c, 54, 22, 68, 10, '#ff3a8a'); c.globalAlpha = 1; R(c, 54, 22, 68, 10, 'rgba(26,12,36,0.55)');
+    font(c, 9, '#5a0818'); c.fillText('CASINO', 89, 28); font(c, 9, '#ffe27a'); c.fillText('CASINO', 88, 27);
+    R(c, 50, 24, 2, 6, '#c9a227'); R(c, 124, 24, 2, 6, '#c9a227'); R(c, 56, 20, 2, 1, '#fff4b8'); R(c, 118, 20, 2, 1, '#fff4b8'); R(c, 18, 40, 3, 8, '#ffe27a'); R(c, 155, 40, 3, 8, '#ffe27a'); c.globalAlpha = 0.25; ellipse(c, 19, 46, 8, 6, '#ffe27a'); ellipse(c, 156, 46, 8, 6, '#ffe27a'); c.globalAlpha = 1;
   });
+  /* ---- THE GRAND ENTRANCE DOORS: a dark bronze frame with gold art-deco trim, two tall reflective glass panels with vertical gold handles, red / purple
+          neon along the edges. They slide apart into the frame pockets: 0 closed, 1 parting, 2 wide, 3 open (the lit lobby and red carpet behind). */
+  const door = (key, step) => mk(key, 64, 40, (c) => {
+    const GOLD = '#c9a227', GOLD_HI = '#fff0a0', GOLD_LO = '#7a5a10', BRONZE = '#2a1a12';
+    R(c, 0, 0, 64, 40, '#0d0710');
+    // the lobby behind the glass (visible when the doors part)
+    R(c, 3, 6, 58, 32, '#1a0c24'); R(c, 3, 6, 58, 10, '#2a1236'); R(c, 3, 26, 58, 12, '#4a0a18'); R(c, 20, 26, 24, 12, '#7a1224'); R(c, 22, 26, 20, 12, '#9a1830');
+    c.globalAlpha = 0.35; ellipse(c, 32, 12, 18, 7, '#ffd870'); ellipse(c, 12, 18, 6, 5, '#ff4a8a'); ellipse(c, 52, 18, 6, 5, '#b06aff'); c.globalAlpha = 1;
+    R(c, 14, 14, 3, 12, '#ffd24a'); R(c, 47, 14, 3, 12, '#ffd24a');
+    // the glass panels: each slides outward by "open" pixels into its pocket (the frame edges hide them)
+    const open = [0, 8, 17, 25][step], pw = 28;
+    const panel = (x0, dir) => {
+      const x = x0 + dir * open, y = 6, h = 29;
+      R(c, x, y, pw, h, '#2d1a3a'); R(c, x + 1, y + 1, pw - 2, h - 2, '#3a5a8a');
+      R(c, x + 1, y + 1, pw - 2, 11, '#6a8ab8'); R(c, x + 1, y + 12, pw - 2, h - 13, '#2e4a78');                                    // sky-lit upper glass, darker lower glass
+      c.globalAlpha = 0.5; R(c, x + 4, y + 2, 3, h - 5, '#ffffff'); R(c, x + 10, y + 2, 1, h - 7, '#ffffff'); R(c, x + 18, y + 2, 2, 12, '#ffffff'); c.globalAlpha = 1;      // reflection streaks
+      c.globalAlpha = 0.28; for (let k = 0; k < 6; k++) R(c, x + 2 + k * 4, y + h - 8 - k * 3, 3, 1, '#ffffff'); c.globalAlpha = 1;
+      R(c, x, y, pw, 1, GOLD_HI); R(c, x, y + h - 1, pw, 1, GOLD_LO); R(c, x, y, 1, h, GOLD); R(c, x + pw - 1, y, 1, h, GOLD_LO);
+      R(c, x, y + h - 4, pw, 3, GOLD);                                                                                             // gold kick plate
+    };
+    panel(3, -1); panel(33, 1);
+    // tall vertical gold handles on the meeting edges (they travel with the panels)
+    const hx = [3 + 24 - open, 33 + 2 + open];
+    hx.forEach((x) => { if (x > 2 && x < 60) { R(c, x, 13, 3, 17, GOLD); R(c, x, 13, 1, 17, GOLD_HI); R(c, x + 2, 13, 1, 17, GOLD_LO); R(c, x, 12, 3, 1, GOLD_HI); R(c, x, 30, 3, 1, GOLD_LO); } });
+    // the frame: bronze with gold inlay and a stepped art-deco header
+    R(c, 0, 0, 64, 6, BRONZE); R(c, 0, 0, 64, 1, GOLD_HI); R(c, 0, 5, 64, 1, GOLD_LO);
+    for (let x = 3; x < 62; x += 6) { poly(c, [[x, 5], [x + 3, 1], [x + 6, 5]], GOLD); R(c, x + 2, 2, 2, 2, '#9a1830'); }                // zig-zag + ruby diamonds
+    R(c, 0, 6, 3, 34, BRONZE); R(c, 61, 6, 3, 34, BRONZE); R(c, 1, 6, 1, 34, GOLD); R(c, 62, 6, 1, 34, GOLD_LO); R(c, 2, 8, 1, 4, GOLD_HI); R(c, 61, 8, 1, 4, GOLD_HI);
+    for (let y = 10; y < 36; y += 6) { R(c, 0, y, 3, 2, GOLD_LO); R(c, 61, y, 3, 2, GOLD_LO); }
+    R(c, 0, 35, 64, 5, BRONZE); R(c, 0, 35, 64, 1, GOLD); R(c, 3, 37, 58, 1, GOLD_LO);                                              // threshold
+    // neon: a red line down the left inside edge, a purple one down the right, a soft glow around both
+    R(c, 3, 6, 1, 29, '#ff3a5a'); R(c, 60, 6, 1, 29, '#b06aff'); c.globalAlpha = 0.28; R(c, 4, 6, 2, 29, '#ff3a5a'); R(c, 58, 6, 2, 29, '#b06aff'); c.globalAlpha = 1;
+    R(c, 3, 6, 58, 1, '#ff8ac0'); c.globalAlpha = 0.5; R(c, 4, 7, 56, 1, '#b06aff'); c.globalAlpha = 1;
+  });
+  [0, 1, 2, 3].forEach((i) => door('casino_door_' + i, i));
   mk('casino_column', 26, 78, (c) => {                                  // a black-marble column with gold bands, capital and a light on top
     ellipse(c, 13, 74, 12, 3, 'rgba(0,0,0,0.35)'); R(c, 1, 68, 24, 6, '#2a2d34'); R(c, 0, 72, 26, 4, '#1a1c22'); R(c, 1, 68, 24, 1, '#7a5a10');
     R(c, 5, 14, 16, 54, '#14121c'); R(c, 7, 14, 3, 54, '#3a3450'); R(c, 18, 14, 3, 54, '#0a0810'); R(c, 5, 22, 16, 2, '#c9a227'); R(c, 5, 58, 16, 2, '#c9a227');

@@ -5,6 +5,7 @@
 import { T, SOLID, WALL_FAMILY } from '../assets/textures.js';
 import { MAP_W as W, MAP_H as H, TILE } from '../config.js';
 import { mulberry32 } from './Rng.js';
+import { DIMS, AREA_OF, MIX } from '../assets/vehicleSpecs.js';
 import { GANGS, GANG_IDS, BOSSES, memberRole, bossRole, weaponFor } from '../story/gangs.js';
 
 const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 219], [223, 259], [263, 299], [303, 339], [343, 379]];
@@ -915,7 +916,7 @@ export function generateWorld(seed = 20240) {
     fillBuildingShell(X, Y, W, H, T.wall2, T.carpet);
     // glass front with two stone pillars and an automatic double door
     for (let lx = 1; lx <= 20; lx++) obj[fy][L(lx)] = (lx === 5 || lx === 16) ? T.wall2 : T.glass;
-    obj[fy][L(10)] = T.doorOpen; obj[fy][L(11)] = T.doorOpen;
+    obj[fy][L(10)] = T.doorClosed; obj[fy][L(11)] = T.doorClosed;                     // the grand entrance: two sliding panels, opened / closed by GameScene.casinoDoorTick (not toggled by hand)
     for (let ly = 16; ly <= 19; ly++) for (let lx = 1; lx <= 13; lx++) ground[M(ly)][L(lx)] = T.tileFloor;       // marble lobby + reception
     const prop = (lx, ly) => { obj[M(ly)][L(lx)] = T.prop; };
     const decor = (kind, x, y) => out.decor.push({ kind, x, y });
@@ -1025,6 +1026,7 @@ export function generateWorld(seed = 20240) {
       X, Y, W, H,
       door: { x: door.x, y: (fy + 1) * TILE + 20 },
       sign: { x: door.x, y: fy * TILE + 4 },
+      doorTiles: [{ tx: L(10), ty: fy }, { tx: L(11), ty: fy }], doorSprite: { x: L(11) * TILE, y: (fy + 1) * TILE - 1 },
       sean: { x: cx(5), y: cy(16) },
       jiro: { x: 0, y: 0 },                                       // set by casinoWing() (the VIP management office upstairs)
       stairsUp: { x: cx(18), y: cy(5), at: stationUp },
@@ -2162,6 +2164,71 @@ export function generateWorld(seed = 20240) {
         lt(cx(2), (fy + 2) * TILE, 0x6aff9a), lt(cx(23), (fy + 2) * TILE, 0x6aff9a), lt(door.x, (fy - 3) * TILE, 0xffd870, { neon: true })
       ]
     };
+  }
+
+  /* ---------------- TRAFFIC VARIETY: the parked cars and the road traffic get their vehicle type from the AREA they are in (residential: ordinary cars,
+     commercial: taxis / delivery vans / mixed, downtown: taxis + luxury + sports, industrial: pickups + trucks + vans). It runs last with its OWN random
+     stream, so nothing else in the world changes. No two neighbours (within ~11 tiles) look the same, footprints never overlap, and bigger vehicles
+     (bus / truck / fire engine) are only ever placed on the road loops or at the fire station, never squeezed into a parking row. */
+  {
+    const vr = mulberry32(seed * 31 + 7717);
+    const rv = () => vr();
+    const areaAtPx = (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); const b = blocks.find((q) => tx >= q.x0 && tx <= q.x1 && ty >= q.y0 && ty <= q.y1); return (b && AREA_OF[b.kind]) || 'any'; };
+    const wpick = (tab, ok) => { const t = tab.filter(([k]) => ok(k)); let r = rv() * t.reduce((a, [, w]) => a + w, 0); for (const [k, w] of t) { r -= w; if (r <= 0) return k; } return t[0][0]; };
+    const nVar = { compact: 5, sports: 4, suv: 5, pickup: 4, minivan: 4, delivery: 4, taxi: 1, bus: 3, firetruck: 1, sedan: 6, luxury: 3, van: 3, truck: 2 };
+    const foot = (v, type = v.type) => { const [l, w] = DIMS[type] || [54, 24]; const horiz = Math.abs(Math.cos(v.heading || 0)) >= 0.7; return horiz ? [v.x - l / 2, v.y - w / 2, v.x + l / 2, v.y + w / 2] : [v.x - w / 2, v.y - l / 2, v.x + w / 2, v.y + l / 2]; };
+    const hit = (a, b) => a[0] < b[2] + 3 && a[2] > b[0] - 3 && a[1] < b[3] + 3 && a[3] > b[1] - 3;
+    const clash = (v, type) => { const f = foot(v, type); return out.vehicles.some((o) => o !== v && Math.abs(o.x - v.x) < 120 && Math.abs(o.y - v.y) < 120 && o.mode === 'parked' && hit(f, foot(o))); };
+    // wide vehicles (SUV, pickup, vans, delivery, bus ...) only drive loops whose road strips are free of barricades and other fixed obstacles
+    const NARROW = ['sedan', 'compact', 'sports', 'luxury', 'taxi'];
+    const cleanCache = {};
+    const loopClean = (ci, r2) => {
+      const key = ci + ',' + r2; if (key in cleanCache) return cleanCache[key];
+      const xl = VR[ci], xr = VR[ci + 1], yt = HR[r2], yb = HR[r2 + 1]; let bad = 0;
+      const chk = (x, y) => { if (inb(x, y) && obj[y][x] !== -1) bad++; };
+      for (let x = xl; x <= xr + 2; x++) for (let y = 0; y <= 2; y++) { chk(x, yt + y); chk(x, yb + y); }
+      for (let y = yt; y <= yb + 2; y++) for (let x = 0; x <= 2; x++) { chk(xl + x, y); chk(xr + x, y); }
+      return (cleanCache[key] = bad === 0);
+    };
+    const loopAt = (x, y) => { const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE); let ci = -1, r2 = -1; for (let i = 0; i < VR.length - 1; i++) if (tx >= VR[i] && tx <= VR[i + 1] + 2) { ci = i; break; } for (let i = 0; i < HR.length - 1; i++) if (ty >= HR[i] && ty <= HR[i + 1] + 2) { r2 = i; break; } return [ci, r2]; };
+    const recent = [];
+    const near = (v, key) => recent.some((r) => r.key === key && Math.hypot(r.x - v.x, r.y - v.y) < 360);
+    const choose = (v, area, ok) => {
+      for (let t = 0; t < 8; t++) {
+        const type = wpick(MIX[area] || MIX.any, ok), variant = Math.floor(rv() * (nVar[type] || 1));
+        if (!near(v, type + variant)) return [type, variant];
+      }
+      const type = wpick(MIX[area] || MIX.any, ok); return [type, Math.floor(rv() * (nVar[type] || 1))];
+    };
+    // 1. the fire engines
+    out.vehicles.forEach((v) => { if (v.type === 'truck' && v.variant === 2) { v.type = 'firetruck'; v.variant = 0; } });
+    // 2. everything that was an ordinary sedan / van
+    out.vehicles.forEach((v) => {
+      if ((v.type !== 'sedan' && v.type !== 'van') || (v.mode !== 'parked' && v.mode !== 'traffic')) return;
+      const keepType = v.type, keepVar = v.variant;
+      const traffic = v.mode === 'traffic', area = areaAtPx(v.x, v.y);
+      const [lc, lr] = traffic ? loopAt(v.x, v.y) : [-1, -1], tClean = traffic ? (lc >= 0 && lr >= 0 && loopClean(lc, lr)) : true;
+      const [type, variant] = choose(v, traffic ? 'any' : area, (k) => (traffic ? k !== 'truck' && k !== 'bus' && (tClean || NARROW.includes(k)) : !['bus', 'truck'].includes(k)));
+      const old = { type: v.type, variant: v.variant };
+      v.type = type; v.variant = variant;
+      if (v.mode === 'parked' && clash(v, type)) { v.type = old.type; v.variant = old.variant; if (clash(v, old.type)) { v.type = 'compact'; v.variant = Math.floor(rv() * 5); } }
+      void keepType; void keepVar;
+      recent.push({ x: v.x, y: v.y, key: v.type + v.variant });
+    });
+    // 3. more road traffic: a second vehicle on most loops (taxis and delivery vans downtown / in the shopping streets, pickups and vans near industry,
+    //    a couple of buses on the busiest roads)
+    let buses = 0;
+    const loops2 = [[1, 2], [2, 2], [2, 1], [3, 2], [1, 3], [2, 3], [3, 3], [6, 2], [7, 2], [6, 3], [7, 3], [0, 2], [3, 1], [6, 1], [5, 1], [1, 1], [7, 4], [6, 4]];
+    loops2.forEach(([ci, r2]) => {
+      const rt = loopFor(ci, r2), b0 = blocks.find((q) => q.c === ci && q.r === r2), area = (b0 && AREA_OF[b0.kind]) || 'any';
+      const v = { type: 'sedan', variant: 0, x: rt[3].x + 120, y: rt[3].y, heading: Math.PI, mode: 'traffic', route: [rt[3], rt[0], rt[1], rt[2]] };
+      const clean2 = loopClean(ci, r2);
+      const forceBus = clean2 && buses < 2 && [[6, 2], [3, 3], [2, 3], [7, 2], [1, 3]].some(([a, b2]) => a === ci && b2 === r2);       // a city bus on the first two obstacle-free downtown / midtown loops
+      const [type, variant] = forceBus ? ['bus', Math.floor(rv() * 3)] : choose(v, area === 'res' ? 'any' : area, (k) => k !== 'truck' && k !== 'bus' && (clean2 || NARROW.includes(k)));
+      if (type === 'bus') buses++;
+      v.type = type; v.variant = variant; recent.push({ x: v.x, y: v.y, key: type + variant });
+      out.vehicles.push(v);
+    });
   }
 
   /* ------------------------------------------------ wall faces vs. cap tiles */
