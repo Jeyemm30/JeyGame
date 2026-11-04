@@ -1,6 +1,6 @@
 # CITY OF CHAOS – Open-World City Story (2D pixel art)
 
-Created by John Mark V. Espineda.
+Created by Jeyem.
 
 Phaser 3 + Vite. All art and sound are generated in code (no external assets, no online services), so the game runs fully offline once `npm install` has finished. Angled top-down 2D – no 3D.
 

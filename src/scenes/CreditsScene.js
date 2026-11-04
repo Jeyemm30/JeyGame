@@ -4,7 +4,7 @@ import { label, button } from '../ui/widgets.js';
 
 const LINES = [
   'CITY OF CHAOS', 'Open-World City Sandbox', '',
-  'CREATED BY', 'John Mark V. Espineda', '',
+  'CREATED BY', 'Jeyem', '',
   'GAME DESIGN & CODE', 'Built with Phaser 3, JavaScript and Vite', '',
   'ART', 'All sprites, tiles and icons are generated in code', 'Pixel-art style: procedural canvas textures', '',
   'AUDIO', 'Synthesised with the Web Audio API', '',

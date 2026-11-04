@@ -50,7 +50,7 @@ export default class MenuScene extends Phaser.Scene {
       bg.on('pointerout', () => { bg.setStrokeStyle(1, TH.line).setFillStyle(TH.panel, 0.84); tx.setColor(TH.dim); });
       bg.on('pointerup', () => { if (!this.menu.locked) { sfx.click(); fn(); } });
     });
-    this.add.text(1262, 684, 'Created by John Mark V. Espineda', { fontFamily: FONT, fontSize: fs(12) + 'px', color: '#ffb070', fontStyle: 'bold' }).setOrigin(1, 1).setDepth(30);
+    this.add.text(1262, 684, 'Created by Jeyem', { fontFamily: FONT, fontSize: fs(12) + 'px', color: '#ffb070', fontStyle: 'bold' }).setOrigin(1, 1).setDepth(30);
     this.add.text(1262, 702, 'Explore Port City. Drive. Dodge the police. Uncover the ledger.', { fontFamily: FONT, fontSize: fs(11) + 'px', color: '#c8b8a8' }).setOrigin(1, 1).setDepth(30).setAlpha(0.8);
   }
 
