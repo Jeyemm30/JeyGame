@@ -49,7 +49,7 @@ export const CONTROLS_TEXT = [
   'G ........... Use armor plate (hold: refuel)',
   'Tab .......... Inventory',
   'M ........... World map (or click minimap)',
-  'Driving: W/S gas+brake, A/D steer, Space brake, H horn',
+  'Driving: W/S gas+brake, A/D steer, Space brake, H horn, L lights, Z/C indicators',
   'Mouse Wheel . Zoom',
   'ESC .......... Pause',
   '',

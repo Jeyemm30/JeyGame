@@ -29,9 +29,9 @@ Object.assign(T, { facPharm: 86, facGrocery: 87, facHardware: 88, facClothing: 8
   winPharm: 96, winGrocery: 97, winHardware: 98, winClothing: 99, winCafe: 100, winDiner: 101, winPizza: 102, winGas: 103, winMall: 104, baskets: 105,
   obsWin: 106, facPolice: 107, winPolice: 108, cooler: 109, ctrPolice: 110, evShelf: 111, radioShelf: 112, ctrPlain: 113,
   polWallPaint: 114, polWallSecure: 115, polDoorSteel: 116, polDoorSteelOpen: 117, polDoorCell: 118, polDoorCellOpen: 119, polDoorGlass: 120, polDoorGlassOpen: 121, polWallRoom: 122, metalTable: 123, steelChair: 124,
-  milBunk: 125, weaponRack: 126, ammoCrate: 127, workbench: 128, jersey: 129, milConsole: 130, milFacade: 131, milWall: 132, milGate: 133, milGateOpen: 134, milBoom: 135, milBoomOpen: 136 });
-export const NTILES = 137;
-export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136];
+  milBunk: 125, weaponRack: 126, ammoCrate: 127, workbench: 128, jersey: 129, milConsole: 130, milFacade: 131, milWall: 132, milGate: 133, milGateOpen: 134, milBoom: 135, milBoomOpen: 136, milDoor: 137, milDoorOpen: 138 });
+export const NTILES = 139;
+export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138];
 export const SHOP_WINDOWS = [96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108];
 export const STORE_FIX = [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85];
 

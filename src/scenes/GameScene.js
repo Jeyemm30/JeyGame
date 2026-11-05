@@ -677,6 +677,7 @@ export default class GameScene extends Phaser.Scene {
       for (const row of [b.y, b.y + b.h - 1]) for (let xx = b.x; xx < b.x + b.w; xx++) { const i = row * W + xx, o = wd.obj[row][xx]; if (this.isWall[i] && (o === T.wall || o === T.wall2)) this.wallFace[i] = b.facade; }
     });
     ((wd.policeSkin && wd.policeSkin.walls) || []).forEach((w) => { const i = w.ty * W + w.tx; if (this.isWall[i]) this.wallFace[i] = w.t; });      // (after the facades: the inside of the station's back wall is not the exterior facade)
+    ((wd.policeSkin && wd.policeSkin.doors) || []).forEach((d) => { const i = d.ty * W + d.tx; if (this.isWall[i]) this.wallFace[i] = d.c; });      // (doors last: a door sits in a wall row and must not be painted over by the wall skin)
     this.wallBands = new Map();
     this.wallPool = [];
     this.wallBuild = { dirty: true, rot: 99, mx: 1e9, my: 1e9, zoom: 0 };
@@ -2527,7 +2528,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.camFocus = v;
     engine.start(v.vtype === 'tesla');
     sfx.doorSlam();
-    this.events.emit('toast', `${VEHICLES[v.vtype].name}: W gas, S brake/reverse, A/D steer, Space handbrake, H horn, F exit`);
+    this.events.emit('toast', `${VEHICLES[v.vtype].name}: W gas, S brake/reverse, A/D steer, Space handbrake, H horn, L lights, Z/C indicators, F exit`);
   }
 
   // a spot beside the vehicle that is free of walls, other vehicles and people; null if there is none
@@ -3043,7 +3044,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const tm = touchEnabled();
     this.touchOn = tm;
     this.gfx.clear();
-    this.lampGfx.clear();
+    this.lampGfx.clear(); this.beamN = 0;
     this.atmo.update(dt);
     if ((this.chunkTick -= dt) <= 0) { this.chunkTick = 120; this.updateChunks(); }
 
@@ -3200,7 +3201,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (tm) { throttle = -touch.moveY; steer = touch.moveX; if (Math.abs(throttle) < 0.2) throttle = 0; if (Math.abs(steer) < 0.15) steer = 0; }
     else { throttle = (k.W.isDown ? 1 : 0) - (k.S.isDown ? 1 : 0); steer = (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0); }
     v.cmd = { throttle, steer, handbrake: k.SPACE.isDown };
-    if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('horn')) { sfx.horn(); this.alertNoise(v.x, v.y, 260, 'step'); }
+    if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('horn')) { if (v.honk(this.gt, 260)) this.alertNoise(v.x, v.y, 260, 'step'); }                    // H: this vehicle's own horn (one short blast per press)
+    if (Phaser.Input.Keyboard.JustDown(k.L)) { const m = v.headMode || 'auto'; v.headMode = m === 'auto' ? 'on' : m === 'on' ? 'off' : 'auto'; sfx.click(); this.events.emit('toast', 'Headlights: ' + (v.headMode === 'auto' ? 'automatic (on at night)' : v.headMode === 'on' ? 'on' : 'off')); }       // L: auto -> on -> off
+    if (Phaser.Input.Keyboard.JustDown(k.Z)) { v.sigManual = v.sigManual === -1 ? 0 : -1; sfx.click(); }                                                           // Z / C: left / right indicator
+    if (Phaser.Input.Keyboard.JustDown(k.C)) { v.sigManual = v.sigManual === 1 ? 0 : 1; sfx.click(); }
     if (Phaser.Input.Keyboard.JustDown(k.M) || consumeAction('map')) this.events.emit('request-map');
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
     if (Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('interact')) { this.exitVehicle(); if (!p.vehicle) return; }

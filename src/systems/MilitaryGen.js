@@ -22,10 +22,11 @@ export function makeMilitary(C) {
   function building(x, y, w, h, o) {
     fillBuildingShell(x, y, w, h, T.wall2, o.floor ?? T.concrete);
     const dw = o.dw || 1;
-    for (let k = 0; k < dw; k++) { addDoorTile(x + o.dc + k, y + h - 1, false); skinDoor(x + o.dc + k, y + h - 1, T.polDoorSteel, T.polDoorSteelOpen); autoDoor(x + o.dc + k, y + h - 1, !!o.lock); }
+    for (let k = 0; k < dw; k++) { addDoorTile(x + o.dc + k, y + h - 1, false); skinDoor(x + o.dc + k, y + h - 1, T.milDoor, T.milDoorOpen); autoDoor(x + o.dc + k, y + h - 1, !!o.lock); }
     placeWindows(x, y, w, h, { windowChance: o.windows ?? 0.55 });
     for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if ((yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1) && obj[yy][xx] === T.window) obj[yy][xx] = T.winHardware;
     registerBuilding(x, y, w, h, o.roof || 'hq', { kind: o.kind || 'hq', colorIdx: 1, tint: o.tint || 0xb4c29a, facade: T.milFacade });
+    for (let k = 0; k < dw; k++) { const tx = x + o.dc + k, ty = y + h; if (inb(tx, ty) && obj[ty][tx] === -1) { ground[ty][tx] = T.plaza; } }
     deco(o.sign, x + o.dc + (dw - 1) / 2, y + h - 1, -46, 60);
     if (o.fill) o.fill((c, r, t) => put(x + c, y + r, t), (c) => x + c, (r) => y + r);
     return { x, y, w, h };
@@ -65,7 +66,7 @@ export function makeMilitary(C) {
     for (let u = 1; u < W - 1; u += 2) { DD('mil_barb', u, 0, -38, 30, 1); DD('mil_barb', u, H - 1, -38, 60, 1); }
     // main gate (south wall, 3 tiles, onto the road) and the personnel door (north wall)
     for (let u = 2; u <= 4; u++) { obj[Y(H - 1)][X(u)] = T.doorClosed; out.doors.push({ x: X(u), y: Y(H - 1) }); skinDoor(X(u), Y(H - 1), T.milGate, T.milGateOpen); autoDoor(X(u), Y(H - 1), true); }
-    obj[Y(0)][X(16)] = T.doorClosed; out.doors.push({ x: X(16), y: Y(0) }); skinDoor(X(16), Y(0), T.polDoorSteel, T.polDoorSteelOpen); autoDoor(X(16), Y(0), true);
+    obj[Y(0)][X(16)] = T.doorClosed; out.doors.push({ x: X(16), y: Y(0) }); skinDoor(X(16), Y(0), T.milDoor, T.milDoorOpen); autoDoor(X(16), Y(0), true);
     DD('mil_sign_gate', 3, H - 1, -52, 70); DD('mil_sign_zone', 9, H - 1, -8, 70); DD('mil_sign_zone', 27, H - 1, -8, 70); DD('mil_sign_zone', 20, 0, -8, 30);
     DD('pd_cam', 1, H - 1, -44, 70); DD('pd_cam', 5, H - 1, -44, 70);
     // ---- streets: north-south road u2-u4 from the gate, three east-west streets

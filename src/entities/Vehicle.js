@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { sfx } from '../systems/Audio.js';
 import { gq } from '../systems/Settings.js';
+import { drawVehicleLamps, signalTick } from '../systems/VehicleLights.js';
 import { NEW_VEHICLES, NEW_MASS } from '../assets/vehicleSpecs.js';
 
 // len/wid = ground footprint in px; max = top speed px/s; acc = px/s^2; steer = max turn rate (rad/s)
@@ -604,6 +605,11 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       } else { P.blockT = Math.max(0, P.blockT - 500); P.waitT = 0; }
       P.prog = { x: this.cx, y: this.cy, t: now };
     }
+    if (civil && f.d < Infinity && f.kind !== 'wall') {                                  // honk when somebody blocks the way for a while, or steps / cuts in right in front
+      const hv = f.kind === 'veh' && f.ref && f.ref.active;
+      const cut = hv && f.d < 34 && sp > 70 && Math.cos(f.ref.heading - this.heading) > 0.3 && f.ref.speed < sp * 0.5;
+      if ((blockedStill && P.waitT > 1800) || cut || ((f.kind === 'ped' || f.kind === 'player') && f.d < 48 && sp < 25 && P.waitT > 900)) this.honk(now, cut ? 9000 : 7000);
+    }
     if (P.blockT > 1100) { this.startRecovery(now); this.cmd = { throttle: -0.85, steer: 0, handbrake: false }; return; }
 
     this.cmd = { throttle, steer, handbrake: false };
@@ -635,6 +641,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         if (this.wrecked || this.hp < this.maxHp * 0.2) sc.emitUp(sc.fxFire, this.x + Phaser.Math.Between(-5, 5), this.y + Phaser.Math.Between(-5, 5), 30, 1);
       }
     }
+    signalTick(this, now, dt);
     this.drawLamps();
     if (this.cfg.police) {
       const on = this.sirenOn && !this.wrecked;
@@ -649,31 +656,21 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   }
 
   // brake / reverse lights always, headlights + tail glow in the dark (drawn into one shared graphics)
+  // brake / reverse / head / tail / turn-signal lights (see systems/VehicleLights.js), drawn into one shared graphics
   drawLamps() {
     const sc = this.scene, gl = sc.lampGfx;
     if (!gl || this.wrecked || !(sc.viewCache || sc.viewRect(60)).contains(this.x, this.y)) return;
-    const ll = gq().lightLevel;
-    const c = Math.cos(this.heading), s = Math.sin(this.heading);
-    const L = this.cfg.len / 2 - 2, Wd = this.cfg.wid * 0.3, lift = (this.view === 's' ? 12 : 14) + 12;
-    const moving = !!this.driver || this.mode === 'chase';
-    const braking = moving && ((this.cmd.throttle < 0 && this.speed > 12) || this.cmd.handbrake || (this.cmd.throttle === 0 && Math.abs(this.speed) < 3 && this.driver === 'player'));
-    const reversing = moving && this.speed < -8;
-    const dark = sc.night || 0;
-    const eo = sc.elev(lift);
-    const pt = (along, side) => ({ x: this.x + c * along - s * side + eo.x, y: this.y + s * along + c * side + eo.y });
-    const lamp = (p, col, r, a) => { if (ll >= 2) gl.fillStyle(col, a * 0.28).fillCircle(p.x, p.y, r * 2.6); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
-    for (const side of [-Wd, Wd]) {
-      const rear = pt(-L, side);
-      if (braking) lamp(rear, 0xff2a1a, 2.2, 1);
-      else if (reversing) lamp(rear, 0xffffff, 2, 0.95);
-      else if (dark > 0.25 && this.driver) lamp(rear, 0xc01810, 1.6, 0.85);
-      if (dark > 0.25 && this.driver && !this.cfg.police || (dark > 0.25 && this.driver)) {
-        const f = pt(L, side);
-        lamp(f, 0xfff2b0, 2.2, 0.95);
-        const f2 = pt(L + 26, side * 1.5);
-        if (ll >= 2) gl.fillStyle(0xfff2b0, 0.07 * dark).fillCircle(f2.x, f2.y + lift * 0.6, 22);
-      }
-    }
+    drawVehicleLamps(this, gl, gq().lightLevel, sc.gt);
+  }
+
+  /* A horn: this vehicle's own sound (by category), quieter with distance, with a cooldown so nobody spams it. Returns true if it honked. */
+  honk(now, cooldown = 6500) {
+    if (this.wrecked || now - (this.lastHonk || -1e9) < cooldown) return false;
+    this.lastHonk = now;
+    const p = this.scene.player, d = Math.hypot(this.x - p.x, this.y - p.y);
+    if (d > 900) return true;                                                  // too far to hear: nothing to play
+    sfx.horn(this.vtype, Math.pow(Math.max(0, 1 - d / 900), 1.6));
+    return true;
   }
 
   /* -------------------------------------------------------- occupants */
@@ -685,7 +682,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   }
 
   release() {
-    this.driver = null;
+    this.driver = null; this.sigManual = 0; this.sigDir = 0;
     this.mode = 'parked';
     this.speed = 0;
     this.thr = 0;

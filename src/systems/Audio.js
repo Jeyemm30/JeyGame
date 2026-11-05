@@ -160,7 +160,53 @@ export const sfx = {
 // ---- city additions: melee, vehicles, sirens --------------------------------
 sfx.swing = () => { if (throttle('swing', 60)) noise(0.09, { freq: 2200, endFreq: 500, vol: 0.18, type: 'bandpass' }); };
 sfx.thud = () => { if (throttle('thud', 60)) { noise(0.1, { freq: 500, endFreq: 120, vol: 0.45 }); tone(110, 0.1, { type: 'sine', vol: 0.25, slideTo: 60 }); } };
-sfx.horn = () => { if (throttle('horn', 250)) { tone(392, 0.35, { type: 'square', vol: 0.12 }); tone(494, 0.35, { type: 'square', vol: 0.1 }); } };
+/* ---- horns: every vehicle category has its own voice (original synthesis, nothing recorded). A horn is a small chord of oscillators through a low-pass filter with a quick
+   attack and release (no click); 'bursts' makes several short honks; 'bend' is a pitch drop at the end (air horns); 'vib' a slow wobble (bus). Volume scales with the distance
+   (vol 0..1, already worked out by the caller), and at most four horns sound at once. */
+const HORNS = {
+  compact:  { f: [466, 587], w: 'square', dur: 0.22, g: 0.085, lp: 1800 },
+  sedan:    { f: [392, 494], w: 'square', dur: 0.36, g: 0.1, lp: 2200 },
+  taxi:     { f: [392, 494], w: 'square', dur: 0.4, g: 0.1, lp: 2200 },
+  sports:   { f: [587, 740], w: 'sawtooth', dur: 0.26, g: 0.075, lp: 3200 },
+  luxury:   { f: [294, 370], w: 'triangle', dur: 0.5, g: 0.17, lp: 1500 },
+  suv:      { f: [330, 415], w: 'square', dur: 0.46, g: 0.11, lp: 1700 },
+  pickup:   { f: [247, 311], w: 'sawtooth', dur: 0.55, g: 0.09, lp: 1400 },
+  van:      { f: [349, 440], w: 'square', dur: 0.42, g: 0.1, lp: 1700 },
+  delivery: { f: [208, 262], w: 'sawtooth', dur: 0.6, g: 0.09, lp: 1200 },
+  truck:    { f: [110, 139, 165], w: 'sawtooth', dur: 0.95, g: 0.1, lp: 900, bend: 0.94 },
+  bus:      { f: [185, 233], w: 'square', dur: 0.8, g: 0.1, lp: 1300, vib: 5 },
+  moto:     { f: [740, 880], w: 'square', dur: 0.16, g: 0.065, lp: 3600 },
+  police:   { f: [466, 587], w: 'square', dur: 0.13, g: 0.1, lp: 2400, bursts: 2, gap: 0.07 },
+  ambulance:{ f: [370, 466], w: 'square', dur: 0.42, g: 0.1, lp: 1900 },
+  firetruck:{ f: [138, 165, 208], w: 'sawtooth', dur: 0.9, g: 0.1, lp: 1000, bend: 0.95 },
+  military: { f: [165, 196], w: 'sawtooth', dur: 0.62, g: 0.1, lp: 1000 },
+  armored:  { f: [123, 147], w: 'sawtooth', dur: 0.75, g: 0.11, lp: 800 },
+  electric: { f: [523, 659], w: 'sine', dur: 0.3, g: 0.14, lp: 3000 }
+};
+export const HORN_OF = { compact: 'compact', sedan: 'sedan', taxi: 'taxi', sports: 'sports', luxury: 'luxury', suv: 'suv', pickup: 'pickup', van: 'van', minivan: 'van', delivery: 'delivery', truck: 'truck', bus: 'bus', moto: 'moto', police: 'police', policesuv: 'police', ambulance: 'ambulance', firetruck: 'firetruck', jeep: 'military', apc: 'armored', gangcar: 'sedan', tesla: 'electric' };
+let hornsOn = [];
+sfx.horn = (type = 'sedan', vol = 1) => {
+  const c = ac(); if (!c || vol < 0.04) return;
+  const def = HORNS[HORN_OF[type] || type] || HORNS.sedan;
+  const now = c.currentTime; hornsOn = hornsOn.filter((t) => t > now);
+  if (hornsOn.length >= 4) return;
+  const n = def.bursts || 1, gap = def.gap || 0;
+  hornsOn.push(now + n * (def.dur + gap));
+  for (let b = 0; b < n; b++) {
+    const t0 = now + b * (def.dur + gap), t1 = t0 + def.dur;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = def.lp; lp.Q.value = 0.7;
+    const g = c.createGain();
+    const peak = def.g * Math.min(1, vol) * Math.min(1, vol * 1.4);                         // a little extra roll-off with distance
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(peak, t0 + 0.02); g.gain.setValueAtTime(peak, Math.max(t0 + 0.03, t1 - 0.07)); g.gain.exponentialRampToValueAtTime(0.0001, t1);
+    lp.connect(g); g.connect(bus.sfx);
+    def.f.forEach((fr, i) => {
+      const o = c.createOscillator(); o.type = def.w; o.frequency.setValueAtTime(fr, t0); o.detune.value = i % 2 ? 6 : -6;
+      if (def.bend) o.frequency.setValueAtTime(fr, t1 - 0.2), o.frequency.exponentialRampToValueAtTime(fr * def.bend, t1);
+      if (def.vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = def.vib; lg.gain.value = fr * 0.012; l.connect(lg); lg.connect(o.frequency); l.start(t0); l.stop(t1 + 0.05); }
+      o.connect(lp); o.start(t0); o.stop(t1 + 0.05);
+    });
+  }
+};
 sfx.crash = (v = 1) => { if (throttle('crash', 120)) { noise(0.35, { freq: 1500, endFreq: 90, vol: Math.min(1, 0.4 + v * 0.5) }); tone(80, 0.25, { type: 'sawtooth', vol: 0.25 * v, slideTo: 40 }); } };
 sfx.doorSlam = () => { if (throttle('slam', 150)) noise(0.12, { freq: 700, endFreq: 150, vol: 0.35 }); };
 // ---- casino
