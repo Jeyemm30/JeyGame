@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { sfx } from '../systems/Audio.js';
+import { gq } from '../systems/Settings.js';
 import { NEW_VEHICLES, NEW_MASS } from '../assets/vehicleSpecs.js';
 
 // len/wid = ground footprint in px; max = top speed px/s; acc = px/s^2; steer = max turn rate (rad/s)
@@ -185,15 +186,21 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.setRotation(Phaser.Math.Clamp(wrap(sh - base), -0.5, 0.5) * 0.7 - rot);
     this.setScale(1, this.scene.upY || 1);
     const horiz = Math.abs(Math.cos(this.heading)) >= Math.abs(Math.sin(this.heading));
-    if (view !== this.view || horiz !== this.bodyHoriz || force) {
+    const sy = this.scene.upY || 1;                  // (vehicles are built before the camera sets upY, so the box is sized again once it is known)
+    if (view !== this.view || horiz !== this.bodyHoriz || sy !== this.bodySy || force) {
+      this.bodySy = sy;
       this.view = view;
       this.bodyHoriz = horiz;
       this.setTexture(this.key + view);
       this.setOrigin(0.5, 0.78);
       const w = horiz ? this.cfg.len : this.cfg.wid;
       const h = horiz ? this.cfg.wid : this.cfg.len;
-      this.body.setSize(w, h);
-      this.body.setOffset(this.width / 2 - w / 2, this.height * 0.78 - h / 2);
+      // Arcade multiplies the box by the sprite scale, and the sprite is stretched vertically by upY (the camera tilt), so the box used to come out
+      // len x (wid * 1.61) when driving sideways (an SUV 43 px tall instead of 27) and (len * 1.61) long when driving up / down the screen. Divide the stretch
+      // out so the box is the documented len x wid footprint at every heading: two lanes fit a 96 px road and cars no longer clip parked ones.
+      const hh = h / sy;
+      this.body.setSize(w, hh);
+      this.body.setOffset(this.width / 2 - w / 2, this.height * 0.78 - hh / 2);
     }
   }
 
@@ -338,7 +345,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         if (off > look + 24) break;
         const d = hl + off;
         const px = this.cx + c * d - s * lat, py = this.cy + s * d + c * lat;
-        if (sc.solidAt(px, py)) { best = { d: off, kind: 'wall', ref: null }; break; }
+        if (sc.vehSolidAt(px, py)) { best = { d: off, kind: 'wall', ref: null }; break; }
         const a = nav.actorAt(px, py, this, 2);
         if (a) { best = { d: off, kind: a.kind, ref: a.ref }; break; }
       }
@@ -349,7 +356,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     for (const t of [8, 26, 50, 80, 115]) {
       if (t > look) break;
       const px = this.cx + c * t, py = this.cy + s * t;
-      if (sc.solidAt(px - bw, py - bh) || sc.solidAt(px + bw, py - bh) || sc.solidAt(px - bw, py + bh) || sc.solidAt(px + bw, py + bh) || sc.solidAt(px, py - bh) || sc.solidAt(px, py + bh) || sc.solidAt(px - bw, py) || sc.solidAt(px + bw, py)) {
+      if (sc.vehSolidAt(px - bw, py - bh) || sc.vehSolidAt(px + bw, py - bh) || sc.vehSolidAt(px - bw, py + bh) || sc.vehSolidAt(px + bw, py + bh) || sc.vehSolidAt(px, py - bh) || sc.vehSolidAt(px, py + bh) || sc.vehSolidAt(px - bw, py) || sc.vehSolidAt(px + bw, py)) {
         if (t < front.d + hl) { front.d = Math.max(0, t - 4); front.kind = 'wall'; front.ref = null; }
         break;
       }
@@ -358,30 +365,54 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     return P.obs;
   }
 
-  // wandering traffic / patrols: keep ~3 intersections of path queued on the road grid
+  // wandering traffic / patrols: keep ~3 intersections of path queued on the road grid.
+  // Traffic and patrols drive two-way roads in their RIGHT-hand lane: every queued waypoint is a lane point (nav.lanePoint) computed from the node
+  // we came from and the node we leave toward, so opposite directions never share a lane and turns follow the lane lines. A police sweep during a
+  // chase (opt.chase) still uses the plain road centre.
   planWander(now, opt) {
-    const P = this.pilot, nav = this.scene.nav;
-    if (!P.wp.length && P.node < 0) {
+    const P = this.pilot, nav = this.scene.nav, lanes = !opt.chase;
+    if (P.wp.length && P.wp[P.wp.length - 1].node < 0) { P.wp = []; P.node = -1; }      // a leftover path from a recovery: start the grid plan again
+    if (!P.wp.length) {
       const A = nav.snapRoad(this.cx, this.cy);
-      const fwdEnd = A.idx % 2 === 0 ? A.b : A.a;
-      const end = fwdEnd >= 0 ? fwdEnd : (A.a >= 0 ? A.a : A.b);
-      P.node = end;
-      P.prev = -1;
-      const n = nav.nodes[end];
-      P.wp.push({ x: n.x, y: n.y, node: end });
+      const ends = [A.a, A.b].filter((i) => i >= 0);
+      let end, other = -1;
+      if (ends.length) {
+        const hx = Math.cos(this.heading), hy = Math.sin(this.heading);
+        end = ends.reduce((best, i) => { const n = nav.nodes[i], bn = nav.nodes[best]; return (n.x - this.cx) * hx + (n.y - this.cy) * hy > (bn.x - this.cx) * hx + (bn.y - this.cy) * hy ? i : best; }, ends[0]);
+        other = ends.find((i) => i !== end) ?? -1;                                           // the node behind us: no U-turn back to it
+      } else end = nav.nearestNode(this.cx, this.cy).id;
+      P.node = end; P.prev = other;
+      const n = nav.nodes[end], o = other >= 0 ? nav.nodes[other] : null;
+      const pt = lanes ? nav.lanePoint(n, o, null) : n;
+      P.wp.push({ x: pt.x, y: pt.y, node: end, from: other, pending: true });
     }
-    if (!P.wp.length) { // after a chase / recovery: pick up the grid again from where we are
-      const n = nav.nearestNode(this.cx, this.cy);
-      P.node = n.id; P.prev = -1;
-      P.wp.push({ x: n.x, y: n.y, node: n.id });
+    while (P.wp.length < 4) {
+      const last = P.wp[P.wp.length - 1];
+      const nx = nav.nextNode(last.node, last.from ?? P.prev, opt);
+      const ln = nav.nodes[last.node], n = nav.nodes[nx];
+      if (lanes && ln.round) {                                                              // a roundabout: circulate round the island, in at this arm, out at the next
+        const pts = nav.ringPath(ln, last.from >= 0 ? nav.nodes[last.from] : null, n);
+        P.wp.splice(P.wp.lastIndexOf(last), 1, ...pts.map((p, q) => ({ x: p.x, y: p.y, node: q === 0 ? last.node : -1, from: q === 0 ? last.from : -1, arc: true })));
+      } else if (lanes) {                                                                   // now that the exit is known, fix the lane point of the node before it
+        const lp = nav.lanePoint(ln, last.from >= 0 ? nav.nodes[last.from] : null, n);
+        last.x = lp.x; last.y = lp.y; last.pending = false;
+      }
+      const pt = lanes ? nav.lanePoint(n, ln, null) : n;
+      P.wp.push({ x: pt.x, y: pt.y, node: nx, from: last.node, pending: true });
     }
-    while (P.wp.length < 3) {
-      const last = P.wp[P.wp.length - 1].node;
-      const before = P.wp.length > 1 ? P.wp[P.wp.length - 2].node : P.prev;
-      const nx = nav.nextNode(last, before, opt);
-      const n = nav.nodes[nx];
-      P.wp.push({ x: n.x, y: n.y, node: nx });
+  }
+
+  // is somebody crossing the intersection at node n (or arriving there from the side with priority)?  Lower uid has priority between two arriving cars,
+  // so two cars never wait for each other forever. Only crossing traffic counts: cars going our way are handled by the following-distance logic.
+  mustYield(n) {
+    for (const o of this.scene.nav.vehiclesNear(n.x, n.y, 130)) {
+      if (o === this || o.wrecked || o.mode === 'parked' || o.driver === undefined) continue;
+      const along = Math.cos(o.heading - this.heading);
+      if (Math.abs(along) > 0.5) continue;
+      if (Math.abs(o.cx - n.x) < 66 && Math.abs(o.cy - n.y) < 66) return true;             // already in the intersection
+      if (o.uid < this.uid && Math.abs(o.speed) > 20) return true;                          // arriving too, and it has priority
     }
+    return false;
   }
 
   planChase(now, pt) {
@@ -392,6 +423,14 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     sc.otherChaseGoals(this).forEach((id) => avoid.add(id));
     let wps = nav.route({ x: this.cx, y: this.cy }, pt, { oneWay: false, heading: this.heading, avoid, avoidCost: 420 });
     if (!wps) wps = [{ x: pt.x, y: pt.y, node: -1 }];
+    if (nav.rounds.length && wps.some((w) => w.node >= 0 && nav.nodes[w.node].round)) {          // go round a roundabout instead of straight at its centre
+      const flat = [], gn = wps.goalNode;
+      wps.forEach((w, k) => {
+        if (w.node >= 0 && nav.nodes[w.node].round) nav.arc(nav.nodes[w.node], k ? wps[k - 1] : { x: this.cx, y: this.cy }, wps[k + 1] || w).forEach((p) => flat.push({ x: p.x, y: p.y, node: -1 }));
+        else flat.push(w);
+      });
+      flat.goalNode = gn; wps = flat;
+    }
     P.wp = wps;
     this.goalNode = wps.goalNode ?? -1;
   }
@@ -427,7 +466,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       P.offT = now + 650;
       const A = nav.snapRoad(this.cx, this.cy);
       const wasLocked = P.locked;
-      if (A.d > 66 && !this.scene.nav.inLot(this.cx, this.cy)) {
+      if (A.d > 66 && !this.scene.nav.inLot(this.cx, this.cy) && !this.scene.nav.inRoundabout(this.cx, this.cy)) {
         if (!P.locked || now > (P.offReplan || 0)) {
           const path = nav.findPath(this.cx, this.cy, A.point.x, A.point.y, 2200, { veh: true });
           P.offReplan = now + 2200;
@@ -461,7 +500,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     } else { this.cmd = { throttle: 0, steer: 0, handbrake: true }; return; }
 
     if (wander && !P.locked) {
-      this.planWander(now, this.mode === 'chase' ? { oneWay: false, home: sc.wanted.lastKnown, homeRadius: 700 } : { oneWay: true, home: this.mode === 'patrol' ? this.homePos : null, homeRadius: 1800 });
+      this.planWander(now, this.mode === 'chase' ? { oneWay: false, chase: true, home: sc.wanted.lastKnown, homeRadius: 700 } : { oneWay: false, home: this.mode === 'patrol' ? this.homePos : null, homeRadius: 1800 });
     }
 
     // ---- recovery sequence (stop -> reverse -> turn away -> replan)
@@ -517,10 +556,26 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     const o = this.probeAhead(now);
     const f = o.front;
     let blockedStill = false;
+    const civil = this.mode !== 'chase';
+    // ---- intersections: wait outside the crossing while somebody is going through it, and give way to the cross traffic that has priority
+    if (civil && wander && wp.node >= 0 && dist < 200 && dist > 76) {
+      if (now >= (P.yieldT || 0)) { P.yieldT = now + 110; P.yielding = this.mustYield(this.scene.nav.nodes[wp.node]); }
+      if (P.yielding) target = Math.min(target, Math.max(0, (dist - 100) * 1.6));
+    } else P.yielding = false;
     if (f.d < Infinity) {
       const close = Phaser.Math.Clamp(1 - f.d / (70 + sp * 0.5), 0, 1);
+      const rv = f.kind === 'veh' && f.ref && f.ref.active ? f.ref : null;
+      const along = rv ? Math.cos(rv.heading - this.heading) : 0;
+      const rs = rv && along > 0.3 ? Math.max(0, rv.speed * along) : 0;
       const mover = f.kind === 'veh' && f.ref && Math.abs(f.ref.speed) > 18 && Math.cos(f.ref.heading - this.heading) > 0.3;
-      if (mover) target = Math.min(target, Math.max(0, Math.abs(f.ref.speed) * 0.92 - (f.d < 40 ? 40 : 0)));
+      if (rv && civil && !(rs < 5 && P.waitT > 2200)) {
+        // keep a safe gap (about half a second of travel + 18 px): match the speed of the car ahead, stop behind a stopped one - never swing into the other lane.
+        // (after 2.2 s stuck behind a dead-stopped car the old swing-around below takes over so a breakdown cannot block a road for good)
+        const safe = 18 + sp * 0.5;
+        target = Math.min(target, Math.max(0, rs + (f.d - safe) * 1.4));
+        if (f.d < 16) target = 0;
+        blockedStill = f.d < 60 && rs < 8;
+      } else if (mover) target = Math.min(target, Math.max(0, Math.abs(f.ref.speed) * 0.92 - (f.d < 40 ? 40 : 0)));
       else if (f.kind === 'ped' || f.kind === 'player') { target = Math.min(target, f.d < 50 ? 0 : 60 * (1 - close)); blockedStill = f.d < 45; }
       else {
         // a wall or a parked / stopped vehicle: swing around it when there is room, otherwise slow right down
@@ -544,7 +599,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       if (target > 25 && moved < 7) P.blockT += span;
       else if (blockedStill && sp < 6) {
         P.waitT += span;
-        if (f.kind !== 'ped' && f.kind !== 'player' && P.waitT > 1500) P.blockT = 9999;   // a parked car / wall will not move
+        if (f.kind !== 'ped' && f.kind !== 'player' && P.waitT > (f.kind === 'veh' && f.ref && f.ref.driver === 'ai' && !f.ref.wrecked ? 6500 : 1500)) P.blockT = 9999;   // a parked car / wall will not move
         if (P.waitT > 7000) P.blockT = 9999;                                              // nor will a person who stands there forever
       } else { P.blockT = Math.max(0, P.blockT - 500); P.waitT = 0; }
       P.prog = { x: this.cx, y: this.cy, t: now };
@@ -557,7 +612,11 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   updateVehicle(now, dt) {
     this.applyKnock(Math.min(this.scene.game.loop.delta || dt, 250) / 1000);      // real frame time: the physics step moves the car for that long, so the friction must match it
     if (this.driver) this.lastDriverAt = now;
-    if (this.driver === 'ai' || this.mode === 'chase') this.aiThink(now, dt);
+    if (this.driver === 'ai' || this.mode === 'chase') {
+      // a car that is far from the player (about 1 screen away) re-plans every other frame: its steering command simply stays in force in between
+      const pp = this.scene.player, far = this.mode !== 'chase' && (Math.abs(this.x - pp.x) > 900 || Math.abs(this.y - pp.y) > 700);
+      if (!(far && (this.aiSkip = !this.aiSkip))) this.aiThink(now, dt);
+    }
     if (this.driver || this.mode === 'chase') this.drive(dt);
     else if (this.mode === 'parked' && this.speed !== 0) { this.speed = 0; if (Math.hypot(this.kv.x, this.kv.y) < 3) this.setVelocity(0, 0); }
 
@@ -592,7 +651,8 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   // brake / reverse lights always, headlights + tail glow in the dark (drawn into one shared graphics)
   drawLamps() {
     const sc = this.scene, gl = sc.lampGfx;
-    if (!gl || this.wrecked || !sc.viewRect(60).contains(this.x, this.y)) return;
+    if (!gl || this.wrecked || !(sc.viewCache || sc.viewRect(60)).contains(this.x, this.y)) return;
+    const ll = gq().lightLevel;
     const c = Math.cos(this.heading), s = Math.sin(this.heading);
     const L = this.cfg.len / 2 - 2, Wd = this.cfg.wid * 0.3, lift = (this.view === 's' ? 12 : 14) + 12;
     const moving = !!this.driver || this.mode === 'chase';
@@ -601,7 +661,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     const dark = sc.night || 0;
     const eo = sc.elev(lift);
     const pt = (along, side) => ({ x: this.x + c * along - s * side + eo.x, y: this.y + s * along + c * side + eo.y });
-    const lamp = (p, col, r, a) => { gl.fillStyle(col, a * 0.28).fillCircle(p.x, p.y, r * 2.6); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
+    const lamp = (p, col, r, a) => { if (ll >= 2) gl.fillStyle(col, a * 0.28).fillCircle(p.x, p.y, r * 2.6); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
     for (const side of [-Wd, Wd]) {
       const rear = pt(-L, side);
       if (braking) lamp(rear, 0xff2a1a, 2.2, 1);
@@ -611,7 +671,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         const f = pt(L, side);
         lamp(f, 0xfff2b0, 2.2, 0.95);
         const f2 = pt(L + 26, side * 1.5);
-        gl.fillStyle(0xfff2b0, 0.07 * dark).fillCircle(f2.x, f2.y + lift * 0.6, 22);
+        if (ll >= 2) gl.fillStyle(0xfff2b0, 0.07 * dark).fillCircle(f2.x, f2.y + lift * 0.6, 22);
       }
     }
   }

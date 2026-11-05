@@ -40,7 +40,7 @@ export function buildPlaces(gs) {
   const blk = wd.blocks.find((b) => b.alley !== undefined);
   set('alley', ((blk.x0 + blk.x1) / 2) * TILE, (blk.alley + 0.5) * TILE, 'Back alley');
   const fort = wd.pois.find((p) => p.type === 'military' && /Fort/.test(p.name)) || poi('military', 0);
-  set('fort', fort.x - (fort.w * TILE) / 2 - 80, fort.y, 'Fort Merrow gate');
+  if (wd.fortGate) set('fort', wd.fortGate.x, wd.fortGate.y, 'Fort Merrow gate'); else set('fort', fort.x - (fort.w * TILE) / 2 - 80, fort.y, 'Fort Merrow gate');
   // houses: pick non-abandoned doors
   const homes = wd.houseDoors.filter((h) => !h.abandoned);
   const byDist = homes.slice().sort((a, b) => dist(a, wd.spawn) - dist(b, wd.spawn));

@@ -10,6 +10,7 @@ import { T } from '../assets/textures.js';
            without scanning every entity. */
 
 const CELL = 64;
+const RING_R = 3.2 * TILE;        // radius of a roundabout's lane ring
 const DIRS8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export default class Nav {
@@ -33,21 +34,51 @@ export default class Nav {
     for (let i = 0; i < this.HR.length; i++) for (let j = 0; j < this.VR.length; j++) {
       this.nodes.push({ id: this.nid(j, i), j, i, x: (this.VR[j] + 1.5) * TILE, y: (this.HR[i] + 1.5) * TILE, out: [], any: [] });
     }
-    // one-way directions: even rows run east, odd rows west; even columns south, odd columns north
+    // Two-way roads: every link can be driven in both directions, each direction in its own right-hand lane (see lanePoint).
+    // (`out` used to hold only the one-way direction; it now holds every link, so wandering traffic may leave an intersection any way except back.)
     const link = (a, b) => {
       if (this.edgeBlocked(a, b)) return;
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
       a.any.push({ to: b.id, d: dist });
-      const horiz = a.i === b.i;
-      const fwd = horiz ? (a.i % 2 === 0 ? b.x > a.x : b.x < a.x) : (a.j % 2 === 0 ? b.y > a.y : b.y < a.y);
-      if (fwd) a.out.push({ to: b.id, d: dist });
+      a.out.push({ to: b.id, d: dist });
     };
     for (const n of this.nodes) {
       if (n.j + 1 < this.VR.length) { const m = this.nodes[this.nid(n.j + 1, n.i)]; link(n, m); link(m, n); }
       if (n.i + 1 < this.HR.length) { const m = this.nodes[this.nid(n.j, n.i + 1)]; link(n, m); link(m, n); }
     }
+    // roundabouts (made by WorldGen): the node at the centre is flagged, and traffic circulates counter-clockwise on a ring of RING_R px
+    this.rounds = [];
+    for (const r of (scene.wd.roundabouts || [])) { const n = this.nodes[this.nid(r.j, r.i)]; if (n) { n.round = true; this.rounds.push(n); } }
     this.actors = new Map();
     this.actorTick = 0;
+  }
+
+  // inside (or right beside) a roundabout: a car circulating there is on the road even though it is far from the road centre lines
+  inRoundabout(x, y) {
+    for (const n of this.rounds) if (Math.abs(n.x - x) < 5.6 * TILE && Math.abs(n.y - y) < 5.6 * TILE) return true;
+    return false;
+  }
+
+  // waypoints round a roundabout, counter-clockwise (the angle decreases on screen), from the arm the car comes in on to the arm it leaves by.
+  // from / to are nodes (or null). Entry and exit sit in the car's own right-hand lane, so inbound and outbound cars of one arm never share a point.
+  ringPath(n, from, to) {
+    const L = 26, dir = (p, q) => (Math.abs(q.x - p.x) > Math.abs(q.y - p.y) ? [Math.sign(q.x - p.x), 0] : [0, Math.sign(q.y - p.y)]);
+    const din = from ? dir(from, n) : (to ? dir(n, to) : [1, 0]), dout = to ? dir(n, to) : din;
+    const R = RING_R, rin = [-din[1], din[0]], rout = [-dout[1], dout[0]];
+    const e = { x: n.x - din[0] * R + rin[0] * L, y: n.y - din[1] * R + rin[1] * L };
+    const x = { x: n.x + dout[0] * R + rout[0] * L, y: n.y + dout[1] * R + rout[1] * L };
+    return this.arc(n, e, x);
+  }
+
+  // counter-clockwise arc from point a to point b (their angles about the node decide where the arc starts and ends)
+  arc(n, a, b) {
+    const R = RING_R, a0 = Math.atan2(a.y - n.y, a.x - n.x), a1 = Math.atan2(b.y - n.y, b.x - n.x);
+    let d = a1 - a0;
+    while (d > -0.05) d -= Math.PI * 2;
+    const steps = Math.max(1, Math.ceil(-d / 0.55)), pts = [{ x: a.x, y: a.y }];
+    for (let k = 1; k < steps; k++) { const t = a0 + (d * k) / steps; pts.push({ x: n.x + Math.cos(t) * R, y: n.y + Math.sin(t) * R }); }
+    pts.push({ x: b.x, y: b.y });
+    return pts;
   }
 
   /* ---------------------------------------------------------------- actors */
@@ -250,6 +281,21 @@ export default class Nav {
       if (sc.solidAt(x, y) || sc.solidAt(x + nx, y + ny) || sc.solidAt(x - nx, y - ny)) return true;
     }
     return false;
+  }
+
+  // Where a car in the RIGHT-hand lane aims when it crosses node n, arriving from node `from` and leaving toward node `to` (either may be null).
+  // Roads are 3 tiles wide: the lane centres sit 26 px either side of the road centre. Straight on = a point on the lane line; a turn = the
+  // spot where the incoming lane line meets the outgoing one (a tight right turn, a wide left turn), so cars never cut into the opposite lane.
+  lanePoint(n, from, to) {
+    const L = 26;
+    const dir = (p, q) => { const dx = q.x - p.x, dy = q.y - p.y; return Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]; };
+    const din = from ? dir(from, n) : (to ? dir(n, to) : [1, 0]);
+    const dout = to ? dir(n, to) : din;
+    const rin = [-din[1], din[0]], rout = [-dout[1], dout[0]];       // right of travel (screen y points down: east -> south, south -> west)
+    if (din[0] === dout[0] && din[1] === dout[1]) return { x: n.x + rin[0] * L, y: n.y + rin[1] * L };
+    if (din[0] === -dout[0] && din[1] === -dout[1]) return { x: n.x + rin[0] * L, y: n.y + rin[1] * L };
+    if (din[1] === 0) return { x: n.x + rout[0] * L, y: n.y + rin[1] * L };     // heading along a row, leaving along a column
+    return { x: n.x + rin[0] * L, y: n.y + rout[1] * L };                         // heading along a column, leaving along a row
   }
 
   // nearest road centre line to a world position

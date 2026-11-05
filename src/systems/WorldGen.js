@@ -7,20 +7,24 @@ import { MAP_W as W, MAP_H as H, TILE } from '../config.js';
 import { mulberry32 } from './Rng.js';
 import { DIMS, AREA_OF, MIX } from '../assets/vehicleSpecs.js';
 import { GANGS, GANG_IDS, BOSSES, memberRole, bossRole, weaponFor } from '../story/gangs.js';
+import { makeMilitary } from './MilitaryGen.js';
 
-const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 219], [223, 259], [263, 299], [303, 339], [343, 379]];
-const ROWS = [[0, 19], [23, 55], [59, 91], [95, 127], [131, 163], [167, 199], [203, 235], [239, 271]];
-const HR = [20, 56, 92, 128, 164, 200, 236]; // horizontal roads (3 tiles tall)
-const VR = [20, 60, 100, 140, 180, 220, 260, 300, 340]; // vertical roads (3 tiles wide)
+// The city: the original 10 x 8 blocks, plus two new block columns to the east (x 383-459) and two new block rows to the south (y 275-343), joined by the same road grid.
+const COLS = [[0, 19], [23, 59], [63, 99], [103, 139], [143, 179], [183, 219], [223, 259], [263, 299], [303, 339], [343, 379], [383, 419], [423, 459]];
+const ROWS = [[0, 19], [23, 55], [59, 91], [95, 127], [131, 163], [167, 199], [203, 235], [239, 271], [275, 307], [311, 343]];
+const HR = [20, 56, 92, 128, 164, 200, 236, 272, 308]; // horizontal roads (3 tiles tall)
+const VR = [20, 60, 100, 140, 180, 220, 260, 300, 340, 380, 420]; // vertical roads (3 tiles wide)
 const KINDS = [
-  ['forest', 'res', 'res', 'ind', 'ind', 'forest', 'suburb', 'suburb', 'school', 'forest'],
-  ['res', 'res', 'park', 'hospital', 'ind', 'forest', 'suburb', 'park2', 'apartments', 'suburb'],
-  ['res', 'res_gas', 'downtown', 'downtown', 'ind', 'forest', 'mall', 'com', 'downtown', 'apartments'],
-  ['res', 'com', 'com', 'police', 'ind_gas', 'casino', 'com', 'fire', 'com', 'suburb'],
-  ['res', 'res', 'res_ab', 'checkpoint', 'military', 'forest', 'res_ab', 'res_ab', 'ind', 'ind_gas'],
-  ['suburb', 'suburb', 'com', 'apartments', 'ind', 'forest', 'res', 'res', 'suburb', 'forest'],
-  ['res', 'hideout', 'suburb', 'mall', 'ind', 'forest', 'ind', 'ind', 'res_ab', 'suburb'],
-  ['forest', 'suburb', 'res', 'fire', 'ind_gas', 'forest', 'res', 'park2', 'suburb', 'forest']
+  ['forest', 'res', 'res', 'ind', 'ind', 'forest', 'suburb', 'suburb', 'school', 'forest', 'suburb', 'forest'],
+  ['res', 'res', 'park', 'hospital', 'ind', 'forest', 'suburb', 'park2', 'apartments', 'suburb', 'res', 'park'],
+  ['res', 'res_gas', 'downtown', 'downtown', 'ind', 'forest', 'mall', 'com', 'downtown', 'apartments', 'com', 'apartments'],
+  ['res', 'com', 'com', 'police', 'ind_gas', 'casino', 'com', 'fire', 'com', 'suburb', 'com', 'suburb'],
+  ['res', 'res', 'res_ab', 'redevA', 'redevB', 'forest', 'res_ab', 'res_ab', 'ind', 'ind_gas', 'checkpoint', 'military'],
+  ['suburb', 'suburb', 'com', 'apartments', 'ind', 'forest', 'res', 'res', 'suburb', 'forest', 'res', 'suburb'],
+  ['res', 'hideout', 'suburb', 'mall', 'ind', 'forest', 'ind', 'ind', 'res_ab', 'suburb', 'ind_gas', 'ind'],
+  ['forest', 'suburb', 'res', 'fire', 'ind_gas', 'forest', 'res', 'park2', 'suburb', 'forest', 'suburb', 'forest'],
+  ['forest', 'suburb', 'res', 'com', 'ind', 'forest', 'suburb', 'res', 'apartments', 'res', 'com', 'suburb'],
+  ['forest', 'res', 'park2', 'suburb', 'ind', 'forest', 'res', 'suburb', 'forest', 'res', 'park', 'forest']
 ];
 const DISTRICTS = [
   { name: 'Northgate', c0: 1, c1: 2, r0: 0, r1: 0, color: '#6aa86a' },
@@ -32,7 +36,7 @@ const DISTRICTS = [
   { name: 'Civic Center', c0: 3, c1: 3, r0: 3, r1: 3, color: '#5a7ad0' },
   { name: 'Eastside Industrial', c0: 3, c1: 4, r0: 0, r1: 3, color: '#a07ad0' },
   { name: 'Southside', c0: 0, c1: 2, r0: 4, r1: 4, color: '#6aa86a' },
-  { name: 'Fort Merrow (Restricted)', c0: 3, c1: 4, r0: 4, r1: 4, color: '#6a8a3a' },
+  { name: 'Merrow Heights', c0: 3, c1: 4, r0: 4, r1: 4, color: '#78b878' },
   { name: 'Riverside Park', c0: 7, c1: 7, r0: 1, r1: 1, color: '#3f9a4a' },
   { name: 'Lincoln School District', c0: 8, c1: 8, r0: 0, r1: 0, color: '#e0b040' },
   { name: 'Maple Heights', c0: 6, c1: 7, r0: 0, r1: 1, color: '#78b878' },
@@ -43,7 +47,12 @@ const DISTRICTS = [
   { name: 'East Docks', c0: 8, c1: 9, r0: 4, r1: 4, color: '#a07ad0' },
   { name: 'Southgate', c0: 0, c1: 4, r0: 5, r1: 7, color: '#6aa86a' },
   { name: 'New Harbor Industrial', c0: 6, c1: 9, r0: 5, r1: 7, color: '#a07ad0' },
-  { name: 'River Woods', c0: 5, c1: 5, r0: 0, r1: 7, color: '#4a8a4a' }
+  { name: 'River Woods', c0: 5, c1: 5, r0: 0, r1: 9, color: '#4a8a4a' },
+  { name: 'Harborview Heights', c0: 10, c1: 11, r0: 0, r1: 1, color: '#78b878' },
+  { name: 'Bayside Commons', c0: 10, c1: 11, r0: 2, r1: 3, color: '#d4a84a' },
+  { name: 'Fort Merrow (Restricted)', c0: 10, c1: 11, r0: 4, r1: 4, color: '#6a8a3a' },
+  { name: 'Pier Industrial', c0: 10, c1: 11, r0: 5, r1: 7, color: '#a07ad0' },
+  { name: 'Southport', c0: 0, c1: 11, r0: 8, r1: 9, color: '#6aa86a' }
 ];
 
 export function generateWorld(seed = 20240) {
@@ -57,7 +66,7 @@ export function generateWorld(seed = 20240) {
   const out = {
     ground, obj, crates: [], containers: [], enemies: [], civilians: [], vehicles: [], doors: [], hidden: [], camps: [],
     zones: [], buildings: [], props: [], trees: [], decor: [], items: [], pois: [], nodes: [], districts: [], publicDoors: [],
-    benches: [], houseDoors: [], lots: [], rugs: [], spawn: null
+    benches: [], houseDoors: [], lots: [], rugs: [], storeFronts: [], policeDecor: [], policeDoors: [], policeSkin: { walls: [], doors: [] }, spawn: null
   };
 
   const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
@@ -159,7 +168,7 @@ export function generateWorld(seed = 20240) {
   const registerBuilding = (x, y, w, h, style, extra = {}) => {
     const b = {
       id: buildingId++, x, y, w, h, style, colorIdx: extra.colorIdx ?? ri(0, 5), broken: !!extra.abandoned,
-      lift: extra.lift || 0, kind: extra.kind || 'house', tall: !!extra.tall, dark: !!extra.dark, look: extra.look || null
+      lift: extra.lift || 0, kind: extra.kind || 'house', tall: !!extra.tall, dark: !!extra.dark, look: extra.look || null, tint: extra.tint || 0, facade: extra.facade || 0, noRoof: !!extra.noRoof
     };
     out.buildings.push(b);
     return b;
@@ -209,6 +218,36 @@ export function generateWorld(seed = 20240) {
     out.doors.push({ x: dx, y: dy });
   };
 
+  /* ---- Supply Depot: an ordinary warehouse run as a supply store. Tool cabinets, equipment shelves and pallet racks (three categories) in rows with wide aisles, a
+     checkout counter beside the (double, roll-up) entrance and a clerk behind it. ---- */
+  function depotInterior(x, y, w, h, doors, part) {
+    const d0 = doors[0];
+    const rx0 = x + 1, rx1 = part > 0 ? part - 1 : x + w - 2;                  // the room behind the entrance (the partition splits the building)
+    const near = (tx, ty, r) => doors.some((d) => cheb(d, { x: tx, y: ty }) <= r);
+    const set = (tx, ty, t) => { if (tx > x && tx < x + w - 1 && tx !== part && ty > y && ty <= y + h - 4 && obj[ty][tx] === -1 && !near(tx, ty, 1)) obj[ty][tx] = t; };
+    // service counter on the BACK side of the entrance room, facing the door, the clerk behind it, a toolboard wall behind the clerk
+    const rw = rx1 - rx0 + 1, cw = rw >= 6 ? 4 : 3, cL = rx0 + Math.floor((rw - cw) / 2), cR = cL + cw - 1, K = y + 2, C = y + 3;
+    for (let xx = rx0; xx <= rx1; xx++) set(xx, y + 1, T.toolWall);
+    for (let xx = cL; xx <= cR; xx++) set(xx, C, T.ctrInd);
+    set(cL - 1, K, T.indRack); set(cR + 1, K, T.indRack);
+    // three product zones in rows with wide aisles: tools (pegboards), equipment (steel racks), supplies (pallets); more open floor than a shop
+    const rows = [y + 5, y + 8].filter((ry) => ry < y + h - 3);
+    rows.forEach((ry) => {
+      for (let xx = x + 2; xx <= x + w - 3; xx++) {
+        if ((xx - x) % 5 === 0 || xx === part || near(xx, ry, 2)) continue;       // an aisle every fifth tile
+        const third = (xx - x) < w / 3 ? 0 : (xx - x) < (2 * w) / 3 ? 1 : 2;
+        set(xx, ry, third === 0 ? T.toolWall : third === 1 ? T.indRack : T.crates);
+      }
+    });
+    if (part > 0) for (let xx = part + 2; xx <= x + w - 3; xx++) if ((xx - x) % 5 !== 0) set(xx, y + 2, xx - part < 4 ? T.indRack : T.crates);      // the room behind the partition: a back row of stock
+    civ(cL + Math.floor(cw / 2), K, 'shopkeeper', { shop: 'Supply Depot', act: 'cashier', face: Math.PI / 2 });
+    [cL - 2, cR + 2].forEach((tx) => { if (tx >= rx0 && tx <= rx1 && obj[y + 1][tx] === T.toolWall) { obj[y + 1][tx] = -1; out.decor.push({ kind: 'st_poster_depot', x: px(tx), y: (y + 1) * TILE + 22 }); } });
+    out.storeFronts.push({ name: 'Supply Depot', tx: d0.x, ty: d0.y, w: 2, x: px(d0.x), y: px(d0.y + 1) });
+    publicDoor(d0.x, d0.y, 'shop', 'Supply Depot');
+    [-3, 3].forEach((ox) => { const tx = d0.x + ox, ty = d0.y + 1; if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) out.decor.push({ kind: 'st_prop_pallets', x: px(tx), y: ty * TILE + 30 }); });      // pallets and a drum by the loading doors
+    for (let ty = d0.y + 1; ty <= d0.y + 2; ty++) for (let tx = d0.x - 3; tx <= d0.x + 4; tx++) if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) ground[ty][tx] = T.concrete;      // the loading apron in front of the roll-up doors
+  }
+
   /* ---- generic box building (warehouses, tents, factories) ---- */
   function block(x, y, w, h, o = {}) {
     const wallT = o.wall ?? T.wall;
@@ -228,6 +267,17 @@ export function generateWorld(seed = 20240) {
       if (o.carpet) for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = part + 1; xx < x + w - 1; xx++) ground[yy][xx] = T.carpet;
     }
     placeWindows(x, y, w, h, { windowChance: o.windowChance ?? 0.25, abandoned: o.abandoned });
+    // warehouse layouts (o.layout): 'rows' = two long pallet racks with an aisle gap every fifth tile; 'bays' = three loading bays of stacked pallets against the back wall with
+    // the whole front left open; anything else = open floor with a few scattered pallets. Tiles near the doors always stay clear.
+    if ((o.layout === 'rows' || o.layout === 'bays') && !o.depot) {
+      const clear = (tx, ty) => obj[ty][tx] === -1 && tx !== part && !doors.some((d) => cheb(d, { x: tx, y: ty }) <= 2);
+      if (o.layout === 'rows') {
+        [y + 3, y + h - 4].forEach((ry) => { if (ry > y && ry < y + h - 1) for (let xx = x + 2; xx <= x + w - 3; xx++) { if ((xx - x) % 5 === 0) continue; if (clear(xx, ry)) obj[ry][xx] = T.barricade; } });
+      } else {
+        const bw = Math.max(2, Math.floor((w - 4) / 4));
+        for (let b = 0; b < 3; b++) { const bx = x + 2 + b * (bw + 2); for (let yy = y + 1; yy <= y + 2; yy++) for (let xx = bx; xx < bx + bw && xx < x + w - 1; xx++) if (clear(xx, yy)) obj[yy][xx] = T.barricade; }
+      }
+    }
     const free = [];
     for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = x + 1; xx < x + w - 1; xx++) {
       if (obj[yy][xx] !== -1 || xx === part) continue;
@@ -235,18 +285,20 @@ export function generateWorld(seed = 20240) {
       free.push({ x: xx, y: yy });
     }
     shuffle(free);
-    for (let i = 0; i < (o.pallets || 0) && free.length; i++) { const t = free.pop(); obj[t.y][t.x] = T.barricade; }
-    for (let i = 0; i < (o.crates || 0) && free.length; i++) {
+    for (let i = 0; i < (o.depot ? 0 : o.pallets || 0) && free.length; i++) { const t = free.pop(); obj[t.y][t.x] = T.barricade; }
+    if (o.depot) depotInterior(x, y, w, h, doors, part);
+    for (let i = 0; i < Math.ceil((o.depot ? 0 : o.crates || 0) * 0.4) && free.length; i++) {
       const t = free.pop();
       out.crates.push({ x: px(t.x), y: px(t.y), tier: o.tier || 'crate' });
       taken.add(t.y * W + t.x);
     }
-    for (let i = 0; i < (o.loose || 0) && free.length; i++) {
+    for (let i = 0; i < (o.depot ? 0 : o.loose || 0) && free.length; i++) {
       const t = free.pop();
       out.items.push({ x: px(t.x), y: px(t.y), id: pick(o.looseIds || ['ammo_pistol', 'm_pipe', 'm_crowbar', 'medkit']) });
     }
-    registerBuilding(x, y, w, h, o.roof || 'metal', { abandoned: o.abandoned, kind: o.kind || 'warehouse' });
-    return { x, y, w, h, free, doors };
+    if (o.depot) for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if ((yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1) && obj[yy][xx] === T.window) obj[yy][xx] = T.winHardware;
+    registerBuilding(x, y, w, h, o.roof || 'metal', { abandoned: o.abandoned, kind: o.kind || 'warehouse', facade: o.depot ? T.facDepot : 0 });
+    return { x, y, w, h, free, doors, depot: !!o.depot };
   }
 
 
@@ -254,6 +306,8 @@ export function generateWorld(seed = 20240) {
           placement (and its loot containers) is kept; it is converted into detailed furniture, then decorations are added around it.
           This uses its own random stream (seeded by the house position), so the rest of the world generates exactly as before. ---- */
   const HOME_THEMES = {
+    // the player's home: seafoam teal + off-white + light oak (palette 6), a TV and a dining area, no clutter, curtains on the big windows
+    player: { pal: [6], floor: { living: T.wood, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [0, 2], plants: 2, art: 0, photos: 0, clock: 0, rug: ['hc_rug2', 'hc_rug'], curtain: 0.9, mess: 0, pc: 0, kc: 1, fr: 1, st: 1, ba: 1, pend: 1, extra: [], kids: false, bath: 'shower', shelf: false },
     modern: { pal: [0, 0, 1], floor: { living: T.wood, bedroom: T.wood, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [0, 2], plants: 2, art: 3, photos: 0.1, clock: 1, rug: ['hc_rug2', 'hc_rug'], curtain: 0.55, mess: 0.1, pc: 0.8, kc: 1, fr: 1, st: 1, ba: 1, pend: 1, extra: ['aquarium'], kids: false, bath: 'tub' },
     family: { pal: [1, 1, 5], floor: { living: T.wood, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 0, lamp: [0], plants: 1, art: 2, photos: 0.9, clock: 0, rug: ['hc_rug2'], curtain: 0.7, mess: 0.35, pc: 0.3, kc: 0, fr: 0, st: 0, ba: 0, pend: 0, extra: [], kids: true, bath: 'shower' },
     luxury: { pal: [2], floor: { living: T.tileFloor, bedroom: T.carpet, kitchen: T.tileFloor, bathroom: T.tileFloor }, tv: 2, lamp: [2], plants: 3, art: 3, photos: 0.2, clock: 1, rug: ['hc_rug'], curtain: 0.9, mess: 0, pc: 0.5, kc: 2, fr: 1, st: 1, ba: 1, pend: 2, extra: ['piano', 'aquarium'], kids: false, bath: 'tub', palm: true, armchair: true },
@@ -270,13 +324,19 @@ export function generateWorld(seed = 20240) {
     const pickH = (a) => a[Math.floor(hr() * a.length)];
     let theme;
     if (ab) theme = 'abandoned';
+    else if (o.home) theme = 'player';
     else if (o.wall === T.wall2) theme = 'apartment';
     else {
       const r = hr();
       theme = r < 0.15 ? 'modern' : r < 0.34 ? 'family' : r < 0.44 ? 'luxury' : r < 0.6 ? 'old' : r < 0.7 ? 'poor' : r < 0.86 ? 'cozy' : 'large';
       if (theme === 'large' && w < 11) theme = 'family';
     }
-    const TH = HOME_THEMES[theme], p = pickH(TH.pal), messy = hr() < TH.mess;
+    // Minimalist ordinary homes: fewer, better-placed pieces. The theme still sets palette, floor, furniture styles and the big pieces (sofa, bed, TV, kitchen,
+    // bookshelf / armchair / piano), so every house keeps its own look; what goes is the clutter: wall pictures, clocks, photos, stains, extra plants,
+    // aquariums, fireplaces, toys / clutter on the floor, and most rugs. (Abandoned houses keep their debris and cobwebs.)
+    const BASE = HOME_THEMES[theme], aband = theme === 'abandoned';
+    const TH = aband ? BASE : { ...BASE, plants: Math.min(1, BASE.plants), extra: BASE.extra.filter((e) => e === 'piano'), photos: 0, clock: 0, stain: false, curtain: Math.min(BASE.curtain, 0.35) };
+    const p = pickH(TH.pal), messy = aband ? hr() < TH.mess : (hr(), false);
     c.theme = theme;
     const nearDoor = (tx, ty) => doorList.some((d) => cheb(d, { x: tx, y: ty }) <= 1);
     const inFoot = (tx, ty) => tx >= x && ty >= y && tx < x + w && ty < y + h;
@@ -324,11 +384,12 @@ export function generateWorld(seed = 20240) {
     };
     const floorItem = (tx, ty, kind, dx = 0, dy = 26) => { if (!free(tx, ty)) return false; used.add(ty * W + tx); dec(kind, tx, ty, dx, dy); return true; };
     const wallDeco = (tx, ty, kind, dy = 26) => {
+      if (!aband) return false;                                  // no wall pictures / clocks / shelves / mirrors in ordinary homes
       const k = ty * W + tx, wt = obj[ty - 1] && obj[ty - 1][tx];
       if (wallUsed.has(k) || (wt !== T.wall && wt !== T.wall2)) return false;
       wallUsed.add(k); dec(kind, tx, ty, 0, dy); return true;
     };
-    const rug = (key, cxp, cyp) => out.rugs.push({ key, x: cxp, y: cyp });
+    const rug = (key, cxp, cyp) => { if (theme === 'luxury' || theme === 'old' || theme === 'cozy' || theme === 'player') out.rugs.push({ key, x: cxp, y: cyp }); };       // rugs only in the three "warm" themes
     const tilesOf = (r) => { const a = []; for (let ty = r.y0; ty <= r.y1; ty++) for (let tx = r.x0; tx <= r.x1; tx++) a.push([tx, ty]); return a; };
     const shuf = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(hr() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const edge = (r) => shuf(tilesOf(r).filter(([tx, ty]) => (tx === r.x0 || tx === r.x1 || ty === r.y0) && free(tx, ty)));
@@ -480,22 +541,26 @@ export function generateWorld(seed = 20240) {
         split({ x0: r.x0, y0: p + 1, x1: r.x1, y1: r.y1 }, depth + 1);
       }
     };
-    split({ x0: x + 1, y0: y + 1, x1: x + w - 2, y1: y + h - 2 }, 0);
+    if (o.plan) {                                                      // a fixed plan (the player's home): rooms with their types, and the wall lines
+      o.plan.rooms.forEach((r) => rooms.push({ ...r }));
+      o.plan.lines.forEach((ln) => { for (let q = ln.a; q <= ln.b; q++) obj[ln.vert ? q : ln.p][ln.vert ? ln.p : q] = wallT; lines.push(ln); });
+    } else split({ x0: x + 1, y0: y + 1, x1: x + w - 2, y1: y + h - 2 }, 0);
 
     const doorList = [];
     const addDoor = (dx, dy, open) => { addDoorTile(dx, dy, open); doorList.push({ x: dx, y: dy }); };
     lines.forEach((ln) => {
+      if (ln.noDoor) return;
       const cands = [];
       for (let q = ln.a; q <= ln.b; q++) {
         const [ax, ay, bx, by] = ln.vert ? [ln.p - 1, q, ln.p + 1, q] : [q, ln.p - 1, q, ln.p + 1];
         if (obj[ay][ax] === -1 && obj[by][bx] === -1) cands.push(q);
       }
-      const q = cands.length ? cands[ri(0, cands.length - 1)] : ri(ln.a, ln.b);
-      addDoor(ln.vert ? ln.p : q, ln.vert ? q : ln.p, ab && rng() < 0.5);
+      const q = ln.at !== undefined ? ln.at : cands.length ? cands[ri(0, cands.length - 1)] : ri(ln.a, ln.b);
+      addDoor(ln.vert ? ln.p : q, ln.vert ? q : ln.p, ln.open ? true : ab && rng() < 0.5);
     });
     const fc = [];
     for (let xx = x + 1; xx < x + w - 1; xx++) if (obj[y + h - 2][xx] === -1) fc.push(xx);
-    const fdx = fc[ri(0, fc.length - 1)];
+    const fdx = o.frontDoor !== undefined ? o.frontDoor : fc[ri(0, fc.length - 1)];
     addDoor(fdx, y + h - 1, ab && rng() < 0.6);
     if (o.wideDoor && obj[y + h - 1][fdx + 1] === wallT && obj[y + h - 2][fdx + 1] === -1) addDoor(fdx + 1, y + h - 1, false);
     const entry = { x: fdx, y: y + h - 2 };
@@ -505,6 +570,7 @@ export function generateWorld(seed = 20240) {
     living.type = o.office ? 'lobby' : 'living';
     const rest = rooms.filter((r) => r !== living).sort((a, b) => (b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1) - (a.x1 - a.x0 + 1) * (a.y1 - a.y0 + 1));
     rest.forEach((r, i) => {
+      if (r.type) return;                                              // a fixed plan names its rooms
       if (o.office) { r.type = 'office'; return; }
       const area = (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1);
       if (i === 0) r.type = rest.length === 1 && rng() < 0.4 ? 'bedroom' : 'kitchen';
@@ -557,8 +623,27 @@ export function generateWorld(seed = 20240) {
         const s = top.filter((tx) => ok(r, tx, r.y0));
         if (s.length) put(s[s.length - 1], r.y0, T.sofa);
       } else if (r.type === 'office') {
-        for (let ty = r.y0 + 1; ty <= r.y1; ty += 2) for (let tx = r.x0 + 1; tx <= r.x1; tx += 2) {
-          if (ok(r, tx, ty) && rng() < 0.8) put(tx, ty, T.desk, rng() < 0.5 ? { tier: 'office', name: 'Desk' } : null);
+        // three office layouts (picked from the room's position, so neighbouring offices differ), each with open aisles and far fewer pieces than the old desk grid
+        const rw = r.x1 - r.x0 + 1, rh = r.y1 - r.y0 + 1, style = (((x * 7 + y * 13 + r.x0 * 3 + r.y0) % 3) + 3) % 3;
+        const desk = () => (rng() < 0.45 ? { tier: 'office', name: 'Desk' } : null);
+        if (style === 0) {                       // open plan: long desk rows with an aisle every fourth column
+          for (let ty = r.y0 + 1; ty <= r.y1; ty += 3) for (let tx = r.x0 + 1; tx <= r.x1; tx++) { if ((tx - r.x0) % 4 === 0) continue; if (ok(r, tx, ty) && rng() < 0.9) put(tx, ty, T.desk, desk()); }
+        } else if (style === 1) {                // pods: facing desk pairs with a chair, gaps all round
+          for (let ty = r.y0 + 1; ty + 1 <= r.y1; ty += 3) for (let tx = r.x0 + 1; tx + 1 <= r.x1; tx += 4) {
+            if (ok(r, tx, ty) && ok(r, tx + 1, ty)) { put(tx, ty, T.desk, desk()); put(tx + 1, ty, T.desk); if (ok(r, tx, ty + 1) && rng() < 0.7) put(tx, ty + 1, T.chair); }
+          }
+        } else if (rw >= 5 && rh >= 4) {         // meeting room: a long table with chairs both sides, desks only along the side wall
+          const cy = Math.floor((r.y0 + r.y1) / 2), x0 = r.x0 + 1, x1 = r.x1 - 1;
+          for (let tx = x0; tx <= x1; tx++) {
+            if (ok(r, tx, cy)) put(tx, cy, T.table);
+            if (ok(r, tx, cy - 1) && (tx - x0) % 2 === 0) put(tx, cy - 1, T.chair);
+            if (ok(r, tx, cy + 1) && (tx - x0) % 2 === 0) put(tx, cy + 1, T.chair);
+          }
+          for (let ty = r.y0 + 1; ty <= r.y1 - 1; ty += 2) if (ok(r, r.x0, ty) && rng() < 0.5) put(r.x0, ty, T.desk, desk());
+        } else {                                 // small room: a manager's office, one desk and a chair
+          const cx = Math.floor((r.x0 + r.x1) / 2), cy = Math.floor((r.y0 + r.y1) / 2);
+          if (ok(r, cx, cy)) put(cx, cy, T.desk, { tier: 'office', name: 'Desk' });
+          if (ok(r, cx, cy + 1)) put(cx, cy + 1, T.chair);
         }
         const t = top.filter((tx) => ok(r, tx, r.y0));
         if (t.length) put(t[ri(0, t.length - 1)], r.y0, T.cabinet, { tier: 'office', name: 'Filing cabinet' });
@@ -615,7 +700,7 @@ export function generateWorld(seed = 20240) {
       if (obj[yy][xx] === -1 && reach(xx, yy) && !nearDoor(xx, yy)) free.push({ x: xx, y: yy });
     }
     shuffle(free);
-    if (!o.office) {
+    if (!o.office && !o.home) {
       const looseCount = ab ? 1 : ri(1, 2);
       const ids = ['ammo_pistol', 'medkit', 'armor', 'm_stick', 'm_bat', 'm_knife', 'm_pipe', 'w_pistol'];
       for (let i = 0; i < looseCount && free.length; i++) {
@@ -623,7 +708,7 @@ export function generateWorld(seed = 20240) {
         out.items.push({ x: px(t.x) + ri(-6, 6), y: px(t.y) + ri(-6, 6), id: pick(ids) });
       }
     }
-    registerBuilding(x, y, w, h, o.roof || 'shingle', { abandoned: ab, lift: o.lift || 0, kind: o.kind || (ab ? 'abandoned' : 'house') });
+    registerBuilding(x, y, w, h, o.roof || 'shingle', { abandoned: ab, lift: o.lift || 0, kind: o.kind || (ab ? 'abandoned' : 'house'), look: o.look || null, dark: !!o.dark });
     if (!o.office) out.houseDoors.push({ x: px(fdx), y: px(y + h), abandoned: ab });
     return { x, y, w, h, free, doorX: fdx, doorY: y + h - 1 };
   }
@@ -638,80 +723,280 @@ export function generateWorld(seed = 20240) {
     { kind: 'Diner', tier: 'food', floor: T.tileFloor, tables: true },
     { kind: 'Pizza', tier: 'food', floor: T.wood, tables: true }
   ];
+  /* Every business has its own identity: wall material + colour, roof, window style, counter and fixtures (the fixtures are the store tiles T.drinkFr ... T.crates). */
+  const SHOP_LOOK = {
+    Pharmacy: { fac: T.facPharm, winT: T.winPharm, poster: 'pharm', wall: T.wall2, tint: 0xe6fbef, roof: 'modern', win: 'full', ctr: T.ctrWhite, cap: T.medCab },
+    Grocery: { fac: T.facGrocery, winT: T.winGrocery, poster: 'grocery', wall: T.wall, tint: 0xffe2a0, roof: 'shingle', ci: 2, win: 'full', ctr: T.ctrWood, cap: T.produce },
+    Hardware: { fac: T.facHardware, winT: T.winHardware, poster: 'hardware', wall: T.wall2, tint: 0xa8b4c8, roof: 'metal', win: 'few', ctr: T.ctrInd, cap: T.indRack },
+    Clothing: { fac: T.facClothing, winT: T.winClothing, poster: 'clothing', wall: T.wall2, tint: 0xe4c4ff, roof: 'modern', win: 'full', ctr: T.ctrPlum, cap: T.clothRk },
+    Cafe: { fac: T.facCafe, winT: T.winCafe, poster: 'cafe', wall: T.wall, tint: 0xd8a070, roof: 'shingle', ci: 3, win: 'full', ctr: T.ctrWood, cap: T.pastry },
+    Diner: { fac: T.facDiner, winT: T.winDiner, poster: 'diner', wall: T.wall2, tint: 0xffb4ac, roof: 'shingle', ci: 4, win: 'full', ctr: T.ctrRed, cap: T.pastry },
+    Pizza: { fac: T.facPizza, winT: T.winPizza, poster: 'pizza', wall: T.wall, tint: 0xff9a80, roof: 'shingle', ci: 4, win: 'pairs', ctr: T.ctrWood, cap: T.pastry },
+    'Gas Mart': { fac: T.facGas, winT: T.winGas, poster: 'gas', wall: T.wall2, tint: 0xffe8a0, roof: 'metal', win: 'full', ctr: T.ctrRed, cap: T.pastry },
+    'Shopping Center': { fac: T.facMall, winT: T.winMall, poster: 'mall', wall: T.wall2, tint: 0xb4d0ff, roof: 'modern', win: 'full', ctr: T.ctrBlue, cap: T.foodSh }
+  };
+  const SHOP_PROP = { Pharmacy: { key: 'st_prop_rx' }, Grocery: { key: 'st_prop_produce', two: true }, 'Gas Mart': { key: 'st_prop_cooler' }, Hardware: { key: 'st_prop_pallets' }, Clothing: { key: 'st_prop_rack' }, Cafe: { key: 'st_prop_cafe' }, Diner: { key: 'st_prop_cafe' }, Pizza: { key: 'st_prop_board' }, 'Shopping Center': { key: 'st_prop_cart' } };
+  // The fixtures the shops used before this redesign, laid out on the grid as placeholders only: rubble, windows and the free-cell shuffle then consume exactly the same
+  // random numbers as before, so the rest of the city (every later building, road user and gang) stays where it was. They are removed again before the real layout is built.
+  function legacyShopCells(x, y, w, h, spec, dx) {
+    const cells = [];
+    const put = (tx, ty, idx) => { if (obj[ty][tx] === -1) { obj[ty][tx] = idx; cells.push([tx, ty]); } };
+    if (spec.shelves) {
+      const kind = spec.kind, aisle = x + Math.floor(w / 2), doorCol = x + w - 3;
+      const staff = (xx, yy) => xx <= x + 3 && yy >= y + h - 5;
+      const sh = (xx, yy, t = T.shopShelf) => { if (!staff(xx, yy) && xx !== doorCol) put(xx, yy, t); };
+      if (kind === 'Grocery') {
+        for (let xx = x + 1; xx < x + w - 1; xx++) sh(xx, y + 1, (xx - x) % 3 === 0 ? T.fridge : T.shopShelf);
+        [y + 3, y + 5].filter((yy) => yy < y + h - 3).forEach((yy) => { for (let xx = x + 2; xx < x + w - 3; xx++) if (xx !== aisle && xx !== aisle + 3) sh(xx, yy); });
+      } else if (kind === 'Pharmacy') {
+        for (let xx = x + 1; xx < x + w - 1; xx++) sh(xx, y + 1, (xx - x) % 2 === 0 ? T.cabinet : T.shopShelf);
+        [x + 3, x + w - 6].forEach((cx) => { if (cx > x + 1 && cx !== doorCol) for (let yy = y + 3; yy <= Math.min(y + 5, y + h - 4); yy++) sh(cx, yy); });
+        for (let xx = x + 4; xx <= x + 5 && w >= 10; xx++) put(xx, y + h - 3, T.counter);
+      } else if (kind === 'Hardware') {
+        [x + 2, x + 5, x + 8].filter((cx) => cx < doorCol - 1).forEach((cx) => { for (let yy = y + 2; yy <= y + h - 5; yy++) sh(cx, yy); });
+        for (let xx = x + w - 5; xx <= x + w - 3; xx++) if (xx !== doorCol) sh(xx, y + 1, T.table);
+        for (let xx = x + 1; xx < x + w - 5; xx++) sh(xx, y + 1);
+      } else if (kind === 'Clothing') {
+        for (let xx = x + 1; xx < x + w - 1; xx += 2) sh(xx, y + 1);
+        [[x + 3, y + 3], [x + w - 6, y + 4]].forEach(([cx, cy]) => { for (let k = 0; k < 3; k++) if (cy < y + h - 3) sh(cx + k, cy); });
+      } else {
+        for (let xx = x + 1; xx < x + w - 1; xx++) sh(xx, y + 1, (xx - x) % 4 === 0 ? T.fridge : T.shopShelf);
+        [y + 3, y + 5].filter((yy) => yy < y + h - 3).forEach((yy, k) => { for (let xx = x + 2; xx < x + w - 3; xx++) if (xx !== aisle && (xx + k) % 5 !== 0) sh(xx, yy); });
+      }
+      for (let xx = x + 1; xx <= x + 3; xx++) put(xx, y + h - 3, T.counter);
+    } else {
+      const kit = [T.fridge, T.stove, T.sink, T.cabinet, T.stove, T.cabinet];
+      for (let xx = x + 1, i = 0; xx < x + w - 1 && i < kit.length; xx++, i++) put(xx, y + 1, kit[i]);
+      for (let xx = x + 1; xx <= x + 4; xx++) put(xx, y + 3, T.counter);
+      for (let ty = y + 5; ty < y + h - 2; ty += 2) for (let tx = x + 2; tx < x + w - 4; tx += 3) { put(tx, ty, T.table); put(tx - 1, ty, T.chair); put(tx + 1, ty, T.chair); }
+    }
+    return cells;
+  }
+
+  /* The interior plan shared by every store. The entrance is in the front (south) wall, the cashier counter stands on the BACK (north) side facing it, centred, with the
+     clerk behind it (a sealed pocket: back-wall fixtures behind, a fixture at each end) and a clear lane from the door up to it. Rows: B = back wall fixtures, K = clerk, C = counter,
+     F0..F1 = the shop floor, and the row just inside the door stays empty. */
+  function shopInterior(x, y, w, h, spec, dx, look, clerkRow) {
+    const kind = spec.kind;
+    const IX0 = x + 1, IX1 = x + w - 2, B = y + 1, K = y + 2, C = y + 3, F0 = y + 4, F1 = y + h - 3;
+    const set = (tx, ty, t) => { if (tx >= IX0 && tx <= IX1 && ty >= B && ty <= F1 && obj[ty][tx] === -1) { obj[ty][tx] = t; return true; } return false; };
+    const lane = (tx) => tx === dx || tx === dx - 1;
+    const rowOf = (ty, x0, x1, f, gap = 0) => { if (ty > F1) return; for (let tx = x0; tx <= x1; tx++) { if (ty >= F0 && lane(tx)) continue; if (gap && (tx - x0) % gap === gap - 1) continue; set(tx, ty, f(tx - x0)); } };
+    const col = (tx, y0, y1, t) => { for (let ty = y0; ty <= y1; ty++) set(tx, ty, t); };
+    const cw = w >= 11 ? 4 : 3, cL = x + Math.floor((w - cw) / 2), cR = cL + cw - 1, clerkX = cL + Math.floor(cw / 2);
+    for (let tx = cL; tx <= cR; tx++) set(tx, C, look.ctr);
+    set(cL - 1, K, look.cap); set(cR + 1, K, look.cap);
+    const L2 = dx - 2, aisleL = IX0 + 2;
+    if (kind === 'Pharmacy') {                                    // medicine wall, first-aid and medicine sections, clean white counter, a small medical fridge
+      rowOf(B, IX0, IX1, (i) => (i % 2 === 0 ? T.medCab : i % 4 === 1 ? T.medSh : T.fridge));
+      col(IX0, K, F1, T.medCab); col(IX1, K, F1, T.firstAid);
+      rowOf(F0 + 1, aisleL, L2, (i) => (i < 3 ? T.firstAid : T.medSh), 4);
+      rowOf(F0 + 3, aisleL, L2, () => T.medSh, 4);
+    } else if (kind === 'Grocery') {                              // chilled wall, dry-goods shelving, produce crates by the front, wooden counter
+      rowOf(B, IX0, IX1, (i) => (i % 3 === 0 ? T.dairyFr : T.foodSh));
+      col(IX0, K, C, T.foodSh); col(IX0, F0, F1, T.produce); col(IX1, K, F1, T.dairyFr);
+      rowOf(F0 + 1, aisleL, L2, () => T.foodSh, 5);
+      rowOf(F0 + 3, aisleL, L2, () => T.foodSh, 5);
+    } else if (kind === 'Hardware') {                             // pegboard tool wall, steel racks in columns, crates, industrial counter
+      rowOf(B, IX0, IX1, () => T.toolWall);
+      col(IX0, K, F1, T.indRack); col(IX1, K, C, T.toolWall); col(IX1, F0, F1, T.crates);
+      [IX0 + 2, IX0 + 5].filter((cx) => cx < dx - 1).forEach((cx) => col(cx, F0 + 1, F1, T.indRack));
+    } else if (kind === 'Clothing') {                             // boutique: rails along the walls, folding tables and one free-standing rack island
+      rowOf(B, IX0, IX1, () => T.clothRk);
+      col(IX0, K, F1, T.clothRk); col(IX1, K, F1, T.clothRk);
+      rowOf(F0 + 1, aisleL, aisleL + 2, () => T.foldTbl); rowOf(F0 + 1, dx - 4, L2, () => T.clothRk);
+      rowOf(F0 + 3, aisleL + 1, dx - 3, () => T.foldTbl, 3);
+    } else if (!spec.shelves) {                                   // restaurants: kitchen strip along the back wall, tables with chairs, food display beside the counter
+      const kit = kind === 'Cafe' ? [T.fridge, T.coffeeM, T.sink, T.cabinet, T.coffeeM, T.cabinet] : kind === 'Pizza' ? [T.fridge, T.pizzaOv, T.sink, T.cabinet, T.pizzaOv, T.cabinet] : [T.fridge, T.stove, T.sink, T.cabinet, T.stove, T.cabinet];
+      for (let xx = x + 1, i = 0; xx < x + w - 1 && i < kit.length; xx++, i++) if (obj[B][xx] === -1) { obj[B][xx] = kit[i]; if (kit[i] === T.fridge || kit[i] === T.cabinet) addContainer(xx, B, 'food', 'Kitchen storage'); }
+      for (let ty = y + 5; ty <= F1; ty += 2) for (let tx = x + 2; tx < x + w - 4; tx += 3) { if (tx === dx || tx + 1 === dx) continue; set(tx, ty, T.table); set(tx - 1, ty, T.chair); set(tx + 1, ty, T.chair); }
+    } else if (kind === 'Shopping Center') {                      // a bit of everything: food, health and clothing thirds
+      rowOf(B, IX0, IX1, (i) => [T.drinkFr, T.foodSh, T.medSh, T.clothRk][i % 4]);
+      col(IX0, K, F1, T.clothRk); col(IX1, K, F1, T.clothRk);
+      const n = L2 - aisleL + 1, third = (i) => (i < n / 3 ? T.foodSh : i < (2 * n) / 3 ? T.medSh : T.clothRk);
+      rowOf(F0 + 1, aisleL, L2, third, 5); rowOf(F0 + 3, aisleL, L2, third, 5);
+    } else {                                                      // Gas Mart / corner store: drink coolers on the back wall, snack racks, a hot-food case by the counter
+      rowOf(B, IX0, IX1, () => T.drinkFr);
+      col(IX0, K, F1, T.snackRk); col(IX1, K, F1, T.snackRk);
+      rowOf(F0 + 1, aisleL, L2, () => T.snackRk, 4);
+    }
+    return { x: clerkX, y: K, cL, cR, B, IX0, IX1 };
+  }
+
   function shop(x, y, w, h, spec, o = {}) {
     shopRects.push({ x, y, w, h });
     const ab = !!o.abandoned;
-    fillBuildingShell(x, y, w, h, o.wall ?? T.wall, spec.floor);
+    const look = SHOP_LOOK[spec.kind] || SHOP_LOOK.Grocery;
+    fillBuildingShell(x, y, w, h, o.wall ?? look.wall, spec.floor);
     const dx = x + w - 3;
     addDoorTile(dx, y + h - 1, ab);
     const doors = [{ x: dx, y: y + h - 1 }];
-    const put = (tx, ty, idx, cont) => { if (obj[ty][tx] === -1) { obj[ty][tx] = idx; if (cont) addContainer(tx, ty, cont.tier, cont.name, { shop: !ab }); } };
-    if (spec.shelves) {
-      // back wall shelves, island rows, counter with register near the entrance
-      for (let xx = x + 1; xx < x + w - 1; xx++) put(xx, y + 1, T.shopShelf, (xx - x) % 3 === 1 ? { tier: spec.tier, name: spec.kind + ' shelf' } : null);
-      const rowsY = [y + 3, y + 5].filter((yy) => yy < y + h - 3);
-      rowsY.forEach((yy, k) => {
-        for (let xx = x + 2; xx < x + w - 3; xx++) {
-          if (Math.abs(xx - (x + Math.floor(w / 2))) <= 0) continue; // aisle
-          put(xx, yy, T.shopShelf, (xx + k) % 4 === 0 ? { tier: spec.tier, name: spec.kind + ' shelf' } : null);
-        }
-      });
-      for (let xx = x + 1; xx <= x + 3; xx++) put(xx, y + h - 3, T.counter);
-    } else {
-      // restaurant: kitchen strip along the back wall + tables with chairs
-      const kit = [T.fridge, T.stove, T.sink, T.cabinet, T.stove, T.cabinet];
-      for (let xx = x + 1, i = 0; xx < x + w - 1 && i < kit.length; xx++, i++) put(xx, y + 1, kit[i], kit[i] === T.fridge || kit[i] === T.cabinet ? { tier: 'food', name: 'Kitchen storage' } : null);
-      for (let xx = x + 1; xx <= x + 4; xx++) put(xx, y + 3, T.counter);
-      for (let ty = y + 5; ty < y + h - 2; ty += 2) for (let tx = x + 2; tx < x + w - 4; tx += 3) {
-        put(tx, ty, T.table); put(tx - 1, ty, T.chair); put(tx + 1, ty, T.chair);
-      }
-    }
+    const ghost = legacyShopCells(x, y, w, h, spec, dx);
     if (ab) {
       for (let i = 0; i < 5; i++) { const tx = ri(x + 1, x + w - 2), ty = ri(y + 1, y + h - 2); if (obj[ty][tx] === -1 && Math.abs(tx - dx) > 1) obj[ty][tx] = T.rubble; }
     }
     placeWindows(x, y, w, h, { windowChance: ab ? 0.5 : 0.85, abandoned: ab });
-    const free = [];
-    for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = x + 1; xx < x + w - 1; xx++) {
-      if (obj[yy][xx] === -1 && !doors.some((d) => cheb(d, { x: xx, y: yy }) <= 1)) free.push({ x: xx, y: yy });
+    let oldFree = 0;
+    for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = x + 1; xx < x + w - 1; xx++) if (obj[yy][xx] === -1 && !doors.some((d) => cheb(d, { x: xx, y: yy }) <= 1)) oldFree++;
+    shuffle(new Array(oldFree).fill(0));                                                // (the old shuffle's random numbers, so nothing after this shifts)
+    ghost.forEach(([tx, ty]) => { obj[ty][tx] = -1; });
+    // ---- the real interior
+    const clerk = shopInterior(x, y, w, h, spec, dx, look, y + 2);
+    if (!ab && look.win) {                                                              // display windows along the front: full / pairs / a few
+      const row = y + h - 1;
+      for (let xx = x + 1; xx <= x + w - 2; xx++) {
+        if (Math.abs(xx - dx) <= 1 || (obj[row][xx] !== T.wall && obj[row][xx] !== T.wall2) || (inb(xx, row + 1) && obj[row + 1][xx] !== -1)) continue;
+        const k = xx - x;
+        if (look.win === 'full' || (look.win === 'pairs' ? k % 4 < 2 : k <= 3)) obj[row][xx] = T.window;
+      }
+      for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) if ((yy === y || yy === y + h - 1 || xx === x || xx === x + w - 1) && obj[yy][xx] === T.window) obj[yy][xx] = look.winT;      // every window of the shop shows the business
     }
-    shuffle(free);
-    registerBuilding(x, y, w, h, 'shingle', { abandoned: ab, kind: spec.tables ? 'restaurant' : 'shop' });
+    if (!ab) {
+      [clerk.cL - 2, clerk.cR + 2].forEach((tx) => {                                   // wall posters on the back wall, either side of the counter
+        if (tx < clerk.IX0 || tx > clerk.IX1) return;
+        const o0 = obj[clerk.B][tx];
+        if (o0 !== -1 && (spec.tables || o0 === T.fridge || o0 === T.cabinet)) return;
+        obj[clerk.B][tx] = -1; out.decor.push({ kind: 'st_poster_' + look.poster, x: px(tx), y: clerk.B * TILE + 22 });
+      });
+      if ((spec.kind === 'Grocery' || spec.kind === 'Shopping Center') && obj[y + h - 2][clerk.IX1] === -1) obj[y + h - 2][clerk.IX1] = T.baskets;      // a stack of shopping baskets by the entrance
+    }
+    const sr = mulberry32(((x * 73856093) ^ (y * 19349663) ^ 0x51ed) >>> 0 || 1), free = [];
+    for (let yy = y + 1; yy < y + h - 1; yy++) for (let xx = x + 1; xx < x + w - 1; xx++) if (obj[yy][xx] === -1 && !doors.some((d) => cheb(d, { x: xx, y: yy }) <= 1) && !(yy === clerk.y && Math.abs(xx - clerk.x) <= 2)) free.push({ x: xx, y: yy });
+    for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(sr() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
+    const rc = ri(0, 5);                                                                // (the old random roof colour: kept so the random stream is unchanged)
+    registerBuilding(x, y, w, h, look.roof, { abandoned: ab, kind: spec.tables ? 'restaurant' : 'shop', colorIdx: look.ci ?? rc, tint: ab ? 0 : look.tint, facade: ab ? 0 : look.fac });
     if (!ab) {
       addPoi(spec.tables ? 'restaurant' : 'shop', `${spec.kind}`, x, y, w, h);
       publicDoor(dx, y + h - 1, spec.tables ? 'restaurant' : 'shop', spec.kind);
-      civ(x + 2, y + h - 4, 'shopkeeper', { shop: spec.kind }); // behind the counter / in the kitchen
+      out.storeFronts.push({ name: spec.kind, tx: dx, ty: y + h - 1, w: 1, x: px(dx), y: px(y + h) });
+      civ(clerk.x, clerk.y, 'shopkeeper', { shop: spec.kind, act: spec.tables ? 'bartend' : 'cashier', face: Math.PI / 2 });       // behind the counter, facing the entrance
+      const pk = SHOP_PROP[spec.kind];                                                     // a signature display on the pavement beside the entrance (scenery; never in front of the door)
+      if (pk) (pk.two ? [-3, 2] : [-3]).forEach((ox) => { const tx = dx + ox, ty = y + h; if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) out.decor.push({ kind: pk.key, x: px(tx), y: ty * TILE + 30 }); });
     }
     return { x, y, w, h, free };
   }
 
   /* ---- police station ---- */
-  function policeStation(x, y, w, h) {
-    fillBuildingShell(x, y, w, h, T.wall2, T.tileFloor);
-    const dx = x + Math.floor(w / 2);
-    addDoorTile(dx, y + h - 1, false);
-    const set = (tx, ty, idx, cont) => { if (obj[ty][tx] === -1) { obj[ty][tx] = idx; if (cont) addContainer(tx, ty, cont.tier, cont.name); } };
-    // holding cells along the back wall
+  /* Replays the random numbers the previous (22 x 14) police station used for its windows, on a scratch copy of that old footprint, so the rest of the city is not shifted
+     by the redesign. */
+  function replayOldPoliceWindows(ox, oy, ow, oh) {
+    const sc = new Map(), key = (tx, ty) => ty * W + tx, get = (tx, ty) => (sc.has(key(tx, ty)) ? sc.get(key(tx, ty)) : obj[ty][tx]);
+    for (let yy = oy; yy < oy + oh; yy++) for (let xx = ox; xx < ox + ow; xx++) if (xx === ox || xx === ox + ow - 1 || yy === oy || yy === oy + oh - 1) sc.set(key(xx, yy), T.wall2); else sc.set(key(xx, yy), -1);
+    const dxo = ox + Math.floor(ow / 2); sc.set(key(dxo, oy + oh - 1), T.doorClosed);
+    const put = (tx, ty, t) => { if (get(tx, ty) === -1) sc.set(key(tx, ty), t); };
     for (let i = 0; i < 3; i++) {
-      const cx = x + 1 + i * 7;
-      for (let yy = y + 1; yy <= y + 4; yy++) { obj[yy][cx] = T.wall2; obj[yy][cx + 5] = T.wall2; }
-      for (let xx = cx + 1; xx <= cx + 4; xx++) obj[y + 4][xx] = T.bars;
-      obj[y + 4][cx + 2] = T.doorClosed; out.doors.push({ x: cx + 2, y: y + 4 });
-      for (let yy = y + 1; yy <= y + 3; yy++) for (let xx = cx + 1; xx <= cx + 4; xx++) ground[yy][xx] = T.concrete;
-      obj[y + 1][cx + 1] = T.hospBed; obj[y + 1][cx + 4] = T.toilet;
+      const cx = ox + 1 + i * 7;
+      for (let yy = oy + 1; yy <= oy + 4; yy++) { sc.set(key(cx, yy), T.wall2); sc.set(key(cx + 5, yy), T.wall2); }
+      for (let xx = cx + 1; xx <= cx + 4; xx++) sc.set(key(xx, oy + 4), T.bars);
+      sc.set(key(cx + 2, oy + 4), T.doorClosed);
+      sc.set(key(cx + 1, oy + 1), T.hospBed); sc.set(key(cx + 4, oy + 1), T.toilet);
     }
-    // offices + armory + front desk
-    for (let tx = x + 3; tx < x + w - 3; tx += 4) { set(tx, y + 7, T.desk, { tier: 'police', name: 'Officer desk' }); }
-    for (let tx = x + 3; tx < x + w - 3; tx += 4) { set(tx, y + 9, T.desk, null); }
-    set(x + w - 2, y + 6, T.locker, { tier: 'police', name: 'Armory locker' });
-    set(x + w - 2, y + 7, T.locker, { tier: 'police', name: 'Armory locker' });
-    set(x + 1, y + 6, T.cabinet, { tier: 'police', name: 'Evidence cabinet' });
-    for (let xx = x + 3; xx <= x + 8; xx++) set(xx, y + h - 4, T.counter);
-    for (let xx = x + 10; xx <= x + 12; xx++) if (xx !== dx) set(xx, y + h - 2, T.chair);
-    placeWindows(x, y, w, h, { windowChance: 0.6 });
-    registerBuilding(x, y, w, h, 'hq', { kind: 'police', colorIdx: 1 });
+    for (let tx = ox + 3; tx < ox + ow - 3; tx += 4) put(tx, oy + 7, T.desk);
+    for (let tx = ox + 3; tx < ox + ow - 3; tx += 4) put(tx, oy + 9, T.desk);
+    put(ox + ow - 2, oy + 6, T.locker); put(ox + ow - 2, oy + 7, T.locker); put(ox + 1, oy + 6, T.cabinet);
+    for (let xx = ox + 3; xx <= ox + 8; xx++) put(xx, oy + oh - 4, T.counter);
+    for (let xx = ox + 10; xx <= ox + 12; xx++) if (xx !== dxo) put(xx, oy + oh - 2, T.chair);
+    const doorXs = out.doors.filter((d) => d.y === oy + oh - 1 || d.y === oy).map((d) => d.x); doorXs.push(dxo);
+    for (let xx = ox + 1; xx < ox + ow - 1; xx++) {
+      for (const row of [oy, oy + oh - 1]) {
+        if (!isWallT(get(xx, row)) || get(xx, row) === T.glass) continue;
+        if (doorXs.some((d) => Math.abs(d - xx) <= 1)) continue;
+        const inner = row === oy ? get(xx, row + 1) : get(xx, row - 1);
+        const outer = row === oy ? (inb(xx, row - 1) ? get(xx, row - 1) : -1) : (inb(xx, row + 1) ? get(xx, row + 1) : -1);
+        if (inner !== -1 && inner !== T.chair) continue;
+        if (row === oy + oh - 1 && outer !== -1) continue;
+        if (get(xx - 1, row) === T.window || get(xx - 1, row) === T.windowBroken) continue;
+        if (!isWallT(get(xx - 1, row))) continue;
+        if (rng() < 0.6) sc.set(key(xx, row), T.window);
+      }
+    }
+  }
+
+  /* ---- THE POLICE STATION (28 x 14, same place and same front door as before). Rows (r) from the back wall: r1-r3 holding cells, two interview rooms and the evidence room,
+     r4 their wall (bars + doors), r5-r6 the restricted hall, r7 wall, r8-r12 locker room | reception + waiting area | main office, r13 the front wall with the glass entrance.
+     Public: lobby (and the office through its own door). Staff only: hall, cells, interview rooms, evidence room, locker room (doors off the hall). ---- */
+  function policeStation(x, y, w, h, oldX) {
+    replayOldPoliceWindows(oldX, y, 22, h);
+    fillBuildingShell(x, y, w, h, T.wall2, T.tileFloor);
+    const X = (c) => x + c, Y = (r) => y + r;
+    const dx = X(14);
+    addDoorTile(dx, Y(13), false);
+    const P = (c, r, t) => { if (obj[Y(r)][X(c)] === -1) obj[Y(r)][X(c)] = t; };
+    const floor = (c0, r0, c1, r1, t) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) ground[Y(r)][X(c)] = t; };
+    const wallH = (r, c0, c1) => { for (let c = c0; c <= c1; c++) obj[Y(r)][X(c)] = T.wall2; };
+    const wallV = (c, r0, r1) => { for (let r = r0; r <= r1; r++) obj[Y(r)][X(c)] = T.wall2; };
+    const door = (c, r) => addDoorTile(X(c), Y(r), false);
+    const D = out.policeDecor;
+    const wallDec = (key, c, wallRow, sy, dz = 40, cx = 0.5) => D.push({ key, x: (X(c) + cx) * TILE, y: Y(wallRow) * TILE + 16, sy, dz });
+    const cop = (c, r, act, face, extra = {}, staff = null) => civ(X(c), Y(r), 'patron', { role: 'police', act, face, ...extra, staff });      // staff = how far they notice a wanted suspect (px) and how long they take to react (ms)
+    // ---- floors
+    floor(1, 1, 26, 6, T.concrete); floor(22, 8, 26, 12, T.carpet);
+    // ---- structure
+    wallH(4, 1, 26); wallH(7, 1, 26);
+    [3, 6, 9, 14, 19].forEach((c) => wallV(c, 1, 3));
+    wallV(9, 8, 12); wallV(21, 8, 12);
+    // holding cells (c1-2, c4-5, c7-8): bars on the front, a cell door each, a bed and a toilet inside
+    [1, 4, 7].forEach((c0) => { obj[Y(4)][X(c0)] = T.bars; door(c0 + 1, 4); obj[Y(1)][X(c0)] = T.hospBed; obj[Y(1)][X(c0 + 1)] = T.toilet; });
+    // interview rooms (c10-13, c15-18): a one-way observation window on the hall wall, a door each
+    door(11, 4); obj[Y(4)][X(13)] = T.obsWin; door(16, 4); obj[Y(4)][X(18)] = T.obsWin;
+    // evidence room (c20-26)
+    door(23, 4);
+    // doors from the hall: locker room, the officers' pocket behind the reception counter, the main office; the office's public door; the side entrance (staff)
+    door(4, 7); door(14, 7); door(20, 7); door(24, 7);                                // hall <-> locker room, reception pocket, lobby (public gate), office
+    obj[Y(11)][X(21)] = T.doorOpen; obj[Y(5)][X(0)] = T.doorOpen;                      // lobby <-> office and the staff side entrance: open doorways in the side walls
+    [[4, 7], [14, 7], [20, 7], [24, 7], [11, 4], [16, 4], [23, 4]].forEach(([c, r]) => out.policeDoors.push({ tx: X(c), ty: Y(r) }));
+    // ---- interview rooms
+    [[10, 11], [15, 16]].forEach(([c0, c1]) => { P(c0 + 1, 2, T.metalTable); P(c0 + 2, 2, T.metalTable); P(c0, 2, T.steelChair); P(c0 + 3, 2, T.steelChair); out.rugs.push({ key: 'pd_rug', x: (X(c0) + 2) * TILE, y: Y(2) * TILE + 20 }); D.push({ key: 'pd_pendant', x: (X(c0) + 2) * TILE, y: Y(2) * TILE + 16, sy: -34, dz: 40 }, { key: 'pd_rec', x: (X(c0) + 3) * TILE, y: Y(0) * TILE + 16, sy: -26, dz: 40 }); D.push({ key: 'pd_cam', x: (X(c0 + 1) + 0.5) * TILE, y: Y(0) * TILE + 16, sy: -34, dz: 40 }); });
+    // ---- evidence room: shelving of labelled boxes and bags, secured lockers, a filing cabinet, the evidence officer's desk
+    for (let c = 20; c <= 24; c++) P(c, 1, T.evShelf); P(25, 1, T.locker); P(26, 1, T.locker); P(26, 2, T.cabinet); P(22, 3, T.desk); P(20, 3, T.crates); P(26, 3, T.crates);
+    // ---- locker room: lockers, benches, radio / equipment shelves, a table
+    [1, 2, 3, 5, 6, 7, 8].forEach((c) => P(c, 8, T.locker)); [2, 3, 6, 7].forEach((c) => P(c, 10, T.bench)); [1, 2, 3].forEach((c) => P(c, 12, T.radioShelf)); P(7, 12, T.table); P(8, 12, T.table);
+    // ---- reception (lobby c10-20): staff pocket r8 behind the counter (r9), the clear row in front, waiting chairs facing it, a water cooler
+    for (let c = 10; c <= 18; c++) P(c, 9, c === 12 || c === 16 ? T.ctrPolice : T.ctrPlain); P(19, 8, T.cabinet);
+    [10, 11, 12, 15, 16, 17, 18, 19].forEach((c) => P(c, 11, T.chair)); P(20, 12, T.cooler);
+    // ---- main office (c22-26): desks with officers behind them, filing cabinets
+    P(22, 8, T.cabinet); P(26, 8, T.cabinet); [23, 25].forEach((c) => { P(c, 10, T.desk); P(c, 9, T.chair); }); P(23, 12, T.desk); P(23, 11, T.chair);
+    // ---- wall boards: reception sign, notices, assignments, city map, cameras
+    D.push({ key: 'pd_recsign', x: (X(14) + 0.5) * TILE, y: Y(7) * TILE + 16, sy: 34, dz: 40 });
+    wallDec('pd_p_safety', 11, 7, -2); wallDec('pd_p_wanted', 13, 7, -2); wallDec('pd_p_board', 15, 7, -2); wallDec('pd_p_safety', 17, 7, -2);
+    wallDec('pd_p_map', 23, 7, -2); wallDec('pd_p_sched', 25, 7, -2);
+    [[6, 4], [20, 4]].forEach(([c, r]) => D.push({ key: 'pd_cam', x: (X(c) + 0.5) * TILE, y: Y(r) * TILE + 20, sy: -40, dz: 40 }));
+    // ---- the front: windows with office lighting, the glass entrance, badges, cameras, lights
+    const fr = 13;
+    [2, 3, 4, 5, 10, 11, 12, 16, 17, 18, 23, 24, 25, 26].forEach((c) => { obj[Y(fr)][X(c)] = T.winPolice; });
+    D.push({ key: 'pd_badge', x: X(8) * TILE, y: Y(fr) * TILE + 14, sy: -12, dz: 60 }, { key: 'pd_badge', x: X(20) * TILE, y: Y(fr) * TILE + 14, sy: -12, dz: 60 });
+    D.push({ key: 'pd_cam', x: (X(13) + 0.5) * TILE, y: Y(fr) * TILE + 14, sy: -30, dz: 60 }, { key: 'pd_cam', x: (X(15) + 0.5) * TILE, y: Y(fr) * TILE + 14, sy: -30, dz: 60 });
+    D.push({ key: 'pd_walllamp', x: (X(9) + 0.5) * TILE, y: Y(fr) * TILE + 14, sy: -26, dz: 60 }, { key: 'pd_walllamp', x: (X(19) + 0.5) * TILE, y: Y(fr) * TILE + 14, sy: -26, dz: 60 });
+    // ---- people (regular, unnamed): reception, office, evidence, hall, locker room, and prisoners who stay in their cells
+    cop(12, 8, 'cashier', Math.PI / 2, {}, { r: 520, d: 700 }); cop(16, 8, 'cashier', Math.PI / 2, {}, { r: 520, d: 1300 });
+    cop(23, 9, 'cashier', Math.PI / 2, { sit: true }, { r: 380, d: 1500 }); cop(25, 9, 'cashier', Math.PI / 2, { sit: true }, { r: 380, d: 2000 }); cop(23, 11, 'cashier', Math.PI / 2, { sit: true }, { r: 380, d: 1700 });
+    cop(22, 2, 'cashier', Math.PI / 2, { sit: true }, { r: 220, d: 2200 }); cop(8, 6, 'chat', 0, {}, { r: 320, d: 900 }); cop(5, 11, 'chat', Math.PI, {}, { r: 240, d: 1600 });
+    civ(X(2), Y(2), 'patron', { act: 'lounge', face: Math.PI / 2 }); civ(X(8), Y(2), 'patron', { act: 'lounge', face: Math.PI / 2 });
+    // ---- the inside has its own look: secure block walls with a hazard stripe where the hall meets the cells / interview / evidence rooms, painted walls with a navy dado on the
+    // lobby / office / locker room side, steel doors, barred cell doors, glass staff doors
+    for (let c = 1; c <= 26; c++) if (obj[Y(0)][X(c)] === T.wall2) out.policeSkin.walls.push({ tx: X(c), ty: Y(0), t: (c >= 10 && c <= 13) || (c >= 15 && c <= 18) ? T.polWallRoom : T.polWallSecure });
+    for (let c = 1; c <= 26; c++) { if (obj[Y(4)][X(c)] === T.wall2) out.policeSkin.walls.push({ tx: X(c), ty: Y(4), t: T.polWallSecure }); if (obj[Y(7)][X(c)] === T.wall2) out.policeSkin.walls.push({ tx: X(c), ty: Y(7), t: T.polWallPaint }); }
+    [[2, 4, 'Cell'], [5, 4, 'Cell'], [8, 4, 'Cell'], [11, 4, 'Steel'], [16, 4, 'Steel'], [23, 4, 'Steel'], [4, 7, 'Glass'], [14, 7, 'Glass'], [20, 7, 'Steel'], [24, 7, 'Steel']].forEach(([c, r, k]) => out.policeSkin.doors.push({ tx: X(c), ty: Y(r), c: T['polDoor' + k], o: T['polDoor' + k + 'Open'] }));
+    // ---- the building
+    registerBuilding(x, y, w, h, 'modern', { kind: 'police', colorIdx: 1, tint: 0x9fb4d8, facade: T.facPolice });
     addPoi('police', 'Police Station', x, y, w, h);
-    publicDoor(dx, y + h - 1, 'police', 'Police Station');
+    publicDoor(dx, Y(13), 'police', 'Police Station');
+    out.storeFronts.push({ name: 'Police Station', tx: dx, ty: Y(13), w: 1, x: px(dx), y: px(Y(13) + 1) });
     out.policeStation = { x: px(dx), y: px(y + h + 1) };
+    // ---- outside, the FRONT: a concrete apron along the wall, a plaza walkway to the door (c12-c16, kept clear), three painted police bays (left of the walkway, nose-in, rows 15-16) with
+    // two patrol sedans and a police SUV, a POLICE PARKING sign, benches, a notice board, a bin and plants. The sidewalk row behind the bays stays free for the cars to come and go.
+    const free2 = (c, r) => inb(X(c), Y(r)) && obj[Y(r)][X(c)] === -1 && !isRoadT(ground[Y(r)][X(c)]) && ground[Y(r)][X(c)] !== T.sidewalk && ground[Y(r)][X(c)] !== T.water;
+    for (let c = 1; c <= 26; c++) if (free2(c, 14)) ground[Y(14)][X(c)] = T.concrete;
+    for (let r = 15; r <= 16; r++) for (let c = 13; c <= 15; c++) if (free2(c, r)) ground[Y(r)][X(c)] = T.plaza;
+    [[1, 4], [5, 8], [9, 12]].forEach(([c0, c1]) => { for (let r = 15; r <= 16; r++) for (let c = c0; c <= c1 + 1; c++) if (free2(c, r) && (c === c0 || c === c1 + 1 || ground[Y(r)][X(c)] !== T.parking)) ground[Y(r)][X(c)] = (c === c0 || c === c1 + 1) ? T.parking : T.concrete; });
+    for (let r = 15; r <= 16; r++) for (let c = 1; c <= 13; c++) if (inb(X(c), Y(r)) && obj[Y(r)][X(c)] === -1) occ[Y(r)][X(c)] = true;
+    [['police', 1], ['policesuv', 5], ['police', 9]].forEach(([t, c0]) => vehicle(t, 0, (X(c0) + 2) * TILE, Y(16) * TILE, -Math.PI / 2, 'parked'));
+    out.decor.push({ kind: 'pd_parksign', x: px(X(16)), y: Y(16) * TILE + 26 });
+    addPoi('parking', 'Police Parking', X(1), Y(15), 12, 2);
+    [[8, 14], [21, 14]].forEach(([c, r]) => out.decor.push({ kind: 'pd_bench', x: px(X(c)) + 16, y: Y(r) * TILE + 28 }));
+    out.decor.push({ kind: 'pd_notice', x: px(X(18)), y: Y(14) * TILE + 30 }, { kind: 'bush', x: px(X(3)), y: Y(14) * TILE + 28 }, { kind: 'bush', x: px(X(6)), y: Y(14) * TILE + 28 }, { kind: 'bush', x: px(X(24)), y: Y(14) * TILE + 28 }, { kind: 'bush', x: px(X(26)), y: Y(14) * TILE + 28 });
+    if (free2(11, 14)) { obj[Y(14)][X(11)] = T.prop; out.props.push({ kind: 'bin', x: px(X(11)), y: Y(14) * TILE + 30 }); }
+    for (let c = 1; c <= 2; c++) if (inb(X(-c), Y(5)) && obj[Y(5)][X(-c)] === -1 && !isRoadT(ground[Y(5)][X(-c)])) ground[Y(5)][X(-c)] = T.concrete;
     return { x, y, w, h };
   }
 
@@ -755,7 +1040,14 @@ export function generateWorld(seed = 20240) {
     return { x, y, w, h };
   }
 
-  /* ---- gas station: mart + pumps ---- */
+  /* ---- gas station: mart + pumps ----
+     A gas station used to be built at a fixed spot INSIDE its block, on top of the houses / warehouses already there. Now the block only queues it (and burns the
+     17 random draws a station consumes, so the rest of the city generates exactly as before); once every block is built, placeGasStations() puts it on a free,
+     roadside site nearby - separate from other buildings, with its forecourt opening onto a road. */
+  const gasQueue = [];
+  let depotCount = 0, depotSeq = 0;
+  const GAS_DRAWS = 17;
+  function queueGas(tx, ty) { for (let i = 0; i < GAS_DRAWS; i++) rng(); gasQueue.push({ tx, ty }); }
   function gasStation(x, y) {
     const w = 9, h = 6;
     shop(x, y, w, h, { kind: 'Gas Mart', tier: 'shop', floor: T.tileFloor, shelves: true }, { wall: T.wall2 });
@@ -775,6 +1067,48 @@ export function generateWorld(seed = 20240) {
 
   /* ---------------------------------------------------- district builders */
   const DOUBLE = (b) => ({ ix0: b.x0 + 2, ix1: b.x1 - 2, iy0: b.y0 + 2, iy1: b.y1 - 2 });
+
+  /* ---- THE PLAYER'S HOME. Replaces the first plot on the street side of the south-west residential block (the old starting corner). A modern 14 x 9 house:
+     charcoal walls with a ribbon of big windows, a flat roof with solar panels and a skylight, an oak-and-teal interior (living room with sofa / TV / table, kitchen
+     with a dining table, bedroom, bathroom, small storage room), a landscaped front yard (path, flower beds, two lamps, a tree) and a paved driveway for the
+     Tesla beside the house. The player starts on the front path facing the street. Exactly one exists (out.home). ---- */
+  function playerHome(x, bottom, b) {
+    const w = 14, h = 9, y = bottom - h - 1;                                   // two rows further back than the neighbours: a deeper front yard
+    const plan = {
+      rooms: [
+        { x0: x + 1, y0: y + 1, x1: x + 6, y1: y + 3, type: 'bedroom' }, { x0: x + 8, y0: y + 1, x1: x + 9, y1: y + 3, type: 'storage' }, { x0: x + 11, y0: y + 1, x1: x + 12, y1: y + 3, type: 'bathroom' },
+        { x0: x + 1, y0: y + 5, x1: x + 7, y1: y + 7, type: 'living' }, { x0: x + 9, y0: y + 5, x1: x + 12, y1: y + 7, type: 'kitchen' }
+      ],
+      lines: [
+        { vert: false, p: y + 4, a: x + 1, b: x + 6, at: x + 3 }, { vert: false, p: y + 4, a: x + 7, b: x + 9, at: x + 9 }, { vert: false, p: y + 4, a: x + 10, b: x + 12, at: x + 11 },
+        { vert: true, p: x + 7, a: y + 1, b: y + 3, noDoor: true }, { vert: true, p: x + 10, a: y + 1, b: y + 3, noDoor: true },
+        { vert: true, p: x + 8, a: y + 5, b: y + 7, at: y + 6, open: true }              // an open archway between the living room and the kitchen
+      ]
+    };
+    const hs = house(x, y, w, h, { wall: T.wall2, roof: 'modern', plan, frontDoor: x + 3, windowChance: 1, home: true, look: 'home', dark: true, kind: 'home' });
+    out.houseDoors[out.houseDoors.length - 1].home = true;                        // (no porch / generic awning: it has its own entrance below)
+    out.storeFronts.push({ name: 'Home', tx: hs.doorX, ty: hs.doorY, w: 1, x: px(hs.doorX), y: px(hs.doorY + 1) });
+    addPoi('home', 'Your Home', x, y, w, h);
+    const yardY = y + h;                                                        // first yard row (just south of the front wall)
+    const rim = b.y1;                                                           // the sidewalk row of the block
+    const okG = (tx, ty) => inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]);
+    for (let ty = yardY; ty < rim; ty++) for (let tx = x - 3; tx <= x + w + 4; tx++) if (okG(tx, ty) && isGrass(ground[ty][tx])) ground[ty][tx] = T.grass1;      // fresh lawn
+    for (let ty = yardY; ty < rim; ty++) for (const tx of [x + 3, x + 4]) if (okG(tx, ty)) ground[ty][tx] = T.plaza;                                              // front path to the sidewalk
+    const driveTop = y + h - 3;
+    for (let ty = driveTop; ty < rim; ty++) for (const tx of [x + w, x + w + 1]) if (okG(tx, ty)) ground[ty][tx] = T.concrete;                                  // driveway
+    const lamp = (tx, ty) => { if (!okG(tx, ty)) return; obj[ty][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: ty * TILE + 30 }); };
+    lamp(x + 2, yardY + 1); lamp(x + w + 3, yardY + 1);
+    [[x + 1, yardY], [x + 2, yardY], [x + 5, yardY], [x + 6, yardY], [x + 8, yardY], [x + 9, yardY], [x + 11, yardY], [x + 12, yardY]].forEach(([tx, ty], i) => {
+      if (okG(tx, ty)) out.decor.push({ kind: i % 3 === 0 ? 'bush' : i % 2 ? 'flower_a' : 'flower_b', x: px(tx), y: ty * TILE + (i % 3 === 0 ? 28 : 24) });
+    });
+    [[x - 2, yardY], [x + w + 4, yardY + 1]].forEach(([tx, ty]) => { if (okG(tx, ty) && ground[ty][tx] !== T.concrete) obj[ty][tx] = T.tree; });
+    out.home = {
+      x, y, w, h, doorX: hs.doorX, doorY: hs.doorY,
+      spawn: { x: px(x + 3), y: px(yardY + 1) },                                  // on the front path, two tiles south of the door, facing the street
+      tesla: { x: (x + w + 1) * TILE, y: (yardY + 1) * TILE + 16, heading: Math.PI / 2 }       // in the driveway, nose to the street
+    };
+    return { w, h };
+  }
 
   function residential(b, abandonedChance = 0.08) {
     const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
@@ -796,6 +1130,7 @@ export function generateWorld(seed = 20240) {
     rowsDef.forEach((row) => {
       let x = ix0;
       while (x + 8 <= ix1) {
+        if (b.c === 1 && b.r === 4 && row.front === 'street' && !out.home && x + 24 <= ix1) { const hm = playerHome(x, row.bottom, b); x += hm.w + 8; continue; }      // the player's home takes the first street-side plot of this block
         const w = Math.min(ri(9, 12), ix1 - x + 1);
         if (w < 8) break;
         const h = ri(8, 9);
@@ -1181,7 +1516,8 @@ export function generateWorld(seed = 20240) {
       while (x + 12 <= ix1) {
         const w = Math.min(ri(13, 17), ix1 - x + 1);
         if (w < 12) break;
-        const h = ri(12, 14);
+        let h = ri(12, 14);
+        while (h > 9 && out.buildings.some((q) => x < q.x + q.w + 1 && q.x < x + w + 1 && bottom - h + 1 < q.y + q.h + 2 && q.y < bottom + 2)) h--;       // never overlap a tower of the first row
         const t = house(x, bottom - h + 1, w, h, { wall: T.glass, office: true, roof: 'tower', lift: 64, kind: 'tower', wideDoor: true, windowChance: 0 });
         addPoi('tower', pick(['Apex Tower', 'Meridian Plaza', 'Harbor Bank', 'Orion Offices', 'City Hall Annex']), t.x, t.y, t.w, t.h);
         publicDoor(t.doorX, t.doorY, 'office', 'Office');
@@ -1211,9 +1547,9 @@ export function generateWorld(seed = 20240) {
         const w = Math.min(ri(14, 20), ix1 - x + 1);
         if (w < 14) break;
         const h = ri(10, 12);
-        const bd = block(x, bottom - h + 1, w, h, { wall: T.wall2, floor: T.concrete, crates: ri(5, 8), tier: rng() < 0.5 ? 'storage' : 'crate', wide: true, noPartition: true, pallets: ri(4, 8), loose: 2, roof: 'metal', windowChance: 0.2, kind: 'warehouse' });
-        addPoi('industrial', rng() < 0.5 ? 'Warehouse' : 'Factory', x, bottom - h + 1, w, h);
-        if (bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, rng() < 0.6 ? 'guard' : 'criminal', 'pistol', 'guard', 60); }
+        const bd = block(x, bottom - h + 1, w, h, { wall: T.wall2, floor: T.concrete, crates: ri(5, 8), tier: rng() < 0.5 ? 'storage' : 'crate', wide: true, noPartition: true, layout: ['rows', 'bays', 'open'][(x * 3 + bottom) % 3], depot: (depotSeq++ % 4 === 1) && depotCount < 8 && w >= 14 && h >= 10, pallets: ri(2, 4), loose: 2, roof: 'metal', windowChance: 0.2, kind: 'warehouse' });
+        if (bd.depot) { depotCount++; addPoi('shop', 'Supply Depot', x, bottom - h + 1, w, h); } else addPoi('industrial', rng() < 0.5 ? 'Warehouse' : 'Factory', x, bottom - h + 1, w, h);
+        if (!bd.depot && bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, rng() < 0.6 ? 'guard' : 'criminal', 'pistol', 'guard', 60); }
         civ(x + 2, bottom + 2, 'worker');
         x += w + 3;
       }
@@ -1239,38 +1575,73 @@ export function generateWorld(seed = 20240) {
     civ(ri(ix0 + 2, ix1 - 2), ri(iy0 + 3, iy1 - 3), 'worker'); civ(ri(ix0 + 2, ix1 - 2), ri(iy0 + 3, iy1 - 3), 'worker');
     // fenced yard gate guard
     enemy(ri(ix0 + 4, ix1 - 4), iy1 - 1, 'guard', 'pistol', 'guard', 40);
-    if (withGas) gasStation(ix0 + 1, iy1 - 12);
+    if (withGas) queueGas(ix0 + 1, iy1 - 12);
   }
 
+  /* ---- the city park: a public recreation area, not a field with random trees. Paved paths run from the middle of each side to a round fountain plaza in the
+     centre (so the park opens onto the sidewalks on all four sides); the four quarters have their own purpose: a fenced playground (swings, slide, seesaw),
+     a pond with benches, a flower garden with hedged beds, and a picnic lawn. Trees are planted along the edges and in groups, never on the paths or at the
+     entrances; lamps and bins stand beside the paths. A handful of visitors sit, stroll and chat. Lightweight on purpose: ~35 trees, ~20 flower / bush sprites,
+     6 lamps, 4 bins, 3 playground pieces. Uses its own random stream (nothing else in the world depends on it). ---- */
   function park(b, parkName = 'Greenfield Park') {
-    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) { if (obj[y][x] === -1 && isGrass(ground[y][x])) { ground[y][x] = rng() < 0.5 ? T.grass1 : T.grass2; occ[y][x] = true; } }
+    const pk = mulberry32(((seed * 53 + b.x0 * 7 + b.y0 * 13) >>> 0) || 1);
+    const pr = (lo, hi) => lo + Math.floor(pk() * (hi - lo + 1));
     const cx = Math.floor((b.x0 + b.x1) / 2), cy = Math.floor((b.y0 + b.y1) / 2);
-    // dirt paths: cross + ring
-    for (let x = b.x0 + 2; x <= b.x1 - 2; x++) { ground[cy][x] = T.dirt; ground[cy + 1][x] = T.dirt; }
-    for (let y = b.y0 + 2; y <= b.y1 - 2; y++) { ground[y][cx] = T.dirt; ground[y][cx + 1] = T.dirt; }
-    // pond
-    const pr = 5;
-    for (let y = cy - pr - 7; y <= cy - 2; y++) for (let x = cx + 5; x <= cx + 5 + pr * 2; x++) {
-      const d = Math.hypot((x - (cx + 5 + pr)) / 1.4, y - (cy - 2 - pr - 2));
-      if (inb(x, y) && d < pr) { obj[y][x] = T.water; ground[y][x] = T.sand; }
-      else if (inb(x, y) && d < pr + 1 && obj[y][x] === -1) ground[y][x] = T.sand;
+    const inside = (x, y) => x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1;
+    const free = (x, y) => inb(x, y) && inside(x, y) && obj[y][x] === -1 && !isRoadT(ground[y][x]);
+    const onPath = (x, y) => Math.abs(x - cx) <= 1 || Math.abs(y - cy) <= 1 || Math.hypot(x - cx, y - cy) <= 4.8;
+    // lawn in two greens
+    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) if (obj[y][x] === -1 && isGrass(ground[y][x])) { ground[y][x] = (x * 7 + y * 13) % 9 < 4 ? T.grass1 : T.grass2; occ[y][x] = true; }
+    // paved paths (3 wide, side to side) and the plaza
+    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) if (free(x, y) && onPath(x, y)) ground[y][x] = T.plaza;
+    // fountain in the middle (a 3 x 3 solid base under the sprite), ring of four benches round the plaza
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) obj[cy + dy][cx + dx] = T.prop;
+    out.props.push({ kind: 'fountain', x: px(cx), y: cy * TILE + 40 });
+    const bench = (tx, ty, sit = true) => { if (!free(tx, ty)) return; obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); if (sit && pk() < 0.7) out.civilians.push({ x: px(tx), y: px(ty) + 4, kind: 'sit' }); };
+    const lamp = (tx, ty) => { if (!free(tx, ty)) return; obj[ty][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: ty * TILE + 30 }); };
+    const bin = (tx, ty) => { if (!free(tx, ty)) return; obj[ty][tx] = T.prop; out.props.push({ kind: 'bin', x: px(tx), y: ty * TILE + 28 }); };
+    [[-6, -2], [6, 2], [-2, 6], [2, -6]].forEach(([dx, dy]) => bench(cx + dx, cy + dy));
+    // ---- NW: fenced playground on sand
+    const gx = cx - 15, gy = cy - 11, gw = 11, gh = 8;
+    for (let y = gy; y < gy + gh; y++) for (let x = gx; x < gx + gw; x++) if (free(x, y)) { ground[y][x] = T.sand; occ[y][x] = true; }
+    for (let x = gx - 1; x <= gx + gw; x++) for (const y of [gy - 1, gy + gh]) if (free(x, y) && !(y === gy + gh && x >= gx + 4 && x <= gx + 6)) obj[y][x] = T.fence;          // gap on the south side
+    for (let y = gy; y < gy + gh; y++) for (const x of [gx - 1, gx + gw]) if (free(x, y)) obj[y][x] = T.fence;
+    for (let k = 1; k <= 3; k++) if (inb(gx + 1 + k, gy + 2)) obj[gy + 2][gx + 1 + k] = T.prop;
+    out.decor.push({ kind: 'park_swing', x: px(gx + 3), y: (gy + 2) * TILE + 30 });
+    for (let k = 0; k < 2; k++) obj[gy + 2 + k][gx + 8] = T.prop;
+    out.decor.push({ kind: 'park_slide', x: px(gx + 8), y: (gy + 3) * TILE + 30 });
+    obj[gy + 5][gx + 3] = T.prop; obj[gy + 5][gx + 4] = T.prop;
+    out.decor.push({ kind: 'park_seesaw', x: (gx + 4) * TILE, y: (gy + 5) * TILE + 30 });
+    bench(gx + 8, gy + gh + 1, false); bin(gx + 10, gy + gh + 1);
+    out.civilians.push({ x: px(gx + 6), y: px(gy + 5), kind: 'stand' }, { x: px(gx + 9), y: px(gy + 5), kind: 'stand' });
+    // ---- NE: pond with a sandy shore and two benches
+    const pxc = cx + 9, pyc = cy - 8, PR = 4;
+    for (let y = pyc - PR - 2; y <= pyc + PR + 2; y++) for (let x = pxc - PR * 1.4 - 2; x <= pxc + PR * 1.4 + 2; x++) {
+      const xx = Math.round(x), d = Math.hypot((xx - pxc) / 1.4, y - pyc);
+      if (!free(xx, y) || onPath(xx, y)) continue;
+      if (d < PR) { obj[y][xx] = T.water; ground[y][xx] = T.sand; } else if (d < PR + 1.2) ground[y][xx] = T.sand;
     }
-    // trees, benches, picnic tables
-    for (let i = 0; i < 90; i++) {
-      const tx = ri(b.x0 + 2, b.x1 - 2), ty = ri(b.y0 + 2, b.y1 - 2);
-      if (obj[ty][tx] !== -1 || ground[ty][tx] === T.dirt || ground[ty][tx] === T.sand || Math.abs(tx - cx) <= 1 || Math.abs(ty - cy) <= 1) continue;
-      obj[ty][tx] = T.tree;
-    }
-    for (let i = 0; i < 8; i++) {
-      const tx = cx - 8 + i * 2 + (i > 3 ? 4 : 0), ty = cy - 1;
-      if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); }
-    }
-    for (let i = 0; i < 3; i++) {
-      const tx = ri(b.x0 + 4, cx - 4), ty = ri(cy + 4, b.y1 - 4);
-      if (obj[ty][tx] === -1 && obj[ty][tx + 1] === -1) { obj[ty][tx] = T.table; obj[ty][tx + 1] = T.table; }
-    }
+    bench(pxc - 7, pyc + 3); bench(pxc + 3, pyc + PR + 3);
+    // ---- SW: flower garden: three hedged beds (bush border, flowers inside), a bench facing them
+    [[cx - 15, cy + 5], [cx - 15, cy + 9], [cx - 8, cy + 8]].forEach(([bx, by], i) => {
+      for (let x = bx; x < bx + 6; x++) { if (free(x, by) && !onPath(x, by)) { out.decor.push({ kind: 'bush', x: px(x), y: by * TILE + 28 }); } if (free(x, by + 1) && !onPath(x, by + 1)) out.decor.push({ kind: (x + i) % 2 ? 'flower_a' : 'flower_b', x: px(x), y: (by + 1) * TILE + 24 }); }
+    });
+    bench(cx - 11, cy + 12); lamp(cx - 12, cy + 4);
+    // ---- SE: picnic lawn: two tables, a tree grove
+    [[cx + 7, cy + 6], [cx + 11, cy + 9]].forEach(([tx, ty]) => { if (free(tx, ty) && free(tx + 1, ty) && !onPath(tx, ty)) { obj[ty][tx] = T.table; obj[ty][tx + 1] = T.table; out.civilians.push({ x: px(tx), y: px(ty + 1), kind: 'stand' }); } });
+    // ---- lamps and bins beside the paths
+    [[-8, -2], [8, 2], [-2, 8], [2, -8], [-8, 2], [8, -2]].forEach(([dx, dy]) => lamp(cx + dx, cy + dy));
+    [[-5, 2], [5, -2], [2, 5], [-2, -5]].forEach(([dx, dy]) => bin(cx + dx, cy + dy));
+    // ---- trees: a row along the inner edge (skipping the path mouths) and a few groves
+    for (let x = b.x0 + 2; x <= b.x1 - 2; x += 4) for (const y of [b.y0 + 2, b.y1 - 2]) if (Math.abs(x - cx) > 3 && free(x, y) && !onPath(x, y)) obj[y][x] = T.tree;
+    for (let y = b.y0 + 4; y <= b.y1 - 4; y += 4) for (const x of [b.x0 + 2, b.x1 - 2]) if (Math.abs(y - cy) > 3 && free(x, y) && !onPath(x, y)) obj[y][x] = T.tree;
+    for (let i = 0; i < 12; i++) { const gxn = cx + pr(5, 15), gyn = cy + pr(4, 13); if (free(gxn, gyn) && !onPath(gxn, gyn) && obj[gyn][gxn] === -1 && ground[gyn][gxn] !== T.sand) obj[gyn][gxn] = T.tree; }
+    [[-13, 3], [-4, 10], [13, -3], [16, -9]].forEach(([dx, dy]) => { const x = cx + dx, y = cy + dy; if (free(x, y) && !onPath(x, y) && ground[y][x] !== T.sand) obj[y][x] = T.tree; });
+    // ---- gate pillars where the paths meet the sidewalk
+    [[cx - 2, b.y0 + 1], [cx + 2, b.y0 + 1], [cx - 2, b.y1 - 1], [cx + 2, b.y1 - 1]].forEach(([x, y]) => out.decor.push({ kind: 'park_gate', x: px(x), y: y * TILE + 30 }));
     addPoi('park', parkName, b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1);
-    for (let i = 0; i < 8; i++) civ(ri(cx - 12, cx + 12), ri(cy + 2, cy + 10), 'stand');
+    // visitors: a couple chatting by the fountain, a few strolling on the lawn
+    out.civilians.push({ x: px(cx - 3), y: px(cy + 3), kind: 'stand' }, { x: px(cx + 3), y: px(cy + 3), kind: 'stand' }, { x: px(cx + 5), y: px(cy - 6), kind: 'stand' }, { x: px(cx - 9), y: px(cy + 10), kind: 'stand' });
   }
 
   function hospitalBlock(b) {
@@ -1297,16 +1668,34 @@ export function generateWorld(seed = 20240) {
       shop(x, iy0 + 1, w, 9, pick(SHOP_KINDS), {});
       x += w + 1;
     }
-    const sw = 22, sh = 14;
-    const sx = Math.floor((b.x0 + b.x1) / 2) - 11, sy = iy1 - sh - 1;
-    policeStation(sx, sy, sw, sh);
+    const sw = 28, sh = 14;
+    const sx = Math.floor((b.x0 + b.x1) / 2) - 14, sy = iy1 - sh - 1;
+    policeStation(sx, sy, sw, sh, Math.floor((b.x0 + b.x1) / 2) - 11);
     const ly0 = iy0 + 12, ly1 = sy - 2;
     for (let y = ly0; y <= ly1; y++) for (let xx = ix0; xx <= ix1; xx++) { if (obj[y][xx] === -1 && !occ[y][xx]) ground[y][xx] = T.parking; }
     out.lots.push({ x0: ix0, y0: ly0, x1: ix1, y1: ly1, police: 3 });
-    addPoi('parking', 'Police Lot', ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1);
-    // officers at the front desk
-    enemy(sx + 6, sy + sh - 3, 'police', 'pistol', 'guard', 30);
-    enemy(sx + 14, sy + sh - 3, 'police', 'pistol', 'guard', 30);
+    // behind the station: no parking. A staff-only service yard (open concrete pad with dumpsters, no fence) between the back wall and the street of shops.
+    {
+      const y8 = sy - 2, y9 = sy - 1;
+      for (let tx = sx + 3; tx <= sx + 24; tx++) for (const ty of [y8, y9]) if (inb(tx, ty) && obj[ty][tx] === -1) { ground[ty][tx] = T.concrete; occ[ty][tx] = true; }
+      [sx + 5, sx + 21].forEach((tx) => { if (obj[y9][tx] === -1) { obj[y9][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: y9 * TILE + 30 }); } });
+    }
+    // a paved promenade between the shop fronts and the station's service yard: two rows of pavers (the top row stays clear for walking), lamps, benches, planters and flower beds along the lower row
+    {
+      const p0 = sy - 3, p1 = sy - 2;
+      for (let tx = ix0; tx <= ix1; tx++) for (const ty of [p0, p1]) if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) { ground[ty][tx] = T.plaza; occ[ty][tx] = true; }
+      const ok = (tx) => inb(tx, p1) && obj[p1][tx] === -1 && ground[p1][tx] === T.plaza;
+      for (let tx = ix0 + 3, k = 0; tx <= ix1 - 2; tx += 4, k++) {
+        if (!ok(tx)) continue;
+        if (k % 3 === 0) { obj[p1][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: p1 * TILE + 30 }); }
+        else if (k % 3 === 1) obj[p1][tx] = T.bench;                                 // (no loiterer on these benches: the bench tile is solid, so he used to be moved into the shop doorway)
+        else out.decor.push({ kind: 'bush', x: px(tx), y: p1 * TILE + 28 }, { kind: k % 2 ? 'flower_a' : 'flower_b', x: px(tx + 1), y: p1 * TILE + 26 }, { kind: 'flower_b', x: px(tx - 1), y: p1 * TILE + 26 });
+      }
+    }
+    // two officers on duty in the restricted hall
+    enemy(sx + 12, sy + 6, 'police', 'pistol', 'guard', 24);
+    enemy(sx + 19, sy + 6, 'police', 'pistol', 'guard', 24);
+    enemy(sx + 18, sy + 16, 'police', 'pistol', 'guard', 24);                                  // one on duty outside, by the parking
   }
 
   /* ----- military ----- */
@@ -1438,7 +1827,8 @@ export function generateWorld(seed = 20240) {
       while (x + 14 <= ix1) {
         const w2 = Math.min(ri(14, 18), ix1 - x + 1);
         if (w2 < 14) break;
-        const h2 = ri(11, 13);
+        let h2 = ri(11, 13);
+        if (bottom > iy0 + 13) h2 = Math.max(9, Math.min(h2, bottom - (iy0 + 13) - 2));       // the second row keeps a two-tile street between it and the first row's front doors
         const t = house(x, bottom - h2 + 1, w2, h2, { roof: 'metal', wall: T.wall2 });
         addPoi('house', 'Apartments', t.x, t.y, t.w, t.h);
         if (rng() < 0.6) civ(t.doorX, t.doorY + 2, 'stand');
@@ -1530,18 +1920,62 @@ export function generateWorld(seed = 20240) {
     };
   }
 
+  // the military blocks and their replacements use a private random stream (the main one is then advanced by exactly what the old block used: 99, 415, 385 and 482 draws)
+  const ownBlock = (b, salt, burn, fn) => { const keep = rng; rng = mulberry32((seed * 53 + salt) >>> 0); try { fn(); } finally { rng = keep; } for (let i = 0; i < burn; i++) rng(); };
+  function redevA(b) { commercial(b); }
+  /* The old Fort Merrow site is now an ordinary city block: a row of small apartment buildings and a small office building, a row of family houses, and a row with a small
+     warehouse, a shop and a parking lot, with trees and bushes in the gaps (all from the block's own random stream). */
+  function redevB(b) {
+    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+    let x = ix0;
+    const aBottom = iy0 + 8;
+    [[11, 9, 'apt'], [11, 9, 'apt'], [9, 9, 'office']].forEach(([w, h, k]) => {
+      if (x + w - 1 > ix1) return;
+      const y = aBottom - h + 1;
+      if (k === 'apt') { const t = house(x, y, w, h, { roof: 'metal', wall: T.wall2 }); addPoi('house', 'Apartments', t.x, t.y, t.w, t.h); if (rng() < 0.6) civ(t.doorX, t.doorY + 2, 'stand'); }
+      else { const t = house(x, y, w, h, { wall: T.wall2, office: true, roof: 'modern', kind: 'office' }); addPoi('tower', 'Offices', t.x, t.y, t.w, t.h); publicDoor(t.doorX, t.doorY, 'office', 'Office'); }
+      x += w + 1;
+    });
+    const bBottom = aBottom + 11;
+    x = ix0;
+    while (x + 8 <= ix1) {
+      const w = Math.min(ri(9, 11), ix1 - x + 1);
+      if (w < 8) break;
+      const h = ri(8, 8), y = bBottom - h + 1;
+      const hs = house(x, y, w, h, { roof: 'shingle' });
+      addPoi('house', 'House', x, y, w, h);
+      if (rng() < 0.45) civ(hs.doorX, hs.doorY + 2, 'stand');
+      x += w + ri(2, 3);
+    }
+    const cy = iy1 - 6;
+    const wh = block(ix0, cy, 12, 7, { wall: T.wall2, floor: T.concrete, crates: 3, tier: 'storage', wide: true, noPartition: true, layout: 'rows', roof: 'metal', windowChance: 0.2 });
+    addPoi('industrial', 'Warehouse', ix0, cy, 12, 7);
+    const sh = shop(ix0 + 13, cy, 10, 7, pick(SHOP_KINDS), {});
+    for (let ty = cy + 1; ty <= iy1; ty++) for (let tx = ix0 + 24; tx <= ix1; tx++) if (obj[ty][tx] === -1 && isGrass(ground[ty][tx])) { ground[ty][tx] = (tx - ix0 - 24) % 4 === 0 ? T.parking : T.concrete; occ[ty][tx] = true; }
+    [[ix0 + 26, 'sedan'], [ix0 + 30, 'compact']].forEach(([tx, t]) => vehicle(t, ri(0, 3), tx * TILE, (cy + 4) * TILE, Math.PI / 2, 'parked'));
+    for (let i = 0; i < 14; i++) {                                                  // trees and bushes in the gaps
+      const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
+      if (occ[ty][tx] || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
+      if (rng() < 0.5) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 });
+    }
+  }
+  // the military camp and checkpoint (right side of the map): see MilitaryGen.js
+  const MIL = makeMilitary({ T, TILE, obj, ground, occ, out, inb, px, fillBuildingShell, addDoorTile, placeWindows, registerBuilding, civ, enemy, vehicle, addPoi, mark, ri });
+  function checkpointCompound(b) { MIL.checkpoint(b); }
+  function fortMerrow(b) { MIL.fort(b); }
+
   /* ------------------------------------------------------- fill the blocks */
   blocks.forEach((b) => {
     switch (b.kind) {
       case 'res': residential(b, 0.07); break;
-      case 'res_gas': residential(b, 0.05); gasStation(b.x1 - 14, b.y0 + 2); break;
+      case 'res_gas': residential(b, 0.05); queueGas(b.x1 - 14, b.y0 + 2); break;
       case 'res_ab': residential(b, 0.55); break;
       case 'com': commercial(b); break;
       case 'downtown': downtown(b); break;
       case 'ind': industrial(b, false); break;
       case 'ind_gas': industrial(b, true); break;
-      case 'park': park(b); break;
-      case 'park2': park(b, 'Riverside Park'); break;
+      case 'park': park(b, b.c === 2 ? 'Greenfield Park' : b.r === 1 ? 'Harborview Park' : 'Southport Gardens'); break;
+      case 'park2': park(b, b.r === 1 ? 'Riverside Park' : b.c === 7 ? 'Southbank Park' : 'Westgate Park'); break;
       case 'hideout': hideout(b); break;
       case 'suburb': suburb(b); break;
       case 'school': school(b); break;
@@ -1550,20 +1984,115 @@ export function generateWorld(seed = 20240) {
       case 'fire': fireStation(b); break;
       case 'hospital': hospitalBlock(b); break;
       case 'police': policeBlock(b); break;
-      case 'checkpoint':
-        camp(b.x0 + 8, b.y0 + 4, 22, 14, { side: 'N', pos: b.x0 + 18 }, { tents: [[2, 3, 7, 5]], boxes: 2, trucks: 1, enemies: ['rifle', 'rifle', 'shotgun', 'rifle'], name: 'Military Checkpoint' });
-        break;
-      case 'military':
-        camp(b.x0 + 2, b.y0 + 2, 34, 26, { side: 'W', pos: b.y0 + 12 }, {
-          tents: [[3, 3, 7, 5], [3, 16, 7, 5], [24, 3, 7, 5]], hq: [12, 7, 14, 10], boxes: 6, trucks: 2, name: 'Fort Merrow',
-          enemies: ['rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'rifle', 'shotgun', 'shotgun', 'sniper', 'sniper', 'heavy', 'heavy', 'heavy', 'rifle']
-        });
-        break;
+      case 'redevA': ownBlock(b, 301, 99, () => redevA(b)); break;
+      case 'redevB': ownBlock(b, 302, 415, () => redevB(b)); break;
+      case 'checkpoint': ownBlock(b, 303, 385, () => checkpointCompound(b)); break;
+      case 'military': ownBlock(b, 304, 482, () => fortMerrow(b)); break;
       case 'forest': forestBlock(b, 0.5); break;
       case 'casino': forestBlock(b, 0.45); casino(b); break;
       default: break;
     }
   });
+  function placeGasStations() {
+    const GW = 9, GH = 6;
+    const okGround = (g) => isGrass(g) || g === T.concrete || g === T.parking || g === T.sidewalk;
+    // the gang hideouts are built last, at fixed spots (NE yard, SE garage, NW compound): keep gas stations out of those areas
+    const RESERVED = [[342, 0, 380, 20], [342, 238, 380, 273], [0, 0, 20, 20], [0, 150, 60, 215]];
+    const clashB = (x0, y0, x1, y1) => RESERVED.some((r) => x0 < r[2] && r[0] < x1 && y0 < r[3] && r[1] < y1) || out.buildings.some((q) => x0 < q.x + q.w && q.x < x1 && y0 < q.y + q.h && q.y < y1);
+    gasQueue.forEach((q, gi) => {
+      const fits = (x, y) => {
+        if (x - 3 < 3 || x + GW + 3 > W - 4 || y - 1 < 3 || y + GH + 14 > H - 4) return false;
+        if (clashB(x - 3, y - 1, x + GW + 3, y + GH + 8)) return false;
+        for (let yy = y - 1; yy <= y + GH + 7; yy++) for (let xx = x - 3; xx <= x + GW + 3; xx++) if ((obj[yy][xx] !== -1 && obj[yy][xx] !== T.tree) || !okGround(ground[yy][xx])) return false;       // (trees may be cleared)
+        const yb = y + GH + 5, cx = x + 4;                              // the forecourt must open onto a road within a few tiles
+        for (let k = 3; k <= 7; k++) {
+          const g = ground[yb + k] && ground[yb + k][cx];
+          if (g === undefined) return false;
+          if (isRoadT(g) && g !== T.bridge) return true;
+          if (!okGround(g) || (obj[yb + k][cx] !== -1 && obj[yb + k][cx] !== T.tree)) return false;
+        }
+        return false;
+      };
+      let best = null, bd = 1e9;
+      for (let y = q.ty - 90; y <= q.ty + 90; y++) for (let x = q.tx - 90; x <= q.tx + 90; x++) {
+        const d = Math.abs(x - q.tx) + Math.abs(y - q.ty);
+        if (d >= bd || !fits(x, y)) continue;
+        bd = d; best = { x, y };
+      }
+      const at = best || { x: q.tx, y: q.ty };
+      if (best) for (let yy = at.y - 1; yy <= at.y + GH + 12; yy++) for (let xx = at.x - 3; xx <= at.x + GW + 3; xx++) if (inb(xx, yy) && obj[yy][xx] === T.tree) obj[yy][xx] = -1;       // clear trees off the site
+      const keep = rng; rng = mulberry32((seed * 29 + 811 + gi * 97) >>> 0);        // own stream: the main one is not touched
+      try { gasStation(at.x, at.y); } finally { rng = keep; }
+      if (best) {                                                                      // clear loose decoration off the new forecourt
+        const x0 = (at.x - 2) * TILE, x1 = (at.x + GW + 3) * TILE, y0 = at.y * TILE, y1 = (at.y + GH + 6) * TILE;
+        out.decor = out.decor.filter((d) => !(d.x >= x0 && d.x <= x1 && d.y >= y0 && d.y <= y1));
+      }
+      out.gasSites = (out.gasSites || []).concat([{ x: at.x, y: at.y, moved: !!best }]);
+    });
+  }
+  placeGasStations();
+
+  /* ---- roundabouts. A few intersections whose surroundings are completely free (no building, prop, door, pickup, bridge or lot within 7 tiles) become roundabouts:
+     a ring road (radius 2 - 4.4 tiles) round a grass island, traffic circulating counter-clockwise (right-hand traffic; see Nav.ringPoints / Vehicle.planWander).
+     The four pedestrian corner nodes that sat on the sidewalk corners are moved just outside the ring. Chosen by a fixed hash, no random draws. */
+  out.roundabouts = [];
+  {
+    const RIN = 2.0, ROUT = 4.4, SQ = 5;
+    const RES2 = [[342, 0, 380, 20], [342, 238, 380, 273], [0, 0, 20, 20]];
+    const niceGround = (g) => isGrass(g) || g === T.sidewalk || g === T.dirt || g === T.plaza || g === T.concrete;
+    const cands = [];
+    HR.forEach((hy, i) => VR.forEach((vx, j) => {
+      const cx = vx + 1, cy = hy + 1;
+      if (cx < 12 || cy < 12 || cx > W - 13 || cy > H - 13) return;
+      if (RES2.some((r) => cx + SQ >= r[0] && cx - SQ <= r[2] && cy + SQ >= r[1] && cy - SQ <= r[3])) return;
+      for (let yy = cy - SQ; yy <= cy + SQ; yy++) for (let xx = cx - SQ; xx <= cx + SQ; xx++) {
+        const g = ground[yy][xx];
+        if (g === T.bridge || g === T.parking) return;
+        if (isRoadT(g)) continue;
+        if ((obj[yy][xx] !== -1 && obj[yy][xx] !== T.tree) || !niceGround(g)) return;
+      }
+      const x0 = cx - SQ, x1 = cx + SQ + 1, y0 = cy - SQ, y1 = cy + SQ + 1;
+      if (out.buildings.some((q) => x0 < q.x + q.w && q.x < x1 && y0 < q.y + q.h && q.y < y1)) return;
+      const inSq = (o) => o.x >= x0 * TILE && o.x <= x1 * TILE && o.y >= y0 * TILE && o.y <= y1 * TILE;
+      if (out.houseDoors.some(inSq) || out.publicDoors.some(inSq) || out.containers.some((c2) => c2.tx >= x0 && c2.tx < x1 && c2.ty >= y0 && c2.ty < y1)) return;
+      // every pedestrian corner node needs a free tile outside the ring to move to (searching outward along the diagonal)
+      const freeT = (tx, ty) => inb(tx, ty) && (obj[ty][tx] === -1 || obj[ty][tx] === T.tree) && niceGround(ground[ty][tx]) && !out.buildings.some((q) => tx >= q.x - 1 && tx < q.x + q.w + 1 && ty >= q.y - 1 && ty < q.y + q.h + 1);
+      const moves = [];
+      for (const [dx, dy] of [[-2, -2], [2, -2], [2, 2], [-2, 2]]) {
+        if (nodeIndex.get((cy + dy) * W + (cx + dx)) === undefined) continue;
+        let t = null;
+        for (let k = 5; k <= 9 && !t; k++) { const a = cx + Math.sign(dx) * k, b = cy + Math.sign(dy) * k; if (freeT(a, b)) t = [a, b]; }
+        if (!t) return;
+        moves.push([dx, dy, t[0], t[1]]);
+      }
+      cands.push({ i, j, cx, cy, moves, h: ((i * 73856093) ^ (j * 19349663)) >>> 0 });
+    }));
+    cands.sort((a, b) => a.h - b.h);
+    const picked = [];
+    cands.forEach((c2) => { if (picked.length < 10 && !picked.some((p2) => Math.abs(p2.i - c2.i) + Math.abs(p2.j - c2.j) <= 1)) picked.push(c2); });
+    picked.forEach((c2) => {
+      const { cx, cy } = c2;
+      out.items = out.items.filter((it) => Math.hypot(it.x / TILE - cx - 0.5, it.y / TILE - cy - 0.5) > ROUT + 1.2);       // loose pickups on the ring are dropped
+      for (let yy = cy - SQ; yy <= cy + SQ; yy++) for (let xx = cx - SQ; xx <= cx + SQ; xx++) {
+        const d = Math.hypot(xx - cx, yy - cy);
+        if (d > ROUT) continue;
+        if (obj[yy][xx] === T.tree) obj[yy][xx] = -1;
+        ground[yy][xx] = d < RIN ? ((xx + yy) % 2 ? T.grass1 : T.grass2) : T.road;
+      }
+      // pedestrian corner nodes: out of the ring, onto the corner blocks
+      c2.moves.forEach(([dx, dy, nx, ny]) => {
+        const k = (cy + dy) * W + (cx + dx), id = nodeIndex.get(k);
+        if (id === undefined) return;
+        const n = out.nodes[id];
+        nodeIndex.delete(k); nodeIndex.set(ny * W + nx, id);
+        n.tx = nx; n.ty = ny; n.x = px(nx); n.y = px(ny);
+      });
+      // a few bushes on the island (decor only: nothing solid, so no loop counts as obstructed)
+      [[-0.9, -0.5], [0.9, -0.5], [-0.5, 0.9], [0.6, 0.8], [0, 0]].forEach(([ox, oy], q) => out.decor.push({ kind: q === 4 ? 'flower_a' : 'bush', x: px(cx) + ox * TILE, y: px(cy) + oy * TILE + 14 }));
+      out.roundabouts.push({ i: c2.i, j: c2.j, x: px(cx), y: px(cy) });
+    });
+  }
+
   // house interiors are decorated LAST (own random streams, nothing else in the world generation depends on it), and never on
   // a tile that holds a pickup, crate, container or NPC spawn
   const clearTile = (px0, py0) => keepClear.add(Math.floor(py0 / TILE) * W + Math.floor(px0 / TILE));
@@ -1584,11 +2113,11 @@ export function generateWorld(seed = 20240) {
     return true;
   };
   HR.forEach((y) => {
-    for (let x = 6; x < W - 6; x += 9) { if (!inV(x) && !inV(x + 1)) propOnSidewalk(x, y - 1, 'lamp'); }
-    for (let x = 11; x < W - 6; x += 13) { if (!inV(x)) propOnSidewalk(x, y + 3, 'lamp'); }
+    for (let x = 6; x < W - 6; x += 16) { if (!inV(x) && !inV(x + 1)) propOnSidewalk(x, y - 1, 'lamp'); }
+    for (let x = 11; x < W - 6; x += 22) { if (!inV(x)) propOnSidewalk(x, y + 3, 'lamp'); }
   });
   VR.forEach((x) => {
-    for (let y = 7; y < H - 6; y += 11) { if (!inH(y)) propOnSidewalk(x - 1, y, 'lamp'); }
+    for (let y = 7; y < H - 6; y += 18) { if (!inH(y)) propOnSidewalk(x - 1, y, 'lamp'); }
   });
   // traffic signs at intersections
   HR.forEach((hy, i) => VR.forEach((vx, j) => {
@@ -1607,8 +2136,15 @@ export function generateWorld(seed = 20240) {
     const x = ri(1, W - 2), y = ri(1, H - 2);
     if (ground[y][x] === T.sidewalk && obj[y][x] === -1 && !corner(x, y)) out.decor.push({ kind: 'hydrant', x: px(x), y: y * TILE + 26 });
   }
-  // barricades (road closures / debris) around the restricted areas
-  [[100, 130], [100, 129], [140, 100], [141, 100]].forEach(([x, y]) => { if (obj[y][x] === -1 && ground[y][x] !== T.bridge) obj[y][x] = T.barricade; });
+  // Roads stay clear: the four barricade blocks that used to close road tiles near the restricted areas are gone, and as a safety net nothing solid
+  // (barricade, sandbag, prop, tree) or crate may stand on a road tile. Sidewalk props, buildings, trees on grass and street decorations are untouched.
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const g = ground[y][x];
+    if (!isRoadT(g) || g === T.bridge) continue;
+    const o = obj[y][x];
+    if (o === T.barricade || o === T.sandbag || o === T.prop || o === T.propHigh || o === T.tree) obj[y][x] = -1;
+  }
+  out.crates = out.crates.filter((c2) => { const cx2 = Math.floor(c2.x / TILE), cy2 = Math.floor(c2.y / TILE); return !(inb(cx2, cy2) && isRoadT(ground[cy2][cx2]) && ground[cy2][cx2] !== T.bridge); });
 
   /* ----------------------------------------------------------- vegetation */
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (obj[y][x] === T.tree) out.trees.push({ x: px(x), y: y * TILE + 26, kind: ri(0, 2) });
@@ -1689,6 +2225,13 @@ export function generateWorld(seed = 20240) {
     vehicle(i % 3 === 0 ? 'van' : 'sedan', i % 3 === 0 ? i % 3 : ri(0, 5), route[1].x - 100, route[1].y, 0, 'traffic', route.slice(1).concat(route.slice(0, 1)));
   });
 
+  // traffic for the new east / south districts (cars far from the player are frozen, so each area needs its own starting traffic)
+  [[8, 0], [8, 1], [8, 3], [9, 0], [9, 1], [9, 2], [9, 3], [9, 4], [9, 5], [9, 6], [9, 7], [8, 7], [7, 7], [6, 7], [5, 7], [4, 7], [3, 7], [2, 7], [1, 7], [0, 7], [10, 0]].forEach(([ci, r2], i) => {
+    if (ci + 1 >= VR.length || r2 + 1 >= HR.length) return;
+    const route = loopFor(ci, r2);
+    vehicle(i % 4 === 0 ? 'van' : 'sedan', i % 4 === 0 ? 0 : ri(0, 5), route[1].x - 100, route[1].y, 0, 'traffic', route.slice(1).concat(route.slice(0, 1)));
+  });
+
   /* ------------------------------------------------------- foot patrols etc. */
   // police foot patrols along sidewalk rings near the busy districts
   [[2, 2], [3, 2], [1, 3], [2, 3], [3, 3], [3, 1], [2, 1], [1, 2], [1, 1], [0, 2], [4, 2], [1, 4]].forEach(([c, r]) => {
@@ -1713,12 +2256,13 @@ export function generateWorld(seed = 20240) {
       if (rng() < 0.55) civ(n.tx, n.ty, 'ped', { node: idx });
     }
   });
+  { let k = 0; out.civilians = out.civilians.filter((c2) => c2.kind !== 'ped' || (k++ % 20) < 11); }       // thin the street crowd
   // loiterers on benches
   out.benches.forEach((bn, i) => { if (i % 2 === 0) out.civilians.push({ x: bn.x, y: bn.y, kind: 'sit' }); });
 
   // spawn point: a quiet sidewalk in the south-west
   const sb = blocks.find((q) => q.c === 1 && q.r === 4);
-  out.spawn = { x: px(sb.x0 + 6), y: px(sb.y0) };
+  out.spawn = out.home ? { ...out.home.spawn } : { x: px(sb.x0 + 6), y: px(sb.y0) };
   // clear a few starter items near the spawn so the player has something to pick up
   out.items.push({ x: out.spawn.x + 60, y: out.spawn.y + 30, id: 'm_bat' });
   out.items.push({ x: out.spawn.x - 70, y: out.spawn.y + 30, id: 'm_knife' });
@@ -1742,7 +2286,9 @@ export function generateWorld(seed = 20240) {
           let ok = true;
           for (let xx = x; xx < x + 4 && ok; xx++) ok = ground[row][xx] === T.sidewalk && obj[row][xx] === -1 && (ground[roadRow][xx] === T.road || ground[roadRow][xx] === T.roadCrack) && ground[row === ry - 1 ? row - 1 : row + 1][xx] !== T.sidewalk + 999;
           if (!ok || doorNear(x + 1, row) || doorNear(x + 2, row)) continue;
-          const cxp = (x + 2) * TILE, cyp = row * TILE + 16;
+          // north-side bays (heading PI) sit 15 px further up: a parked car's collision box is ~38 px tall (the 23 px footprint is stretched by the camera tilt) and its sprite origin is above
+          // the box centre, so at the row centre it used to poke ~11 px into the driving lane and traffic rear-ended it
+          const cxp = (x + 2) * TILE, cyp = row * TILE + 16 - (heading === Math.PI ? 15 : 0);
           if (out.decor.some((d) => Math.abs(d.x - cxp) < 78 && Math.abs(d.y - (row * TILE + 28)) < 40) || out.props.some((p2) => Math.abs(p2.x - cxp) < 78 && Math.abs(p2.y - (row * TILE + 28)) < 40)) continue;
           cand.push({ x: cxp, y: cyp, heading, tx: x, row });
         }
@@ -2038,7 +2584,7 @@ export function generateWorld(seed = 20240) {
     out.buildings = out.buildings.filter((b) => !(b.x <= wx1 && b.x + b.w - 1 >= wx0 && b.y <= wy1 && b.y + b.h - 1 >= wy0));
     out.doors = out.doors.filter((d) => !inR(d.x, d.y)); out.containers = out.containers.filter((c) => !inR(c.tx, c.ty));
     out.pois = out.pois.filter((p) => !(p.tx <= wx1 && p.tx + p.w - 1 >= wx0 && p.ty <= wy1 && p.ty + p.h - 1 >= wy0));
-    ['publicDoors', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => { if (Array.isArray(out[k])) out[k] = out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))); });
+    ['publicDoors', 'storeFronts', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => { if (Array.isArray(out[k])) out[k] = out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))); });
     out.trees = out.trees.filter((t) => !inRpx(t.x, t.y - 26));
     for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) if (inb(x, y)) occ[y][x] = false;
     mark(wx0, wy0, wx1 - wx0 + 1, wy1 - wy0 + 1, 0);
@@ -2263,6 +2809,7 @@ export function generateWorld(seed = 20240) {
     // move NPC / enemy spawns off furniture, trees and walls onto the nearest walkable reachable tile
     const free = (tx, ty) => inb(tx, ty) && seen[ty * W + tx] === 1 && !SOLID.has(obj[ty][tx]);
     const snap = (e) => {
+      if (e.kind === 'shopkeeper') return true;                          // a clerk stands in the sealed pocket behind the counter
       const tx = Math.floor(e.x / TILE), ty = Math.floor(e.y / TILE);
       if (free(tx, ty)) return true;
       for (let r = 1; r <= 6; r++) {

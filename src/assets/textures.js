@@ -19,27 +19,42 @@ export const T = {
   toilet: 40, sink: 41, dresser: 42, locker: 43, stove: 44, rubble: 45,
   // city additions
   counter: 46, hospBed: 47, bars: 48, desk: 49, pump: 50, bench: 51,
-  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, propHigh: 57, glass: 58, glassCap: 59, shopShelf: 60, graf1: 61, graf2: 62, graf3: 63
+  roadDashV: 52, crossH: 53, crossV: 54, parking: 55, plaza: 56, propHigh: 57, glass: 58, glassCap: 59, shopShelf: 60, graf1: 61, graf2: 62, graf3: 63,
+  // store fixtures (each business has its own)
+  drinkFr: 64, dairyFr: 65, produce: 66, foodSh: 67, medCab: 68, medSh: 69, firstAid: 70, indRack: 71, toolWall: 72, snackRk: 73, clothRk: 74, foldTbl: 75,
+  pastry: 76, coffeeM: 77, pizzaOv: 78, ctrWhite: 79, ctrInd: 80, ctrWood: 81, ctrBlue: 82, ctrPlum: 83, ctrRed: 84, crates: 85
 };
+// front-wall facades (one per business) and business windows
+Object.assign(T, { facPharm: 86, facGrocery: 87, facHardware: 88, facClothing: 89, facCafe: 90, facDiner: 91, facPizza: 92, facGas: 93, facMall: 94, facDepot: 95,
+  winPharm: 96, winGrocery: 97, winHardware: 98, winClothing: 99, winCafe: 100, winDiner: 101, winPizza: 102, winGas: 103, winMall: 104, baskets: 105,
+  obsWin: 106, facPolice: 107, winPolice: 108, cooler: 109, ctrPolice: 110, evShelf: 111, radioShelf: 112, ctrPlain: 113,
+  polWallPaint: 114, polWallSecure: 115, polDoorSteel: 116, polDoorSteelOpen: 117, polDoorCell: 118, polDoorCellOpen: 119, polDoorGlass: 120, polDoorGlassOpen: 121, polWallRoom: 122, metalTable: 123, steelChair: 124,
+  milBunk: 125, weaponRack: 126, ammoCrate: 127, workbench: 128, jersey: 129, milConsole: 130, milFacade: 131, milWall: 132, milGate: 133, milGateOpen: 134, milBoom: 135, milBoomOpen: 136 });
+export const NTILES = 137;
+export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136];
+export const SHOP_WINDOWS = [96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108];
+export const STORE_FIX = [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85];
 
 // Anything in this set stops movement.
 export const SOLID = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.fence, T.barricade, T.water, T.sandbag,
   T.doorClosed, T.window, T.windowBroken, T.prop, T.propHigh, T.tree,
   T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
-  T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3
+  T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3,
+  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 127, 128, 129, 130
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.tree, T.barricade, T.sandbag, T.doorClosed,
-  T.fridge, T.shelf, T.locker, T.cabinet, T.propHigh, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3
+  T.fridge, T.shelf, T.locker, T.cabinet, T.propHigh, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3, 127, 129
 ]);
 // Solid for walking but bullets (and sight) go through.
 export const BULLET_PASS = new Set([
   T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser,
-  T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf
+  T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf,
+  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 128, 130
 ]);
-export const WALL_FAMILY = new Set([T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
+export const WALL_FAMILY = new Set([96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
 
 export const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
 
@@ -98,7 +113,7 @@ export function makeCanvas(scene, key, w, h, draw) {
 /* ================================================================ tiles */
 function drawTiles(scene) {
   const rng = mulberry32(99);
-  makeCanvas(scene, 'tiles', 64 * 32, 32, (c) => {
+  makeCanvas(scene, 'tiles', NTILES * 32, 32, (c) => {
     const tile = (idx, base, fn) => { const ox = idx * 32; R(c, ox, 0, 32, 32, base); if (fn) fn(ox); };
 
     /* ---------- ground ---------- */
@@ -629,21 +644,49 @@ function drawPose(c, ox, oy, dir, f, a) {
   else if (f === 11) put(16, 44, -12, 1, 0.97);
   else if (f === 12) put(16, 44, 16, 1, 0.88);
   else if (f === 13) {
-    c.beginPath(); c.rect(0, 0, 32, 34); c.clip();
+    // seated: the torso of the standing figure (lowered a little), then legs drawn straight onto it with no gap - thighs toward the viewer, shins down, shoes - so the body is
+    // continuous (it used to be cropped at the waist with the legs floating below a gap)
+    c.beginPath(); c.rect(0, 0, 32, 35); c.clip();
     c.drawImage(tmp, 0, 8);
     c.restore(); c.save(); c.translate(ox, oy);
-    const pc = CLOTH_COLORS[a.pantsColor], sc = SHOE_COLORS[a.shoeColor];
-    if (dir === 'r') { R(c, 14, 36, 12, 5, pc); R(c, 24, 36, 4, 6, sc); }
-    else { R(c, 11, 38, 11, 4, pc); R(c, 10, 42, 5, 3, sc); R(c, 17, 42, 5, 3, sc); }
+    const pc = CLOTH_COLORS[a.pantsColor], sc = SHOE_COLORS[a.shoeColor], pl = shade(pc, 0.22), pd = shade(pc, -0.25);
+    if (dir === 'r') {
+      R(c, 13, 33, 14, 6, pc); R(c, 13, 33, 14, 1, pl); R(c, 13, 38, 14, 1, pd);              // thigh, pointing forward
+      R(c, 23, 39, 5, 6, pc); R(c, 23, 39, 1, 6, pl); R(c, 27, 39, 1, 6, pd);                  // shin down from the knee
+      R(c, 23, 45, 7, 3, sc); R(c, 23, 45, 7, 1, shade(sc, 0.25));                             // shoe
+    } else if (dir === 'u') {
+      R(c, 10, 33, 12, 10, pc); R(c, 10, 33, 12, 1, pl); R(c, 15, 38, 2, 5, pd);              // seen from behind: hips and the backs of the legs, down to the shoes (no gap)
+      R(c, 10, 43, 5, 3, sc); R(c, 17, 43, 5, 3, sc);
+    } else {
+      R(c, 10, 33, 12, 6, pc); R(c, 10, 33, 12, 1, pl); R(c, 15, 34, 2, 5, pd);                // two thighs toward the viewer
+      R(c, 10, 39, 5, 6, pc); R(c, 17, 39, 5, 6, pc); R(c, 10, 39, 1, 6, pl); R(c, 17, 39, 1, 6, pl); R(c, 14, 39, 1, 6, pd); R(c, 21, 39, 1, 6, pd);      // shins
+      R(c, 9, 45, 7, 3, sc); R(c, 16, 45, 7, 3, sc); R(c, 9, 45, 7, 1, shade(sc, 0.25)); R(c, 16, 45, 7, 1, shade(sc, 0.25));                              // shoes
+    }
   } else if (f === 14) {
     c.drawImage(tmp, 0, 0);
     const sh = CLOTH_COLORS[a.shirtColor], sk = SKIN_TONES[a.skin];
     if (dir === 'r') { R(c, 16, 7, 4, 9, sh); R(c, 16, 3, 4, 5, sk); }
     else { R(c, 6, 8, 4, 8, sh); R(c, 6, 3, 4, 6, sk); R(c, 22, 8, 4, 8, sh); R(c, 22, 3, 4, 6, sk); }
-  } else if (f === 15) put(16, 44, 28, 1, 0.96);
-  else if (f === 16) put(14, 44, 64, 0.9, 0.9);
-  else if (f === 17) put(16, 46, 90, 0.7, 0.7);
+  } else if (f === 15) fitRotated(c, tmp, 24, 1, 0.96);
+  else if (f === 16) fitRotated(c, tmp, 64, 0.9, 0.9);
+  else if (f === 17) fitRotated(c, tmp, 90, 0.8, 0.8);
   c.restore();
+}
+
+/* The stumbling / falling / lying poses rotate the standing figure, which used to swing the head and legs out of the 32 x 48 cell (heads and feet were cut off, and pixels spilled
+   into the neighbouring frames). The rotated figure is rendered on a scratch canvas, its real extent is measured, and it is scaled down only as far as needed to fit inside the cell and
+   set on the ground line, so nothing is ever clipped. c is already translated to the cell origin. */
+function fitRotated(c, tmp, rot, sx, sy) {
+  const big = document.createElement('canvas'); big.width = 112; big.height = 112;
+  const b = big.getContext('2d'); b.imageSmoothingEnabled = false;
+  b.translate(56, 80); b.rotate(rot * Math.PI / 180); b.scale(sx, sy); b.drawImage(tmp, -16, -44);
+  const d = b.getImageData(0, 0, 112, 112).data;
+  let x0 = 112, y0 = 112, x1 = -1, y1 = -1;
+  for (let y = 0; y < 112; y++) for (let x = 0; x < 112; x++) if (d[(y * 112 + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1, k = Math.min(1, 28 / w, 42 / h), dw = Math.max(1, Math.round(w * k)), dh = Math.max(1, Math.round(h * k));
+  c.imageSmoothingEnabled = false;
+  c.drawImage(big, x0, y0, w, h, Math.round((32 - dw) / 2), 45 - dh, dw, dh);
 }
 
 /* Yosen's sheet: the normal 18 frames plus 4 more per direction - 18 hold (cigarette between the fingers, arm bent), 19 puff (hand at the mouth),

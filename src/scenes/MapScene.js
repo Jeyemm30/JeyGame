@@ -9,7 +9,7 @@ const MS = 4; // world-map texture pixels per tile (matches GameScene.buildMapTe
 const WORLD_TO_MAP = MS / TILE;
 const LEGEND = [
   ['police', 'Police'], ['hospital', 'Hospital'], ['shop', 'Shops'], ['restaurant', 'Restaurants'], ['gas', 'Gas stations'],
-  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking'], ['wise', 'WISE SOLE'], ['casino', 'Casino'], ['bank', 'Bank']
+  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking'], ['wise', 'WISE SOLE'], ['casino', 'Casino'], ['bank', 'Bank'], ['home', 'Your Home']
 ];
 
 // Full-screen world map. It is drawn from the real world data (tiles, buildings, POIs, zones),
@@ -59,6 +59,8 @@ export default class MapScene extends Phaser.Scene {
       this.view.add(img);
       return img;
     });
+    const tv = this.gs.teslaVeh;                                      // the player's Tesla (static while the map is open: the game is paused)
+    if (tv && tv.active) { const ti = this.add.image(tv.x * WORLD_TO_MAP, tv.y * WORLD_TO_MAP, 'mapicons', 'tesla'); this.view.add(ti); }
     // markers + player
     this.markerImgs = [];
     this.playerImg = this.add.image(0, 0, 'mapicons', 'player');

@@ -109,6 +109,24 @@ const FAMILIES = {
     sideExtra: () => (c, g) => { R(c, 5, g.top + 6, g.W - 10, 1, '#e8e4d0'); R(c, g.W - 8, g.top - 1, 3, 2, '#e8e4d0'); R(c, 14, g.top - 10, 30, 1, '#c8c4b0'); },
     fbExtra: () => (c, g) => { if (g.front) { R(c, g.W / 2 - 1, g.top - 2, 2, 3, '#e8e4d0'); R(c, 8, g.top + 4, g.W - 16, 1, '#e8e4d0'); } }
   },
+  /* ---- tesla: the player's electric sedan. Smooth fastback with a long glass roof, flush door handles, aero wheels, a closed nose (no grille: just a thin
+         lower intake), slim bluish LED headlights and a full-width red tail light bar. Pearl white with a black glass roof. */
+  tesla: {
+    side: [66, 42], fb: [36, 50], colors: ['#e6e9ee'],
+    shape: [{ cab: [15, 50], ch: 12, fs: 15, rs: 17, hood: 5, deck: 3, doors: [29, 44], pillars: [], roof: '#15181e', glass: '#22384a' }],
+    bh: 15, wheels: (W) => [15, W - 16], wr: 6, fbo: { bh: 15, ch: 11, taper: 5, tw: 5, lightW: 8, lamp: '#eaf6ff' },
+    sideExtra: () => (c, g) => {
+      R(c, 6, g.top + 6, g.W - 12, 1, shade(g.body, -0.12));                                  // a single clean character line
+      R(c, 31, g.top + 3, 4, 1, '#bfc5cc'); R(c, 46, g.top + 3, 4, 1, '#bfc5cc');             // flush door handles
+      R(c, g.W - 6, g.top + 6, 3, 2, '#eaf6ff'); R(c, 2, g.top + 4, 2, 3, '#ff3a3a');         // slim headlight and tail light
+      [15, g.W - 16].forEach((wx) => { disc(c, wx, g.base + 1, 4, '#d8dce2'); R(c, wx - 3, g.base, 6, 1, '#8a8e96'); R(c, wx, g.base - 2, 1, 6, '#8a8e96'); });      // aero hub caps
+      R(c, 18, g.top - 11, 28, 1, '#2b3640');                                                   // glass roof edge
+    },
+    fbExtra: () => (c, g) => {
+      if (g.front) { R(c, 8, g.top + 3, g.W - 16, g.bh - 9, g.body); R(c, 9, g.top + 2, g.W - 18, 1, g.light); R(c, 10, g.base - 6, g.W - 20, 2, '#1c1e22'); R(c, g.W / 2 - 2, g.top + 4, 4, 3, '#2a2d32'); }
+      else { R(c, 4, g.top + 2, g.W - 8, 3, '#d02828'); R(c, 4, g.top + 2, g.W - 8, 1, '#ff7a6a'); R(c, 6, g.base - 7, g.W - 12, 2, '#1c1e22'); }
+    }
+  },
   /* ---- sports: low, wide, spoiler, vents */
   sports: {
     side: [62, 38], fb: [36, 44], colors: ['#d02828', '#e8c020', '#2a78d8', '#e8e8f0'],
@@ -139,6 +157,40 @@ const FAMILIES = {
     bh: 19, wheels: (W) => [15, W - 17], wr: 7, fbo: { bh: 19, ch: 14, taper: 3, tw: 6, lightW: 6, roofRack: true },
     sideExtra: (i) => (c, g) => { R(c, 12, g.top - 18, 34, 1, '#9aa0a8'); for (let x = 14; x < 46; x += 8) R(c, x, g.top - 17, 1, 3, '#6a7078'); if (i % 2 === 0) R(c, 2, g.top + 4, 5, 8, '#3a3d40'); R(c, 4, g.top + 12, g.W - 8, 1, '#2a2d30'); },
     fbExtra: () => (c, g) => { R(c, 6, g.top - 15, g.W - 12, 1, '#9aa0a8'); R(c, 7, g.top - 14, 1, 3, '#6a7078'); R(c, g.W - 8, g.top - 14, 1, 3, '#6a7078'); }
+  },
+  /* ---- military jeep: olive, flat windscreen, white star on the door, roll bar */
+  jeep: {
+    side: [62, 44], fb: [34, 46], colors: ['#4f5e3a', '#5e6a46'],
+    shape: [{ cab: [14, 46], ch: 10, fs: 8, rs: 3, hood: 4, deck: 2, doors: [28, 40], pillars: [] }, { cab: [14, 46], ch: 10, fs: 6, rs: 3, hood: 4, deck: 2, doors: [28, 40], pillars: [] }],
+    bh: 16, wheels: (W) => [13, W - 14], wr: 7, fbo: { bh: 16, ch: 11, taper: 3, tw: 6, lightW: 6 },
+    sideExtra: () => (c, g) => { R(c, 20, g.top - 12, 22, 1, '#2a3022'); R(c, 20, g.top - 12, 1, 6, '#2a3022'); R(c, 41, g.top - 12, 1, 6, '#2a3022'); R(c, 29, g.top + 5, 6, 6, '#f0f0dc'); R(c, 31, g.top + 3, 2, 10, '#f0f0dc'); R(c, 4, g.top + 12, g.W - 8, 1, '#2a3022'); },
+    fbExtra: () => (c, g) => { R(c, 8, g.top - 8, g.W - 16, 1, '#2a3022'); if (g.front) R(c, g.W / 2 - 3, g.top + 5, 6, 3, '#f0f0dc'); }
+  },
+  /* ---- armoured carrier: a low olive hull, a turret with a gun, four big wheels */
+  apc: {
+    side: [96, 56], fb: [44, 56], colors: ['#4a5638'],
+    shape: [{}],
+    bh: 24, wheels: (W) => [18, 36, W - 36, W - 18], wr: 7, fbo: { bh: 26, ch: 12, taper: 3, tw: 8, lightW: 6 },
+    custom: (c, W, H, col) => {
+      const body = col, dark = shade(body, -0.3), light = shade(body, 0.25), base = H - 9, top = base - 24;
+      ellipse(c, W / 2, base + 5, W / 2 - 4, 5, 'rgba(0,0,0,0.35)');
+      R(c, 5, top + 4, W - 10, 20, body); R(c, 5, top + 4, W - 10, 2, light); R(c, 6, base - 6, W - 12, 5, dark); R(c, W - 16, top, 12, 8, body); R(c, W - 16, top, 12, 1, light);
+      R(c, 5, top + 10, W - 10, 1, dark); for (let x = 14; x < W - 18; x += 14) { R(c, x, top + 8, 9, 7, shade(body, -0.15)); R(c, x, top + 8, 9, 1, light); }
+      R(c, W / 2 - 14, top - 7, 28, 11, shade(body, 0.05)); R(c, W / 2 - 14, top - 7, 28, 2, light); R(c, W / 2 - 14, top + 2, 28, 2, dark); R(c, W / 2 + 14, top - 4, 20, 3, '#1c1e22'); R(c, W / 2 + 30, top - 5, 4, 5, '#2a2d30');
+      R(c, W / 2 - 4, top - 12, 8, 5, '#3a4228'); R(c, W / 2 - 4, top - 12, 8, 1, light);
+      R(c, 22, top + 12, 6, 6, '#f0f0dc'); R(c, 24, top + 10, 2, 10, '#f0f0dc');
+      [18, 36, W - 36, W - 18].forEach((wx) => { disc(c, wx, base, 8, '#14161a'); disc(c, wx, base, 4, '#8a8e92'); disc(c, wx, base, 1, '#14161a'); });
+      R(c, 3, base - 3, 4, 3, '#c0392b'); R(c, W - 7, base - 3, 4, 3, '#f4e19a');
+    },
+    fbExtra: () => (c, g) => { R(c, g.W / 2 - 12, g.top - 10, 24, 8, shade(g.body, 0.05)); R(c, g.W / 2 - 12, g.top - 10, 24, 1, shade(g.body, 0.3)); if (g.front) { R(c, g.W / 2 - 2, g.top - 18, 4, 9, '#1c1e22'); } R(c, 10, g.top + 4, g.W - 20, 2, shade(g.body, -0.3)); }
+  },
+  /* ---- police SUV: navy body, white doors with a blue stripe, roof light bar */
+  policesuv: {
+    side: [68, 48], fb: [38, 54], colors: ['#1f2a44'],
+    shape: [{ cab: [9, 52], ch: 14, fs: 6, rs: 2, hood: 3, deck: 1, doors: [24, 38], pillars: [25, 39] }],
+    bh: 19, wheels: (W) => [15, W - 17], wr: 7, fbo: { bh: 19, ch: 14, taper: 3, tw: 6, lightW: 6, police: true },
+    sideExtra: () => (c, g) => { R(c, 4, g.top + 13, g.W - 8, 8, '#f0f0f0'); R(c, 4, g.top + 11, g.W - 8, 2, '#1f4fa8'); R(c, 22, g.top + 14, 20, 3, '#1f4fa8'); R(c, 22, g.top - 20, 16, 4, '#222'); R(c, 23, g.top - 19, 6, 2, '#e03030'); R(c, 31, g.top - 19, 6, 2, '#3060e0'); },
+    fbExtra: () => (c, g) => { R(c, g.W / 2 - 8, g.top - 18, 16, 3, '#222'); R(c, g.W / 2 - 7, g.top - 17, 6, 1, '#e03030'); R(c, g.W / 2 + 1, g.top - 17, 6, 1, '#3060e0'); }
   },
   /* ---- pickup: cab + open bed with a load */
   pickup: {

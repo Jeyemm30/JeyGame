@@ -2,13 +2,16 @@ import Phaser from 'phaser';
 import Atmosphere from '../systems/Atmosphere.js';
 import Nav from '../systems/Nav.js';
 import { TILE, MAP_W as W, MAP_H as H, MELEE } from '../config.js';
-import { T, SOLID, LOS_BLOCK, BULLET_PASS, WALL_FAMILY, defaultAppearance, generateCharacter } from '../assets/textures.js';
+import { T, NTILES, FACADE_TILES, SHOP_WINDOWS, SOLID, LOS_BLOCK, BULLET_PASS, WALL_FAMILY, defaultAppearance, generateCharacter } from '../assets/textures.js';
 import { generateWorld } from '../systems/WorldGen.js';
 import Combat from '../systems/Combat.js';
 import { ITEMS, rollTier, rollNpcDrop, giveItem } from '../systems/Loot.js';
 import { sfx, engine, introAudio, ambience, setMusicDuck } from '../systems/Audio.js';
 import { music } from '../systems/Music.js';
-import { settings } from '../systems/Settings.js';
+import { gq, settings } from '../systems/Settings.js';
+import { useBestSupply } from '../systems/Supplies.js';
+import { STORES, SHOP_KIND } from '../systems/Stores.js';
+import { STORE_STYLES, styleHasAwning } from '../assets/storeArt.js';
 import Wanted, { CRIME } from '../systems/Wanted.js';
 import Player, { CHEST } from '../entities/Player.js';
 import Enemy from '../entities/Enemy.js';
@@ -47,7 +50,6 @@ const DEPTH_D0 = (W + H) * TILE;
 const DEPTH_K = 4700 / (2 * DEPTH_D0);
 const PROP_TEX = { lamp: 'lamp', sign: 'sign', stop: 'stop', bin: 'bin', fountain: 'fountain', dumpster: 'dumpster' };
 const wrapA = Phaser.Math.Angle.Wrap;
-const SHOP_KIND = { Hardware: 'hardware', Pharmacy: 'pharmacy', Clothing: 'clothing' };
 
 export default class GameScene extends Phaser.Scene {
   constructor() { super('Game'); }
@@ -141,15 +143,14 @@ export default class GameScene extends Phaser.Scene {
     this.containerMarks = [];
     this.containers.forEach((c, i) => {
       c.idx = i;
-      if (profile.searched.includes(i)) { c.searched = true; this.containerMarks.push(this.add.image(c.x, c.y + 6, 'open_mark').setDepth(this.depthOf(c.x, c.y, 1))); }
     });
 
     // ---- fx emitters
-    this.fxBlood = this.add.particles(0, 0, 'blood', { speed: { min: 40, max: 160 }, lifespan: 450, scale: { start: 1.2, end: 0 }, emitting: false }).setDepth(5002);
-    this.fxSpark = this.add.particles(0, 0, 'spark', { speed: { min: 30, max: 110 }, lifespan: 220, scale: { start: 0.9, end: 0 }, emitting: false }).setDepth(5002);
-    this.fxSmoke = this.add.particles(0, 0, 'smoke', { speedY: { min: -40, max: -20 }, speedX: { min: -8, max: 8 }, lifespan: 900, scale: { start: 0.6, end: 1.6 }, alpha: { start: 0.7, end: 0 }, emitting: false }).setDepth(5002);
-    this.fxCig = this.add.particles(0, 0, 'smoke', { speedY: { min: -26, max: -14 }, speedX: { min: -7, max: 7 }, lifespan: 1500, scale: { start: 0.2, end: 0.62 }, alpha: { start: 0.5, end: 0 }, emitting: false }).setDepth(5001);
-    this.fxFire = this.add.particles(0, 0, 'fire', { speedY: { min: -50, max: -25 }, lifespan: 450, scale: { start: 1, end: 0 }, emitting: false }).setDepth(5002);
+    this.fxBlood = this.add.particles(0, 0, 'blood', { speed: { min: 40, max: 160 }, lifespan: 450, scale: { start: 1.2, end: 0 }, emitting: false, maxAliveParticles: 90 }).setDepth(5002);
+    this.fxSpark = this.add.particles(0, 0, 'spark', { speed: { min: 30, max: 110 }, lifespan: 220, scale: { start: 0.9, end: 0 }, emitting: false, maxAliveParticles: 60 }).setDepth(5002);
+    this.fxSmoke = this.add.particles(0, 0, 'smoke', { speedY: { min: -40, max: -20 }, speedX: { min: -8, max: 8 }, lifespan: 900, scale: { start: 0.6, end: 1.6 }, alpha: { start: 0.7, end: 0 }, emitting: false, maxAliveParticles: 70 }).setDepth(5002);
+    this.fxCig = this.add.particles(0, 0, 'smoke', { speedY: { min: -26, max: -14 }, speedX: { min: -7, max: 7 }, lifespan: 1500, scale: { start: 0.2, end: 0.62 }, alpha: { start: 0.5, end: 0 }, emitting: false, maxAliveParticles: 30 }).setDepth(5001);
+    this.fxFire = this.add.particles(0, 0, 'fire', { speedY: { min: -50, max: -25 }, lifespan: 450, scale: { start: 1, end: 0 }, emitting: false, maxAliveParticles: 70 }).setDepth(5002);
     this.gfx = this.add.graphics().setDepth(5003);
     this.lampGfx = this.add.graphics().setDepth(4997); // vehicle lamps / glow
     this.night = 0;
@@ -176,7 +177,22 @@ export default class GameScene extends Phaser.Scene {
       if (veh.mode === 'patrol' || veh.mode === 'traffic') this.placeOnRoad(veh);
       this.ensureFree(veh);
     });
-    (profile.ownedVehicles || []).forEach((o) => this.ensureFree(this.spawnVehicle({ type: o.type, variant: o.variant, x: o.x, y: o.y, heading: o.heading || 0, hp: o.hp, fuel: o.fuel, mode: 'parked', ownedId: o.id, locked: true })));
+    // The player's Tesla (id 'tesla_home'): handed over ONCE (a new game, or an older save that never had it) in the driveway of the home. From then on it is just a
+    // saved owned vehicle: wherever the player leaves it is remembered, and nothing ever creates a second one (a record is only added while flags.tesla is unset, and only
+    // one 'tesla' record with that id is ever spawned).
+    if (!profile.flags.tesla && this.wd.home) {
+      const t = this.wd.home.tesla;
+      if (!(profile.ownedVehicles || []).some((o) => o.id === 'tesla_home')) profile.ownedVehicles.push({ id: 'tesla_home', type: 'tesla', variant: 0, x: t.x, y: t.y, heading: t.heading, hp: VEHICLES.tesla.hp, fuel: 100 });
+      profile.flags.tesla = true;
+    }
+    this.teslaVeh = null;
+    const seenOwned = new Set();
+    profile.ownedVehicles = (profile.ownedVehicles || []).filter((o) => { const ok = !seenOwned.has(o.id) && (o.type !== 'tesla' || o.id === 'tesla_home'); if (ok) seenOwned.add(o.id); return ok; });
+    profile.ownedVehicles.forEach((o) => {
+      const v = this.spawnVehicle({ type: o.type, variant: o.variant, x: o.x, y: o.y, heading: o.heading || 0, hp: o.hp, fuel: o.fuel, mode: 'parked', ownedId: o.id, locked: true });
+      this.ensureFree(v);
+      if (o.id === 'tesla_home') this.teslaVeh = v;
+    });
     this.wd.enemies.forEach((spec, i) => {
       if (spec.boss) {                                   // a beaten boss stays away for GANG_CFG.bossRespawnMs of REAL time (also across reloads); bossRespawn() brings him back live
         this.bossSpecs[spec.boss] = spec;
@@ -188,7 +204,8 @@ export default class GameScene extends Phaser.Scene {
       e.spawnIdx = i;
       if (spec.bank) e.bank = true;
     });
-    this.wd.civilians.forEach((spec) => { const c = this.spawnCivilian(spec); if (spec.bank) c.bankSpec = spec; });
+    this.policeStaff = []; this.psZero = null; this.stationAlert = -1e9;
+    this.wd.civilians.forEach((spec) => { const c = this.spawnCivilian(spec); if (spec.bank) c.bankSpec = spec; if (spec.staff) this.policeStaff.push({ spec, civ: c, enemy: null, seen: 0, off: false }); });
     this.bankHeist = new BankHeist(this);                                  // Port City Trust: doors, vault, loot and the robbery state match profile.bank (also the cooldown after a reload)
     {                                                       // Yosen Blackthorn's map marker: "?" until the player has seen him, then his own badge
       const ys = this.npcSpot('yosen'), y0 = ystate();
@@ -219,6 +236,24 @@ export default class GameScene extends Phaser.Scene {
       [this.player, this.civilians, this.enemies, this.vehicles].forEach((g) => this.physics.add.collider(g, z));
       this.blockMove[sp.ty * W + sp.tx] = 1;                         // walkers' pathfinding goes around the post
     }
+    // Small street objects (streetlights, signs, stop signs, bins) are static decorations whose collision is only the object itself: an 8 px round body on the pole
+    // (14 px for a bin) instead of the whole 32x32 tile. The tile stays in the grid for walkers' pathfinding but no longer collides. (The knock-over / restore system was removed: it cost performance.)
+    this.lampPoles = this.physics.add.staticGroup();
+    this.lampTile = new Uint8Array(W * H);          // tiles that only hold a streetlight: solid for walkers' pathfinding, but cars' sensors ignore them (the pole itself is a small body)
+    this.wd.props.forEach((p) => {
+      const r = p.kind === 'lamp' || p.kind === 'sign' || p.kind === 'stop' ? 4 : p.kind === 'bin' ? 7 : 0;
+      if (!r) return;
+      const ttx = Math.floor(p.x / TILE), tty = Math.floor((p.y - 28) / TILE);
+      const t = this.objLayer.getTileAt(ttx, tty);
+      if (t) t.setCollision(false, false, false, false);
+      this.lampTile[tty * W + ttx] = 1;
+      const z = this.add.zone(p.x, p.y - 4, r * 2, r * 2);
+      this.physics.add.existing(z, true); z.body.setCircle(r);
+      this.lampPoles.add(z);
+      z.removeFromDisplayList();           // a zone draws nothing: keep it out of the render list (525 fewer objects to sort and walk every frame)
+      p.pole = z;
+    });
+    [this.player, this.civilians, this.enemies, this.vehicles].forEach((g) => this.physics.add.collider(g, this.lampPoles));
     this.physics.add.collider(this.player, this.enemies);
     this.physics.add.collider(this.player, this.civilians, null, (p, c) => !c.soft);              // shoppers in the narrow WISE SOLE aisles are soft: you walk past them
     this.physics.add.collider(this.civilians, this.civilians, null, (a, b) => !(a.soft && b.soft));
@@ -277,7 +312,7 @@ export default class GameScene extends Phaser.Scene {
     cam.fadeIn(this.cine ? 1600 : 500);
 
     // ---- input
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,F,G,Q,X,V,C,Z,M,L,J,K,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,E,R,H,B,F,G,Q,X,V,C,Z,M,L,J,K,SPACE,ONE,TWO,THREE,FOUR,FIVE,SIX');
     this.input.mouse.disableContextMenu();
     this.input.keyboard.on('keydown-O', () => this.atmo && this.atmo.cycleWeather());
     this.input.keyboard.on('keydown-Y', () => { if (this.atmo) { this.atmo.skipHours(3); this.events.emit('toast', 'Time ' + this.atmo.timeText); } });
@@ -366,11 +401,11 @@ export default class GameScene extends Phaser.Scene {
   cinePose() {
     const c = this.cine, t = c.t, p = this.player;
     const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * Phaser.Math.Clamp(u, 0, 1));
-    const u = ease(t / 11500);
-    const ox = Phaser.Math.Linear(820, 0, u), oy = Phaser.Math.Linear(-520, -6, u);
-    let z = Math.exp(Phaser.Math.Linear(Math.log(0.78), Math.log(2.0), u));
-    if (t > 11500) z = 2.0 + 0.06 * Phaser.Math.Clamp((t - 11500) / 1500, 0, 1);
-    if (t > 13000) z = Phaser.Math.Linear(2.06, c.zEnd, ease((t - 13000) / 5000));
+    // the framing that shows the whole house (up and to the left of the player) AND the Tesla in the driveway (to the right): centre a little north-east of the player
+    const HX = 150, HY = -105, HZ = 1.45, u = ease(t / 11500);
+    let ox = Phaser.Math.Linear(820, HX, u), oy = Phaser.Math.Linear(-520, HY, u), z = Math.exp(Phaser.Math.Linear(Math.log(1.0), Math.log(HZ), u));
+    if (t > 11500) z = HZ + 0.05 * Phaser.Math.Clamp((t - 11500) / 1500, 0, 1);
+    if (t > 13000) { const v = ease((t - 13000) / 5000); ox = Phaser.Math.Linear(HX, 0, v); oy = Phaser.Math.Linear(HY, -6, v); z = Phaser.Math.Linear(HZ + 0.05, c.zEnd, v); }
     return { x: p.x + ox, y: p.y + oy, zoom: z };
   }
 
@@ -392,7 +427,8 @@ export default class GameScene extends Phaser.Scene {
   // world offset that appears h pixels straight UP the screen (height above the ground)
   elev(h) { const q = h / TILT; return { x: -q * this.sn, y: -q * this.cs }; }
   // sort key along the screen's vertical axis (extra: px in front of the point)
-  depthOf(x, y, extra = 0) { return 100 + (x * this.sn + y * this.cs + DEPTH_D0 + extra) * DEPTH_K; }
+  // (sn / cs are only set once the camera rotation is known: before that a NaN depth - the gang gates were created that early - corrupts Phaser's depth sort for the whole scene and lets furniture draw over roofs)
+  depthOf(x, y, extra = 0) { return 100 + (x * (this.sn ?? 0) + y * (this.cs ?? 1) + DEPTH_D0 + extra) * DEPTH_K; }
   // world point -> position on screen (px)
   worldToScreen(x, y) {
     const c = this.cameras.main;
@@ -445,7 +481,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.cine) { const cp = this.cinePose(); this.camCenter.x = cp.x; this.camCenter.y = cp.y; this.camSnap = false; }
     else if (this.camSnap || Math.hypot(goal.x - this.camCenter.x, goal.y - this.camCenter.y) > 700) { this.camCenter.x = goal.x; this.camCenter.y = goal.y; this.camSnap = false; }
     else {
-      const ks = 1 - Math.exp(-dt / (v ? 130 : 90));
+      const ks = 1 - Math.exp(-dt / (v ? 130 : 70));
       this.camCenter.x += (goal.x - this.camCenter.x) * ks;
       this.camCenter.y += (goal.y - this.camCenter.y) * ks;
     }
@@ -453,6 +489,7 @@ export default class GameScene extends Phaser.Scene {
     const m = 260;
     const cx = Phaser.Math.Clamp(this.camCenter.x - b.x, -m, W * TILE + m), cy = Phaser.Math.Clamp(this.camCenter.y - b.y, -m, H * TILE + m);
     cam.setScroll(cx - cam.width / 2, cy - cam.height / 2);
+    this.viewCache = this.viewRect(80);              // one view rectangle per frame for everything that only needs "is it on screen" (lamps, effects)
 
     // ---- culling: Phaser culls against the UNrotated view, so pad the tile layers and skip sprite culling while rotated
     cam.disableCull = true;                       // Phaser's sprite culling does not know about the tilt / rotation
@@ -467,6 +504,53 @@ export default class GameScene extends Phaser.Scene {
 
     // ---- billboards that are not updated by their own entity: re-orient + re-sort when the angle changed
     if (Math.abs(this.camRot - (this.lastBillRot ?? 99)) > 0.0002) { this.lastBillRot = this.camRot; this.refreshBillboards(); }
+  }
+
+  /* Physics used to step ~1,100 moving bodies (605 civilians, 208 enemies, 302 cars) 120 times a second, every one of them colliding with everything,
+     although only the ones near the player matter (the AI already freezes the rest). Four times a second, take far bodies OUT of the physics world
+     (it then does not step them, does not index them in its collision tree and does not collide them) and put them back when the player comes near.
+     The thresholds sit just outside the AI's own simulation ranges (civilians sleep at 1150 px, enemies go dormant at ~1200, cars simulate inside
+     1500 x 1100), with a gap between "remove" and "add" so nothing flickers. A body's own enable flag is kept as it was. */
+  sleepFarBodies() {
+    const w = this.physics.world, p = this.player, tm = this.touchOn;
+    const put = (o, far, enableKeep = true) => {
+      const b = o.body; if (!b) return;
+      if (far && !o._ws) { o._ws = true; if (o.setVelocity) o.setVelocity(0, 0); w.remove(b); }
+      else if (!far && o._ws) { o._ws = false; const en = b.enable; w.add(b); if (enableKeep) b.enable = en; }
+    };
+    const R = tm ? 880 : 1150;
+    this.civilians.children.iterate((c) => { if (!c || !c.active) return; const d = Math.hypot(c.x - p.x, c.y - p.y); if (d > R + 200 || (c._ws && d > R + 100)) put(c, true); else put(c, false); });
+    this.enemies.children.iterate((e) => {
+      if (!e || !e.active) return;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      const far = e.dormant && !e.response && d > (tm ? 900 : 1200) + 150;
+      if (far || (e._ws && e.dormant && !e.response)) put(e, true); else put(e, false);
+    });
+    const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
+    this.vehicles.children.iterate((v) => {
+      if (!v || !v.active) return;
+      if (v === p.vehicle || v.driver === 'player' || v.mode === 'chase') { put(v, false); return; }
+      const dx = Math.abs(v.x - p.x), dy = Math.abs(v.y - p.y);
+      if (dx > rx + 100 || dy > ry + 100) put(v, true); else if (dx < rx && dy < ry) put(v, false);
+    });
+  }
+
+  /* Phaser's own sprite culling is off (it does not know about the camera tilt), so every sprite in the world used to be drawn every frame: house
+     shutters / porches / flower boxes (facade), loot and its glow, crates and every parked / driving car on the whole 380 x 272 tile map - well over
+     2,000 sprites for the few hundred that are on screen. Four times a second, hide the ones that are far outside the view. */
+  cullFar() {
+    const Q = gq(), v = this.viewRect(Q.cull), vv = this.viewRect(Q.cull + 160);
+    const wantFps = this.touchOn || settings.quality === 'low' ? 60 : 90;            // Low quality steps the physics at 60 Hz (phones always do)
+    if (this.physics.world.fps !== wantFps) this.physics.world.setFPS(wantFps);
+    // soft shadows: only the characters near the player get one (distance from the Graphics Quality / Shadows setting); the player always has hers
+    const sd = Q.shadowDist, p = this.player;
+    const shade = (c) => { if (!c || !c.active) return; c.noShadow = sd <= 0 || (Math.abs(c.x - p.x) > sd || Math.abs(c.y - p.y) > sd * 0.75); };
+    this.civilians.children.iterate(shade); this.enemies.children.iterate(shade);
+    for (const pi of this.porchImgs || []) { const on = v.contains(pi.x, pi.y); if (pi.visible !== on) pi.setVisible(on); }
+    for (const f of this.facade) { const on = v.contains(f.gx, f.gy); if (f.img.visible !== on) f.img.setVisible(on); }
+    for (const it of this.items) { const on = v.contains(it.x, it.y); if (it.visible !== on) { it.setVisible(on); if (it.glow) it.glow.setVisible(on); } }
+    this.crates.getChildren().forEach((c) => { const on = v.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
+    this.vehicles.children.iterate((c) => { if (!c) return; const on = vv.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
   }
 
   // static upright things: counter-rotate and depth-sort for the current camera angle
@@ -554,7 +638,7 @@ export default class GameScene extends Phaser.Scene {
     const tiles = this.textures.get('tiles');
     const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
     WALL_FAMILY.forEach((idx) => { if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE); });
-    for (let idx = 0; idx < 64; idx++) if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE);
+    for (let idx = 0; idx < NTILES; idx++) if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE);
     const FLAT_OBJ = new Set([T.water, T.tree, T.prop, T.propHigh]);     // left flat in the tilemap (water) or blank (tree / prop: drawn as sprites)
     this.wallUV = new Map();
     this.isLow = new Uint8Array(W * H);
@@ -562,9 +646,9 @@ export default class GameScene extends Phaser.Scene {
     this.lowH = LOW;
     this.boxTop = new Set();
     // furniture: world-aligned boxes (front/side faces + a top), height in px
-    const FH = { 32: 18, 33: 18, 34: 20, 35: 22, 36: 32, 37: 40, 38: 40, 39: 22, 40: 22, 41: 30, 42: 26, 43: 40, 44: 28, 45: 8, 46: 26, 47: 20, 48: 36, 49: 26, 50: 38, 51: 20, 60: 38 };
+    const FH = { 32: 18, 33: 18, 34: 20, 35: 22, 36: 32, 37: 40, 38: 40, 39: 22, 40: 22, 41: 30, 42: 26, 43: 40, 44: 28, 45: 8, 46: 26, 47: 20, 48: 36, 49: 26, 50: 38, 51: 20, 60: 38, 64: 40, 65: 38, 66: 18, 67: 36, 68: 40, 69: 36, 70: 34, 71: 44, 72: 40, 73: 36, 74: 34, 75: 20, 76: 24, 77: 28, 78: 38, 79: 26, 80: 26, 81: 26, 82: 26, 83: 26, 84: 26, 85: 30, 109: 34, 110: 28, 111: 44, 112: 38, 113: 28, 123: 22, 125: 24, 126: 38, 127: 28, 128: 26, 129: 22, 130: 30 };
     Object.keys(FH).forEach((k) => { LOW.set(+k, FH[k]); if (+k !== 48 && +k !== 45) this.boxTop.add(+k); });
-    [...WALL_FAMILY, ...LOW.keys()].forEach((idx) => { const f = tiles.get('t' + idx); const e = (f.u1 - f.u0) * 0.012, ev = (f.v1 - f.v0) * 0.012; this.wallUV.set(idx, [f.u0 + e, f.v0 + ev, f.u1 - e, f.v1 - ev]); });
+    [...WALL_FAMILY, ...LOW.keys(), ...FACADE_TILES].forEach((idx) => { const f = tiles.get('t' + idx); const e = (f.u1 - f.u0) * 0.012, ev = (f.v1 - f.v0) * 0.012; this.wallUV.set(idx, [f.u0 + e, f.v0 + ev, f.u1 - e, f.v1 - ev]); });
     this.wallGL = tiles.source[0];
     for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
       const idx = wd.obj[ty][tx];
@@ -586,6 +670,13 @@ export default class GameScene extends Phaser.Scene {
       this.wallFace[i] = FACE.get(idx) ?? idx;
       if (!WALL_TOPS.has(idx)) { const tile = this.objLayer.getTileAt(tx, ty); if (tile) tile.alpha = 0; }   // faces become panels; tops stay flat
     }
+    this.doorSkin = new Map();                                                 // the police station's inner walls and doors have their own faces
+    ((wd.policeSkin && wd.policeSkin.doors) || []).forEach((d) => { const i = d.ty * W + d.tx; this.doorSkin.set(i, [d.c, d.o]); if (this.isWall[i]) this.wallFace[i] = d.c; });
+    wd.buildings.forEach((b) => {                                              // each business has its own front-wall (and back-wall) face texture
+      if (!b.facade) return;
+      for (const row of [b.y, b.y + b.h - 1]) for (let xx = b.x; xx < b.x + b.w; xx++) { const i = row * W + xx, o = wd.obj[row][xx]; if (this.isWall[i] && (o === T.wall || o === T.wall2)) this.wallFace[i] = b.facade; }
+    });
+    ((wd.policeSkin && wd.policeSkin.walls) || []).forEach((w) => { const i = w.ty * W + w.tx; if (this.isWall[i]) this.wallFace[i] = w.t; });      // (after the facades: the inside of the station's back wall is not the exterior facade)
     this.wallBands = new Map();
     this.wallPool = [];
     this.wallBuild = { dirty: true, rot: 99, mx: 1e9, my: 1e9, zoom: 0 };
@@ -710,11 +801,11 @@ export default class GameScene extends Phaser.Scene {
     };
     this.initWalls(addScenery);
     wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
-    wd.decor.forEach((d) => addScenery(d.x, d.y, d.kind, 1));
+    wd.decor.forEach((d) => { d.it = addScenery(d.x, d.y, d.kind, 1); });
     (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; });      // rugs lie flat on the floor
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
-      if (key) addScenery(p.x, p.y, key, 1);
+      if (key) p.it = addScenery(p.x, p.y, key, 1);
     });
     // upright decoration attached to walls: (gx, gy) is its spot on the ground, sy its height (screen px, negative = up)
     this.facade = [];
@@ -738,18 +829,34 @@ export default class GameScene extends Phaser.Scene {
       bk.doors.vault.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
       this.bankVaultImg = dec('vault_door_0', bk.vaultDoor.x, bk.vaultDoor.y, 0, 0, 0.5, 1, 6);
     }
+    (wd.policeDecor || []).forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // the police station: badge, cameras, lamps outside; wall boards, map, cameras inside
     if (wd.wise && wd.wise.wallDecor) wd.wise.wallDecor.forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // WISE SOLE: the back-wall sign, spot lights and the logo panel
     if (wd.wise) {
       this.wiseSign = dec('wise_sign', wd.wise.door.x, wd.wise.door.y - 34, 0, -24, 0.5, 1, 60);              // the official logo sign above the entrance
       const dt = wd.wise.doorTile; this.noFace[dt.ty * W + dt.tx] = 1;
       this.wiseDoor = { tx: dt.tx, ty: dt.ty, state: 0, img: dec('wise_door_0', (dt.tx + 0.5) * TILE, (dt.ty + 1) * TILE - 1, 0, 0, 0.5, 1, 6), evs: [] };
     }
+    // store fronts: every business has its own sign, awning and door skin (a sprite over the door tile(s), animated like the WISE SOLE door)
+    this.policeDoors = (wd.policeDoors || []).map((t) => ({ lock: !!t.lock, tx: t.tx, ty: t.ty, cx: (t.tx + 0.5) * TILE, cy: (t.ty + 0.5) * TILE, nearAt: 0 }));
+    this.storeDoors = []; this.storeDoorAt = new Map(); this.storeExt = []; this.storeExtCb = undefined;
+    (wd.storeFronts || []).forEach((f) => {
+      const k = STORE_STYLES[f.name]; if (!k) return;
+      const cx = (f.tx + f.w / 2) * TILE, gy = (f.ty + 1) * TILE - 1, tiles = [];
+      for (let i = 0; i < f.w; i++) { tiles.push({ tx: f.tx + i, ty: f.ty }); this.noFace[f.ty * W + f.tx + i] = 1; }
+      const d = { style: k, tiles, state: 'closed', target: false, evs: [], nearAt: 0, cx, cy: gy - 16, img: dec('st_door_' + k + '_0', cx, gy, 0, 0, 0.5, 1, 6) };
+      tiles.forEach((t) => this.storeDoorAt.set(t.ty * W + t.tx, d));
+      this.storeDoors.push(d);
+      const ext = [dec('st_sign_' + k, cx, f.ty * TILE + 14, 0, -46, 0.5, 1, 60)];
+      if (styleHasAwning(k)) ext.push(dec('st_awn_' + k, cx, f.ty * TILE + 16, 0, -8, 0.5, 0, 12));
+      (this.storeExt = this.storeExt || []).push({ imgs: ext, bid: this.buildingGrid[(f.ty - 1) * W + f.tx] });      // exterior only: hidden while you are inside this shop
+    });
     // porches over house doors (flat on the ground), striped awnings over shop doors (upright)
     wd.houseDoors.forEach((d, i) => {
-      this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2);
+      if (d.home) return;
+      (this.porchImgs = this.porchImgs || []).push(this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2));
       if (!d.abandoned) dec('awning' + (i % 5), d.x, d.y - 32, 0, -6, 0.5, 0, 12, 0.8);   // anchored on the door tile
     });
-    wd.publicDoors.forEach((d, i) => { dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
+    wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name]) return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
     // window flower boxes + shutters on house fronts, balconies on apartment blocks
     wd.buildings.forEach((b) => {
       if (b.kind !== 'house' || b.broken) return;
@@ -784,6 +891,7 @@ export default class GameScene extends Phaser.Scene {
       if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
+      if (b.tint) parts[0].setTint(b.tint);                          // store roofs take their business colour
       if (b.look === 'casino') {                                    // the casino roof: dark plum with illuminated edges
         parts[0].setTint(0x6a5a8a);
         parts.push(this.add.rectangle(x, y + h - 8, w, 3, 0xffd24a, 0.95).setOrigin(0, 0), this.add.rectangle(x, y + h - 12, w, 2, 0xff3a8a, 0.8).setOrigin(0, 0), this.add.rectangle(x, y, 3, h, 0xb06aff, 0.85).setOrigin(0, 0), this.add.rectangle(x + w - 3, y, 3, h, 0x3ad8ff, 0.85).setOrigin(0, 0), this.add.rectangle(x, y, w, 3, 0xff3a5a, 0.7).setOrigin(0, 0));
@@ -810,8 +918,10 @@ export default class GameScene extends Phaser.Scene {
       this.activeChunks.add(k);
       for (const it of c.items) {
         const im = this.chunkPool.pop() || this.add.image(0, 0, 'tree0');
+        im.setAlpha(1);
         if (it.flat) im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, 0.5).setScale(1, 1).setRotation(0).setDepth(3.4).setVisible(true).setActive(true);
         else im.setTexture(it.key, it.frame).setPosition(it.x, it.y).setOrigin(0.5, it.oy).setScale(it.sc, it.sy ?? it.sc * UPY).setRotation(-this.camRot).setDepth(this.depthOf(it.x, it.y)).setVisible(true).setActive(true);
+        if (it.hidden) im.setVisible(false);                         // a knocked-down street object stays hidden until it is restored
         it.im = im;
         c.live.push(im);
       }
@@ -843,7 +953,7 @@ export default class GameScene extends Phaser.Scene {
         R(cx, cy, 14, 16, 0x4a4442); R(cx, cy, 14, 3, 0x8c8782); R(cx + 11, cy, 3, 16, 0x2e2a28); R(cx + 2, cy + 5, 4, 2, 0x6a625e);
         R(cx - 2, cy - 2, 18, 5, 0xb8b2aa); R(cx + 2, cy, 10, 2, 0x100c0a);
       }
-    } else if (b.style !== 'glass') {
+    } else if (b.style !== 'glass' && b.look !== 'home') {
       const n = 1 + Math.floor(hash(4) * 3);
       for (let i = 0; i < n; i++) {
         const ax = x + 16 + Math.floor(hash(10 + i) * Math.max(8, w - 60)), ay = y + 10 + Math.floor(hash(20 + i) * Math.max(6, h - 44));
@@ -868,6 +978,14 @@ export default class GameScene extends Phaser.Scene {
     const idx = this.wd.obj[y][x];
     this.blockLos[y * W + x] = LOS_BLOCK.has(idx) ? 1 : 0;
     this.blockMove[y * W + x] = SOLID.has(idx) ? 1 : 0;
+  }
+
+  // like solidAt, but a tile that only holds a streetlight does not count (used by the vehicles' look-ahead sensors)
+  vehSolidAt(x, y) {
+    const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
+    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
+    const i = ty * W + tx;
+    return this.blockMove[i] === 1 && !this.lampTile[i];
   }
 
   solidAt(x, y) {
@@ -995,10 +1113,11 @@ export default class GameScene extends Phaser.Scene {
     this.wd.obj[ty][tx] = idx;
     const nt = this.objLayer.putTileAt(idx, tx, ty);
     if (nt) nt.alpha = 0;
-    this.wallFace[ty * W + tx] = idx;
+    { const sk = this.doorSkin && this.doorSkin.get(ty * W + tx); this.wallFace[ty * W + tx] = sk ? sk[open ? 1 : 0] : idx; }
     this.wallBuild.dirty = true;
     this.refreshCell(tx, ty);
     if (this.wiseDoor && tx === this.wiseDoor.tx && ty === this.wiseDoor.ty) this.animWiseDoor(open);
+    const sdr = this.storeDoorAt && this.storeDoorAt.get(ty * W + tx); if (sdr) this.animStoreDoor(sdr, open);
     if (quiet) return;
     if (Math.hypot(this.player.x - (tx * TILE + 16), this.player.y - (ty * TILE + 16)) < 480) (open ? sfx.door() : sfx.doorClose());      // only doors you could actually hear
     this.alertNoise(tx * TILE + 16, ty * TILE + 16, 90, 'step');
@@ -1050,6 +1169,96 @@ export default class GameScene extends Phaser.Scene {
     if (!any) this.civilians.children.iterate((c) => { if (c && near(c)) any = true; });
     if (!any) this.enemies.children.iterate((c) => { if (c && near(c)) any = true; });
     if (any) this.wdNear = now; else if (now - (this.wdNear || now) > 4500) this.setDoor(d.tx, d.ty, false);
+  }
+
+  /* Store doors open by themselves when somebody (you, a customer, an employee, a guard) comes within about two tiles and close about three seconds after the
+     last one has left (never with somebody in the doorway). Only the doors near the player are looked at, a few times a second. */
+  storeDoorTick(now) {
+    if (!this.storeDoors || now - (this.sdT || 0) < 350) return;
+    this.sdT = now;
+    const p = this.player;
+    for (const d of this.storeDoors) {
+      if (Math.abs(d.cx - p.x) > 1100 || Math.abs(d.cy - p.y) > 900) continue;
+      const R = d.tiles.length > 1 ? 80 : 58;
+      const near = (o) => o && o.active && !o.dead && !o.sleeping && o.visible !== false && o.state !== 'inside' && o.kind !== 'shopkeeper' && Math.abs(o.x - d.cx) < R && Math.abs(o.y - d.cy) < R;
+      if ((d.state === 'opening' || d.state === 'closing') && now - (d.animAt || 0) > 700) { d.state = d.target ? 'open' : 'closed'; d.img.setTexture('st_door_' + d.style + '_' + (d.target ? 2 : 0)); }      // never stuck half-way
+      let any = !p.dead && Math.abs(p.x - d.cx) < R && Math.abs(p.y - d.cy) < R, inDoorway = any && Math.abs(p.y - d.cy) < 26;
+      if (!any || !inDoorway) {
+        this.civilians.children.iterate((c) => { if (near(c)) { any = true; if (Math.abs(c.y - d.cy) < 26) inDoorway = true; } });
+        this.enemies.children.iterate((e) => { if (near(e)) { any = true; if (Math.abs(e.y - d.cy) < 26) inDoorway = true; } });
+      }
+      if (any) { d.nearAt = now; if (d.state === 'closed') this.storeDoorSet(d, true); }
+      else if (d.state === 'open' && now - d.nearAt > 3200 && !inDoorway) this.storeDoorSet(d, false);
+    }
+  }
+
+  /* The police station's staff (reception, office, evidence, locker room, hall) work as ordinary civilians while the player is innocent. When the player is WANTED and one of
+     them has a clear line of sight (walls block it) within their own range - or hears a colleague already on alert - they react after their own delay (shorter at higher wanted
+     levels): the officer steps out of the work routine and becomes a full police officer (the existing police AI: investigates at one star, arrests at 1-3, pursues at 2+, calls
+     the others over). Officers who are down stay down and never report again. Once the wanted level has been clear for a while and the officer is back at the post, the
+     officer goes back to work. */
+  policeStaffTick(now) {
+    if (!this.policeStaff || !this.policeStaff.length || now - (this.psT || 0) < 250) return;
+    this.psT = now;
+    const lvl = this.wanted.level, p = this.player;
+    this.psZero = lvl === 0 ? (this.psZero ?? now) : null;
+    for (const r of this.policeStaff) {
+      if (r.off) continue;
+      const e = r.enemy;
+      if (e) {
+        if (e.dead || !e.active) { r.off = true; r.enemy = null; continue; }                     // an officer who is down does not come back to report anything
+        if (e.ai === 'alert' || e.ai === 'attack' || e.ai === 'cover') this.stationAlert = now;
+        if (lvl === 0 && this.psZero !== null && now - this.psZero > 20000 && e.ai === 'idle' && Math.hypot(e.x - r.spec.x, e.y - r.spec.y) < 40) {     // back at the post, all clear: back to work
+          e.gun.destroy(); e.flash.destroy(); e.shadow.destroy(); if (e.icon) e.icon.destroy(); if (e.sayTxt) e.sayTxt.destroy(); if (e.nameTag) e.nameTag.destroy(); e.destroy();
+          r.enemy = null; r.seen = 0; r.civ = this.spawnCivilian(r.spec);
+        }
+        continue;
+      }
+      const c = r.civ;
+      if (!c || !c.active || c.dead) { r.off = true; continue; }
+      if (lvl < 1 || p.dead) { r.seen = 0; continue; }
+      const k = lvl >= 2 ? 1.4 : 0.7, d = Math.hypot(p.x - c.x, p.y - c.y), st = r.spec.staff;
+      let detect = d < st.r * k && this.hasLOS(c.x, c.y, p.x, p.y);
+      if (!detect && lvl >= 2 && now - this.stationAlert < 8000 && d < st.r * k * 1.2) detect = true;        // the radio: a colleague nearby is already on it
+      if (!detect) { r.seen = 0; continue; }
+      if (!r.seen) r.seen = now;
+      if (now - r.seen < st.d * (lvl >= 3 ? 0.55 : 1)) continue;
+      const o = this.spawnEnemy({ x: c.x, y: c.y, role: 'police', type: 'pistol', mode: 'guard', radius: 0, route: null });
+      o.face = o.faceGoal = Math.atan2(p.y - c.y, p.x - c.x); o.lastKnown = { x: p.x, y: p.y }; o.lastSeen = now; o.awareness = lvl >= 2 ? 0.9 : 0.6;
+      r.enemy = o; c.shadow.destroy(); c.destroy(); r.civ = null;
+    }
+  }
+
+  /* The police station's inner doors (hall, reception, office, interview and evidence rooms) open by themselves when somebody comes within about a tile and a half and close
+     about two and a half seconds after the last one has left - never with somebody in the doorway. The holding-cell doors stay manual (F). */
+  policeDoorTick(now) {
+    if (!this.policeDoors || !this.policeDoors.length || now - (this.pdT || 0) < 300) return;
+    this.pdT = now;
+    const p = this.player;
+    for (const d of this.policeDoors) {
+      if (Math.abs(d.cx - p.x) > 700 || Math.abs(d.cy - p.y) > 700) { if (this.doorState(d.tx, d.ty) === 'open') this.setDoor(d.tx, d.ty, false, true); continue; }
+      const near = (o, r) => o && o.active && !o.dead && !o.sleeping && o.visible !== false && o.state !== 'inside' && Math.abs(o.x - d.cx) < r && Math.abs(o.y - d.cy) < r;
+      let any = !p.dead && !p.vehicle && near(p, 50), inDoorway = any && near(p, 22);
+      if (!inDoorway) {
+        this.civilians.children.iterate((c) => { if (near(c, 50)) { any = true; if (near(c, 22)) inDoorway = true; } });
+        this.enemies.children.iterate((e) => { if (near(e, 50)) { any = true; if (near(e, 22)) inDoorway = true; } });
+      }
+      const st = this.doorState(d.tx, d.ty);
+      if (any && d.lock && this.wanted.level >= 2 && !this.inRestricted(p.x, p.y)) { d.nearAt = now; }                // military gates and doors stay shut against a wanted player outside
+      else if (any) { d.nearAt = now; if (st === 'closed' && !this.lockedDoors.has(d.ty * W + d.tx)) this.setDoor(d.tx, d.ty, true); }
+      else if (st === 'open' && now - d.nearAt > 2500 && !inDoorway) this.setDoor(d.tx, d.ty, false);
+    }
+  }
+
+  storeDoorSet(d, open) { d.tiles.forEach((t, i) => this.setDoor(t.tx, t.ty, open, i > 0)); }
+
+  animStoreDoor(d, open) {
+    if (d.target === open) return;                    // (a two-tile door calls this once per tile)
+    d.target = open; d.animAt = this.gt;
+    d.evs.forEach((e) => e.remove(false)); d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    const seq = open ? [1, 2] : [1, 0];
+    seq.forEach((f, i) => d.evs.push(this.time.delayedCall(80 * (i + 1), () => { if (d.img && d.img.scene) d.img.setTexture('st_door_' + d.style + '_' + f); if (i === 1) d.state = open ? 'open' : 'closed'; })));
   }
 
   openDoorAt(x, y) {
@@ -1157,10 +1366,12 @@ export default class GameScene extends Phaser.Scene {
 
   updateNpcTags() {
     const p = this.player;
-    const avail = this.missions.active ? [] : this.missions.availableStory();
+    if (this.gt - (this.availAt || -1e9) > 500 || this.availMission !== !!this.missions.active) { this.availAt = this.gt; this.availMission = !!this.missions.active; this.availList = this.missions.active ? [] : this.missions.availableStory(); }
+    const avail = this.availList;
     Object.keys(this.storyNpcs).forEach((id) => {
       const n = this.storyNpcs[id];
       if (!n || !n.active) return;
+      if (Math.abs(p.x - n.x) > 1500 || Math.abs(p.y - n.y) > 1300) { if (n.tag && n.tag.visible) n.tag.setVisible(false); if (n.mark && n.mark.visible) n.mark.setVisible(false); if (n.chat && n.chat.visible) n.chat.setVisible(false); return; }       // far away: tag, exclamation mark and chat bubble stay hidden
       if (n.tag && n.tag.text !== STORY_NPCS[id].name) n.tag.setText(STORY_NPCS[id].name);
       if (!n.tag) n.tag = this.add.text(0, 0, STORY_NPCS[id].name, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: STORY_NPCS[id].color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
       if (!n.mark) {
@@ -1812,7 +2023,10 @@ export default class GameScene extends Phaser.Scene {
   /* --------------------------------------------------------------- shopping */
   openShop(kind, name) {
     this.scene.pause('Game');
-    this.scene.launch('Shop', { kind, name });
+    if (STORES[kind]) {                                     // an ordinary store: its employee greets you, then the store screen opens
+      const g = STORES[kind].greet; this.events.emit('toast', `${name} clerk: "${g[Math.floor(Math.random() * g.length)]}"`);
+      this.scene.launch('Store', { kind, name });
+    } else this.scene.launch('Shop', { kind, name });
   }
 
   shopBuy(e, price, owned) {
@@ -1880,7 +2094,7 @@ export default class GameScene extends Phaser.Scene {
     p.hp = s.hp; p.armor = s.armor; p.stamina = s.stamina;
     p.weapons = { fists: {}, ...s.weapons };
     p.ammo = { ...p.ammo, ...s.ammo };
-    p.medkits = s.medkits; p.plates = s.plates; p.backpack = s.backpack;
+    p.medkits = s.medkits; p.plates = s.plates; p.backpack = s.backpack; p.supplies = { ...(s.supplies || {}) };
     p.current = p.weapons[s.current] ? s.current : 'fists';
     p.gun.setTexture(p.weaponTex);
     if (load.wantedHeat) this.wanted.add(load.wantedHeat, null);
@@ -2063,7 +2277,7 @@ export default class GameScene extends Phaser.Scene {
     const horiz = A.kind === 'h', fwd = A.idx % 2 === 0;
     const hd = horiz ? (fwd ? 0 : Math.PI) : (fwd ? Math.PI / 2 : -Math.PI / 2);
     const dx = Math.cos(hd), dy = Math.sin(hd);
-    let px = A.point.x, py = A.point.y;
+    let px = A.point.x - dy * 26, py = A.point.y + dx * 26;           // the right-hand lane of the road (lane centres are 26 px off the road centre)
     for (let k = 0; k < 10; k++) {
       const clash = this.vehicles.getChildren().some((o) => o !== v && o.active && Math.hypot(o.body.center.x - px, o.body.center.y - py) < 84);
       if (!clash) break;
@@ -2268,7 +2482,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // spawn particles h px above a ground point (straight up the SCREEN, whatever the camera angle)
-  emitUp(em, x, y, h, count) { const o = this.elev(h); em.emitParticleAt(x + o.x, y + o.y, count); }
+  emitUp(em, x, y, h, count) {
+    const mul = gq().particleMul; if (mul <= 0) return;
+    const v = this.viewCache; if (v && !v.contains(x, y)) return;               // off-screen: nothing to see, nothing to spawn
+    const o = this.elev(h); em.emitParticleAt(x + o.x, y + o.y, Math.max(1, Math.round(count * mul)));
+  }
 
   // filled rectangle drawn upright on screen: (x, y) is a ground anchor, (ox, oy) the box's top-left in screen px from it
   fillUpright(g, x, y, ox, oy, w, h) {
@@ -2292,7 +2510,7 @@ export default class GameScene extends Phaser.Scene {
     this.doorSwing(v); p.pickupUntil = this.gt + 260;
     const wasAi = v.driver === 'ai';
     if (!v.ownedId && !v.questTag) {
-      if (v.vtype === 'police') this.reportCrime(v.x, v.y, 25, 'stole a police car');
+      if (v.cfg && v.cfg.police) this.reportCrime(v.x, v.y, 25, 'stole a police car');
       else this.reportCrime(v.x, v.y, wasAi ? CRIME.CAR_THEFT * 1.6 : CRIME.CAR_THEFT, 'car theft');
     }
     if (v.mode === 'chase') v.sirenOn = false;
@@ -2307,7 +2525,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     p.swing = null;
     if (v.ownedId) profile.lastVehicleId = v.ownedId;
     this.camFocus = v;
-    engine.start();
+    engine.start(v.vtype === 'tesla');
     sfx.doorSlam();
     this.events.emit('toast', `${VEHICLES[v.vtype].name}: W gas, S brake/reverse, A/D steer, Space handbrake, H horn, F exit`);
   }
@@ -2561,15 +2779,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const d = Math.hypot(s.x - p.x, s.y - p.y) - 12;
       if (d < 34) consider(d, { kind: 'item', ref: s, x: s.x, y: s.y, label: 'Pick up ' + ITEMS[s.itemId].label });
     }
-    this.crates.children.iterate((c) => {
-      if (!c || c.opened) return;
-      const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d < 54) consider(d, { kind: 'crate', ref: c, x: c.x, y: c.y, label: c.tier === 'crate' ? 'Open crate' : 'Open supply box' });
-    });
-    for (const c of this.containers) {
-      const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d < 58) consider(d, { kind: 'container', ref: c, x: c.x, y: c.y, label: c.searched ? `${c.name} (empty)` : `Search ${c.name.toLowerCase()}` });
-    }
+    // (crates, shelves, bins, boxes and other containers can no longer be searched: they are ordinary decoration. Stores sell supplies instead.)
     if (this.casinoGateKeys) this.casinoGateKeys.forEach((g) => { if (Casino.vipLevel() >= g.level) this.lockedDoors.delete(g.key); else this.lockedDoors.add(g.key); });
     if (this.wd.casino) {
       for (const st of this.wd.casino.stations) {
@@ -2601,11 +2811,12 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c.state === 'flee' || c.state === 'phone') return;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d > (c.npcId === 'ezekiel' ? 74 : 50) || !c.visible) return;                // Ezekiel stands behind his counter: he can be talked to from the front of it
+      if (d > (c.npcId === 'ezekiel' ? 74 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;                // Ezekiel stands behind his counter: he can be talked to from the front of it
       if (c.kind === 'story') {
         if (c.npcId === 'fare') return;
         consider(d + 4, { kind: 'story', ref: c, x: c.x, y: c.y, label: `Talk to ${this.npcName(c.npcId)}` });
       } else if (c.kind === 'shopkeeper') {
+        if (p.y < c.y + 8 || Math.abs(p.x - c.x) > 80) return;                  // only from the customer side of the counter (never through the back wall, shelves or the side units)
         consider(d + 6, { kind: 'shop', ref: c, x: c.x, y: c.y, label: `Browse ${c.shopName || 'shop'}` });
       } else if (d < 46) {
         consider(d + 8, { kind: 'talk', ref: c, x: c.x, y: c.y, label: 'Talk' });
@@ -2679,7 +2890,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     } else if (t.kind === 'story') {
       this.talkTo(t.ref.npcId);
     } else if (t.kind === 'shop') {
-      const kind = SHOP_KIND[t.ref.shopName] || 'general';
+      const kind = SHOP_KIND[t.ref.shopName] || 'grocery';
       this.openShop(kind, t.ref.shopName || 'Shop');
     } else if (t.kind === 'talk') {
       this.startDialogue(null, { dialogue: this.civilianChat(t.ref) });
@@ -2849,9 +3060,11 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
     // NPC / vehicle simulation
     this.nav.refreshActors(now);
+    if ((this.sleepT = (this.sleepT || 0) - dt) <= 0) { this.sleepT = 250; this.sleepFarBodies(); }
     if (now - (this.vehSightT || 0) > 300) { this.vehSightT = now; this.updateVehicleSight(now); }
-    this.enemies.children.iterate((e) => { if (e && e.active) { try { e.updateEnemy(now, dt); } catch (err) { if (!e.updErr) { e.updErr = true; console.error('enemy update error (ignored)', e.role, err); } } } });      // one broken NPC must never stop the whole game loop
-    this.civilians.children.iterate((c) => { if (c && c.active) c.updateCivilian(now, dt); });
+    const fN = this.frameN = ((this.frameN || 0) + 1) & 0xffff;
+    this.enemies.children.iterate((e) => { if (e && e.active) { if (e.dormant && ((fN + (e.__i = e.__i ?? (this.__ic = (this.__ic || 0) + 1))) & 7)) return; try { e.updateEnemy(now, dt); } catch (err) { if (!e.updErr) { e.updErr = true; console.error('enemy update error (ignored)', e.role, err); } } } });      // one broken NPC must never stop the whole game loop
+    this.civilians.children.iterate((c) => { if (c && c.active) { if (c.sleeping && ((fN + (c.__i = c.__i ?? (this.__ic = (this.__ic || 0) + 1))) & 7)) return; c.updateCivilian(now, dt); } });
     const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
     const near = (v) => Math.abs(v.x - p.x) < rx && Math.abs(v.y - p.y) < ry;
     this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver === 'player' || v.mode === 'chase' || near(v))) v.updateVehicle(now, dt); });
@@ -2863,7 +3076,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
-    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.casinoDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.storeDoorTick(now); this.policeDoorTick(now); this.policeStaffTick(now); this.casinoDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;
@@ -2880,24 +3093,27 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const cb = this.currentBuilding();
     const pscr = this.worldToScreen(p.x, p.y), pkey = p.x * this.sn + p.y * this.cs;
     this.xray = { x: pscr.x, y: pscr.y, key: pkey + DEPTH_D0, on: !p.dead };
+    const vr = this.viewRect(0);
     for (const r of this.roofs) {
-      let target = r.id === cb ? 0 : 1;
+      const onScreen = r.cx + r.rad > vr.x && r.cx - r.rad < vr.right && r.cy + r.rad > vr.y && r.cy - r.rad < vr.bottom;
+      if (!onScreen && r.alpha === 1 && r.id !== cb && !r.cont.visible) continue;                  // far away, fully closed and already hidden: nothing to do
+      let target = r.id === cb || r.b.noRoof ? 0 : 1;
       if (target === 1 && this.roofHides(r, pscr, pkey)) target = 0.28;
       r.alpha += (target - r.alpha) * Math.min(1, dt / 140);
       if (Math.abs(r.alpha - target) < 0.02) r.alpha = target;
-      const vr = this.viewRect(0);
-      const onScreen = r.cx + r.rad > vr.x && r.cx - r.rad < vr.right && r.cy + r.rad > vr.y && r.cy - r.rad < vr.bottom;
       r.cont.setAlpha(r.alpha).setVisible(onScreen && r.alpha > 0.01);
       if (r.fg && onScreen && !r.fgDrawn) this.drawFacade(r);
     }
     this.insideBuilding = cb >= 0;
+    if (this.storeExt && this.storeExtCb !== cb) { this.storeExtCb = cb; this.storeExt.forEach((s) => { const a = s.bid === cb ? 0 : 1; s.imgs.forEach((i) => i.setAlpha(a)); }); }
     if (this.wiseSign) this.wiseSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.casinoSign) this.casinoSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.bankSign) this.bankSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.bankExt && this.bankExtIn !== this.insideBuilding) { this.bankExtIn = this.insideBuilding; this.bankExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
     if (this.casinoExt && this.casinoExt.length && this.casinoExtIn !== this.insideBuilding) { this.casinoExtIn = this.insideBuilding; this.casinoExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }       // keep the big storefront sign out of the way indoors
 
-    this.updateCamera(now, dt, aimWorld);
+    this.updateCamera(now, Math.min(delta, 250), aimWorld);       // the camera eases with the REAL frame time (dt is capped at 50 ms for the game logic, so on a slow frame the player used to outrun the camera)
+    if ((this.cullT = (this.cullT || 0) - dt) <= 0) { this.cullT = 180; this.cullFar(); }
 
     this.enemies.children.iterate((e) => {
       if (!e || !e.visible || e.hpShowUntil < now) return;
@@ -2906,14 +3122,14 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       this.gfx.fillStyle(0xd02020, 1); this.fillUpright(this.gfx, e.x, e.y, -w / 2, -48, (w * Math.max(0, e.hp)) / e.maxHp, 3);
     });
 
-    // never leave the player stuck inside geometry
+    // never leave the player stuck inside geometry (vehSolidAt: a tile that only holds a streetlight is walkable - just its 8 px pole blocks - so it must not trigger the rescue teleport)
     if (!p.vehicle && !p.dead && now - (this.lastStuckCheck || 0) > 700) {
       this.lastStuckCheck = now;
-      if (this.solidAt(p.x, p.y)) { const s = this.freeSpotNear(p.x, p.y, 96); if (s) { p.setPosition(s.x, s.y); p.body.reset(s.x, s.y); } }
+      if (this.vehSolidAt(p.x, p.y)) { const s = this.freeSpotNear(p.x, p.y, 96); if (s) { p.setPosition(s.x, s.y); p.body.reset(s.x, s.y); } }
     }
     if (p.vehicle && now - (this.lastStuckCheck || 0) > 700) {
       this.lastStuckCheck = now;
-      if (this.solidAt(p.vehicle.x, p.vehicle.y)) this.ensureFree(p.vehicle);
+      if (this.vehSolidAt(p.vehicle.x, p.vehicle.y)) this.ensureFree(p.vehicle);
     }
 
     if (p.dead && !this.over) this.gameOver();
@@ -2956,6 +3172,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (Phaser.Input.Keyboard.JustDown(k.Z) || consumeAction('melee-swap')) p.cycleMelee();
     if (Phaser.Input.Keyboard.JustDown(k.X) || consumeAction('cycle')) p.cycleWeapon(1);
     if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('medkit')) { if (p.useMedkit()) this.events.emit('toast', 'Used medkit (+50 HP)'); }
+    if (Phaser.Input.Keyboard.JustDown(k.B)) { const m = useBestSupply(p); if (m) this.events.emit('toast', m); else this.events.emit('toast', "You're fine for now"); }
     if (Phaser.Input.Keyboard.JustDown(k.G) || consumeAction('armor')) { if (p.useArmor()) this.events.emit('toast', 'Armor plate applied (+40)'); }
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.toggleLock();
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
@@ -3122,7 +3339,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const dark = '#1c1c1c';
     const ocol = {
       [T.wall]: dark, [T.wall2]: dark, [T.tent]: '#2e3a22', [T.wallCap]: dark, [T.wall2Cap]: dark, [T.tentCap]: '#2e3a22',
-      [T.glass]: '#2f6a96', [T.glassCap]: '#2f6a96', [T.window]: '#5a7a8a', [T.windowBroken]: '#5a7a8a',
+      [T.glass]: '#2f6a96', [T.glassCap]: '#2f6a96', [T.window]: '#5a7a8a', [T.windowBroken]: '#5a7a8a', ...Object.fromEntries(SHOP_WINDOWS.map((i) => [i, '#5a7a8a'])),
       [T.tree]: '#1c3d1c', [T.fence]: '#b0b0b0', [T.barricade]: '#8a5a2a', [T.water]: '#2f6fb0', [T.sandbag]: '#b79a62',
       [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.propHigh]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'
     };

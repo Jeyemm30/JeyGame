@@ -39,6 +39,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.catLast = {};
     this.burstQueue = 0; this.burstNextAt = 0; this.rackUntil = 0; this.rackStart = 0;
     this.medkits = 1;
+    this.supplies = {};              // everyday supplies bought in stores { id: count } (see Supplies.js)
     this.plates = 0;
     this.backpack = 0;
     this.current = 'stick';
@@ -259,7 +260,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       else this.burstQueue = 0;
     }
     const gunMul = !this.isMelee && this.weapon.moveMul ? this.weapon.moveMul : 1;
-    const speed = (this.sprinting ? 215 : this.crouching ? 72 : this.reloading ? 105 : this.swing ? 95 : 135) * gunMul;
+    const speed = (this.sprinting ? 160 : this.crouching ? 54 : this.reloading ? 78 : this.swing ? 71 : 100) * gunMul;      // on foot, ~25 % slower than before (was 215 / 72 / 105 / 95 / 135)
     const k = this.moving ? (analog ? Math.max(0.55, mag) : 1) : 0;
     if (time < this.knockUntil) this.setVelocity(this.kvx, this.kvy);
     else this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
@@ -270,9 +271,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     const key = this.dir === 'l' ? 'r' : this.dir;
     this.setFlipX(this.dir === 'l');
     if (this.moving) {
-      this.animT += dt;
+      this.animT += dt * 0.78;                 // leg cycle matches the slower pace
       this.stepT += dt;
-      const interval = this.sprinting ? 260 : 380;
+      const interval = this.sprinting ? 340 : 500;           // footsteps follow the slower pace
       // a step only counts while the body really moves (not while pushing against a wall) and on foot
       const moved = Math.abs(this.body.velocity.x) + Math.abs(this.body.velocity.y) > 30;
       if (!this.crouching && this.stepT > interval && moved) {

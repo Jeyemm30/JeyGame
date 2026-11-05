@@ -21,6 +21,7 @@ import CreditsScene from './scenes/CreditsScene.js';
 import EndingScene from './scenes/EndingScene.js';
 import SettingsScene from './scenes/SettingsScene.js';
 import IntroScene from './scenes/IntroScene.js';
+import StoreScene from './scenes/StoreScene.js';
 import { VIEW_W, VIEW_H } from './config.js';
 import { initTouch, touch } from './systems/Touch.js';
 
@@ -35,13 +36,13 @@ const config = {
   pixelArt: true,
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, fullscreenTarget: 'game' },
-  // phones get a lower physics rate (half the collision work); everything is delta-time based so gameplay is unchanged
-  physics: { default: 'arcade', arcade: { fps: touch.detected ? 60 : 120, gravity: { x: 0, y: 0 } } },
+  // phones get a lower physics rate (60 Hz), desktops 90 Hz (was 120: twice the collision work per frame; the fastest bullet, 1300 px/s, still moves < 15 px per step, less than an NPC is wide); everything is delta-time based so gameplay is unchanged
+  physics: { default: 'arcade', arcade: { fps: touch.detected ? 60 : 90, gravity: { x: 0, y: 0 } } },
   render: { antialias: false, powerPreference: 'high-performance', batchSize: 4096 },
   fps: { target: 60, smoothStep: true },
   input: { activePointers: 4 },
   // Order matters: later scenes render on top of earlier ones.
-  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, AtmScene, VaultScene, GangScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene, IntroScene]
+  scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, AtmScene, VaultScene, GangScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene, IntroScene, StoreScene]
 };
 
 window.__game = new Phaser.Game(config);

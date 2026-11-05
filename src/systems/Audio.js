@@ -172,6 +172,11 @@ sfx.diceRoll = () => { for (let i = 0; i < 7; i++) noise(0.04, { freq: 900 + Mat
 sfx.win = () => { [523, 659, 784].forEach((f, i) => tone(f, 0.12, { type: 'triangle', vol: 0.18, delay: i * 0.09 })); };
 sfx.bigWin = () => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, 0.16, { type: 'triangle', vol: 0.2, delay: i * 0.1 })); for (let i = 0; i < 10; i++) tone(1800 + Math.random() * 900, 0.03, { type: 'triangle', vol: 0.08, delay: 0.3 + i * 0.07 }); };
 sfx.lose = () => { tone(220, 0.22, { type: 'sawtooth', vol: 0.14, slideTo: 130 }); tone(165, 0.3, { type: 'sawtooth', vol: 0.12, slideTo: 90, delay: 0.16 }); };
+// ---- knocked-over street objects (v = 0..1 loudness, already scaled by distance)
+sfx.clang = (v = 1) => { if (!throttle('clang', 90)) return; noise(0.12, { freq: 2600, endFreq: 700, vol: 0.45 * v, type: 'bandpass', q: 3 }); tone(310, 0.5, { type: 'triangle', vol: 0.16 * v, slideTo: 250 }); tone(930, 0.35, { type: 'sine', vol: 0.07 * v, slideTo: 820 }); tone(150, 0.3, { type: 'sawtooth', vol: 0.1 * v, slideTo: 90, delay: 0.1 }); };
+sfx.groundHit = (v = 1) => { noise(0.14, { freq: 500, endFreq: 100, vol: 0.4 * v }); tone(95, 0.18, { type: 'sine', vol: 0.3 * v, slideTo: 50 }); };
+sfx.rattle = (v = 1) => { if (!throttle('rattle', 90)) return; noise(0.1, { freq: 1800, endFreq: 600, vol: 0.35 * v, type: 'bandpass', q: 2 }); for (let i = 0; i < 4; i++) tone(380 + Math.random() * 260, 0.07, { type: 'triangle', vol: 0.09 * v, delay: 0.08 + i * 0.07 }); };
+sfx.plastic = (v = 1) => { if (!throttle('plastic', 70)) return; noise(0.06, { freq: 1400, endFreq: 500, vol: 0.3 * v, type: 'bandpass' }); tone(520, 0.09, { type: 'triangle', vol: 0.14 * v, slideTo: 330 }); tone(330, 0.07, { type: 'triangle', vol: 0.08 * v, delay: 0.16 }); };
 sfx.phone = () => { if (throttle('phone', 800)) { tone(880, 0.06, { type: 'square', vol: 0.1 }); tone(880, 0.06, { type: 'square', vol: 0.1, delay: 0.1 }); } };
 
 
@@ -189,21 +194,27 @@ export const engine = (() => {
     return { s, g, fl };
   };
   return {
-    start() {
+    start(electric = false) {
       const c = ac(); if (!c || n) return;
-      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300; lp.Q.value = 1.2;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = electric ? 1100 : 300; lp.Q.value = 1.2;
       const g = c.createGain(); g.gain.value = 0;
       const a = c.createOscillator(), b = c.createOscillator(), s = c.createOscillator(), sg = c.createGain();
-      a.type = 'sawtooth'; b.type = 'sawtooth'; b.detune.value = 9; s.type = 'sine'; sg.gain.value = 0.6;
+      a.type = electric ? 'sine' : 'sawtooth'; b.type = electric ? 'sine' : 'sawtooth'; b.detune.value = electric ? 0 : 9; s.type = electric ? 'triangle' : 'sine'; sg.gain.value = electric ? 0.3 : 0.6;
       a.frequency.value = b.frequency.value = 50; s.frequency.value = 25;
       a.connect(lp); b.connect(lp); s.connect(sg); sg.connect(lp); lp.connect(g); g.connect(bus.sfx);
       a.start(); b.start(); s.start();
-      n = { a, b, s, lp, g, road: loopNoise(c, 'lowpass', 650, 0.7), skid: loopNoise(c, 'bandpass', 1750, 7) };
+      n = { a, b, s, lp, g, elec: electric, road: loopNoise(c, 'lowpass', 650, 0.7), skid: loopNoise(c, 'bandpass', 1750, 7) };
     },
     // speed01 0..1, throttle 0..1, pitch: 1 car, >1 bike, <1 truck
     set(speed01, throttle, pitch = 1) {
       const c = ac(); if (!c || !n) return; const t = c.currentTime;
       const sp = Math.min(0.999, Math.max(0, speed01)), gear = Math.floor(sp * 4), within = sp * 4 - gear;
+      if (n.elec) {                                                  // electric: one smooth whine that climbs with speed (no gear shifts), very little rumble
+        const fe = 150 + sp * 640 + throttle * 50;
+        n.a.frequency.setTargetAtTime(fe, t, 0.08); n.b.frequency.setTargetAtTime(fe * 1.5, t, 0.08); n.s.frequency.setTargetAtTime(fe * 0.5, t, 0.08);
+        n.lp.frequency.setTargetAtTime(900 + sp * 1600, t, 0.1); n.g.gain.setTargetAtTime(0.02 + sp * 0.03 + throttle * 0.035, t, 0.1); n.road.g.gain.setTargetAtTime(sp * sp * 0.09, t, 0.15);
+        return;
+      }
       const f = (40 + gear * 9 + within * 58 + throttle * 9) * pitch;
       n.a.frequency.setTargetAtTime(f, t, 0.06); n.b.frequency.setTargetAtTime(f * 1.004, t, 0.06); n.s.frequency.setTargetAtTime(f * 0.5, t, 0.06);
       n.lp.frequency.setTargetAtTime(230 + sp * 420 + throttle * 650, t, 0.09);

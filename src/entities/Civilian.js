@@ -267,6 +267,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       case 'queue': if (within(3 + (this.seed % 4), 4.6 + (this.seed % 4))) this.poseNow = { talk: true }; break;                                                  // waiting in line
       case 'atmuse': if (within(1.5, 3.2) || within(8, 9.2)) this.poseNow = { pickup: true }; break;                                                               // at the cash machine
       case 'manager': if (within(2, 4.5)) this.poseNow = { talk: true }; else if (within(7, 8.2)) this.poseNow = { lift: true }; break;
+      case 'drill': if (within(0, 3)) this.poseNow = { lift: true }; else if (within(4, 6)) this.poseNow = { pickup: true }; else if (within(7, 8.5)) this.poseNow = { panic: true }; break;                    // training: push-ups / stretches / jumping jacks
       case 'valet': if (within(4, 5)) this.poseNow = { pickup: true }; else if (within(8, 11)) this.poseNow = { talk: true }; break;
       default: break;
     }
@@ -513,7 +514,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
       sit: this.state === 'sit', hurt: time < this.hurtUntil,
       talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
-      pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6)) && this.moveSpeed === 0,
+      pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'gus' && Math.floor(time / 1000) % 9 === 5 && time % 1000 < 1100) || (this.npcId === 'dex' && Math.floor(time / 1000) % 11 === 6) || (this.npcId === 'gordy' && Math.floor(time / 1000) % 12 === 8) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6)) && this.moveSpeed === 0,
       panic: this.state === 'flee' || (this.npcId === 'sean' && this.moveSpeed === 0 && Math.floor(time / 1000) % 11 === 2 && time % 1000 < 700) || (this.npcId === 'ezekiel' && this.moveSpeed === 0 && Math.floor(time / 1000) % 9 === 2 && time % 1000 < 650),   // Ezekiel throws his arms up when he is excited about a sneaker       // Kenny counts his cash / reaches under the counter
       lean: (this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 10 === 8),
       ...(this.poseNow || {})
@@ -527,7 +528,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     }
     const depth = sc.depthOf(this.x, this.y, this.state === 'sit' ? 14 : 0);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
-    this.shadow.setPosition(this.x, this.y + 2).setScale(bg);
+    this.shadow.setVisible(this.visible && !this.noShadow).setPosition(this.x, this.y + 2).setScale(bg);
     if (this.state === 'phone') { this.setTint(0xd8f0ff); this.phoneTint = true; } else if (this.phoneTint) { this.clearTint(); this.phoneTint = false; }
   }
 }

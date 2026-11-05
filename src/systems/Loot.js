@@ -1,5 +1,6 @@
 import { profile } from './Profile.js';
 import { WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
+import { SUPPLIES, SUPPLY_CAP } from './Supplies.js';
 
 export const ITEMS = {
   medkit: { label: 'Medkit', tex: 'it_medkit', kind: 'medkit' },
@@ -12,6 +13,8 @@ Object.keys(AMMO_TYPES).forEach((k) => {
   ITEMS['ammo_' + k] = { label: AMMO_TYPES[k].name + ' Ammo', tex: 'it_ammo', kind: 'ammo', ammo: k, amount: [Math.max(2, Math.round(pk * 0.5)), pk] };
 });
 WEAPON_ORDER.forEach((id) => { ITEMS['w_' + id] = { label: WEAPONS[id].name, tex: WEAPONS[id].gun, kind: 'weapon', weapon: id }; });
+// everyday supplies sold in stores: id "s_<supply>" (stored in player.supplies, see Supplies.js)
+Object.keys(SUPPLIES).forEach((id) => { ITEMS['s_' + id] = { label: SUPPLIES[id].label, tex: 'sp_' + id, kind: 'supply', supply: id }; });
 // quest items (story + side jobs); they live in profile.flags.qitems, not in the weapon inventory
 const QUEST = { q_package: ['Package', 'q_package'], q_locket: ["Hal's locket", 'q_locket'], q_ledger: ['Ledger', 'q_ledger'], q_documents: ['Reyes document', 'q_documents'], q_key: ['Safehouse key', 'q_key'], q_food: ['Food order', 'q_food'], q_wallet: ['Wallet', 'q_wallet'], q_stash: ["Rico's stash", 'q_stash'], q_lighter: ['Lighter', 'q_lighter'], q_tape: ['Cassette tape', 'q_tape'], q_photo: ['Old photograph', 'q_photo'] };
 Object.keys(QUEST).forEach((id) => { ITEMS[id] = { label: QUEST[id][0], tex: QUEST[id][1], kind: 'quest' }; });
@@ -93,6 +96,12 @@ export function giveItem(player, id) {
       if (player.plates >= player.plateCap()) return null;
       player.plates++;
       return 'Picked up Armor Plate (G to use)';
+    case 'supply': {
+      const n = player.supplies[it.supply] || 0;
+      if (n >= SUPPLY_CAP) return null;
+      player.supplies[it.supply] = n + 1;
+      return `Bought ${it.label}`;
+    }
     case 'backpack':
       if (player.backpack >= 2) return null;
       player.backpack++;

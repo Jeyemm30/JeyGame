@@ -9,7 +9,8 @@ export const PAL = [
   { n: 'velvet', m: '#7a1a3a', a: '#e8c860', w: '#3a2218', t: '#1a1418' },    // 2 luxury: burgundy velvet + dark wood + gold
   { n: 'olive', m: '#6a7a3a', a: '#d8c898', w: '#6a4a2a', t: '#2a2218' },     // 3 old-fashioned: olive floral + brown
   { n: 'worn', m: '#7a7468', a: '#a89c88', w: '#6a5a48', t: '#2a2824' },      // 4 poor: faded grey-brown
-  { n: 'cozy', m: '#c8783a', a: '#f0e0c0', w: '#a8683a', t: '#3a2418' }       // 5 cozy: warm orange
+  { n: 'cozy', m: '#c8783a', a: '#f0e0c0', w: '#a8683a', t: '#3a2418' },      // 5 cozy: warm orange
+  { n: 'haven', m: '#2f9a96', a: '#f4f1ea', w: '#d9bd8c', t: '#1f2c34' }        // 6 the player's home: seafoam teal, off-white and light oak
 ];
 const font = (c, size, col) => { c.font = `bold ${size}px "Courier New", monospace`; c.fillStyle = col; c.textBaseline = 'middle'; c.textAlign = 'center'; };
 const sh = (c, x, y, rx) => ellipse(c, x, y, rx, 3, 'rgba(0,0,0,0.28)');

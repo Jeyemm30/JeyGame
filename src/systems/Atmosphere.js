@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { T } from '../assets/textures.js';
+import { gq } from './Settings.js';
 
 /* Day / night cycle, weather (clear, cloudy, rain, fog), streetlight glow and interior lighting.
    Everything is drawn as screen-space overlays on the Game camera, so it costs a handful of draw calls. */
@@ -106,8 +107,9 @@ export default class Atmosphere {
   }
 
   drawGlow() {
-    const g = this.glow;
+    const g = this.glow, ll = gq().lightLevel;
     g.clear();
+    if (ll <= 0) return;                                  // Lighting Effects off: no lamp / hideout glow at all
     // the hideout's bare bulbs, neon and fire barrel flicker day and night
     if (this.hideLights.length) {
       const vv = this.scene.viewRect(260);
@@ -119,8 +121,7 @@ export default class Atmosphere {
         const on = L.fire || L.steady ? 1 : (Math.sin(k / 130 + L.ph) * Math.sin(k / 47 + L.ph * 2) > -0.6 ? 1 : 0.25);   // sputtering bulbs
         const s = (L.steady ? 0.35 + 0.65 * nt : 0.55 + 0.45 * nt) * on * (L.fire ? 0.85 + 0.15 * Math.sin(k / 60 + L.ph) : 1);
         const col = L.col || (L.neon ? 0xff4a8a : L.fire ? 0xff8a30 : 0xffc870);
-        g.fillStyle(col, 0.07 * s).fillEllipse(L.x, L.y, 210, 130);
-        g.fillStyle(col, 0.11 * s).fillEllipse(L.x, L.y, 120, 74);
+        if (ll >= 2) { g.fillStyle(col, 0.07 * s).fillEllipse(L.x, L.y, 210, 130); g.fillStyle(col, 0.11 * s).fillEllipse(L.x, L.y, 120, 74); }
         g.fillStyle(col, 0.17 * s).fillEllipse(L.x, L.y, 52, 32);
       }
     }
@@ -130,10 +131,9 @@ export default class Atmosphere {
     const x0 = v.x, x1 = v.right, y0 = v.y, y1 = v.bottom;
     const flick = 0.92 + 0.08 * Math.sin(this.clock / 90);
     for (const p of this.lamps) {
-      if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+      if (p.down || p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;           // a knocked-down streetlight gives no light
       const a = night * flick;
-      g.fillStyle(0xffd27a, 0.07 * a).fillEllipse(p.x, p.y - 4, 190, 120);
-      g.fillStyle(0xffd27a, 0.10 * a).fillEllipse(p.x, p.y - 4, 120, 76);
+      if (ll >= 2) { g.fillStyle(0xffd27a, 0.07 * a).fillEllipse(p.x, p.y - 4, 190, 120); g.fillStyle(0xffd27a, 0.10 * a).fillEllipse(p.x, p.y - 4, 120, 76); }
       g.fillStyle(0xffe6a8, 0.16 * a).fillEllipse(p.x, p.y - 4, 56, 36);
       const ho = this.scene.fromScreen(4, -42);
       g.fillStyle(0xfff2c8, 0.9 * a).fillCircle(p.x + ho.x, p.y + ho.y, 3);

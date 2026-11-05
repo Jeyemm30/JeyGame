@@ -40,7 +40,7 @@ export function snapshot(gs) {
     appearance: gs.registry.get('appearance') || null,
     player: {
       x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp), armor: Math.round(p.armor), stamina: Math.round(p.stamina),
-      weapons: JSON.parse(JSON.stringify(p.weapons)), ammo: { ...p.ammo }, medkits: p.medkits, plates: p.plates, backpack: p.backpack, current: p.current,
+      weapons: JSON.parse(JSON.stringify(p.weapons)), ammo: { ...p.ammo }, medkits: p.medkits, supplies: { ...p.supplies }, plates: p.plates, backpack: p.backpack, current: p.current,
       vehicleId: pv && pv.ownedId ? pv.ownedId : null
     },
     wantedHeat: Math.round(gs.wanted.heat),

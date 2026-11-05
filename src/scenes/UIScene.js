@@ -6,8 +6,11 @@ import { sfx } from '../systems/Audio.js';
 import { touch, touchEnabled, resetTouch } from '../systems/Touch.js';
 import { VEHICLES } from '../entities/Vehicle.js';
 import { profile, repTitle } from '../systems/Profile.js';
+import { SUPPLIES, SUPPLY_IDS, useSupply, supplyCount } from '../systems/Supplies.js';
 
 // minimap: shows an 80x64 tile window around the player at 2px per tile
+// location icons on the minimap (same badges as the world map); gang hideouts and Kenny's alley appear once discovered (they join wd.pois then)
+const MM_ICON_TYPES = new Set(['police', 'hospital', 'shop', 'gas', 'wise', 'casino', 'bank', 'kenny', 'home']);
 const MM_X = 1100, MM_Y = 20, MM_W = 160, MM_H = 128, MM_TILES_X = 80, MM_TILES_Y = 64, MM_SCALE = 2;
 
 function drawStar(g, cx, cy, r, fill, alpha = 1, stroke = 0x000000) {
@@ -180,7 +183,7 @@ export default class UIScene extends Phaser.Scene {
   /* ----------------------------------------------------------- state toggles */
   modalActive() {
     if (this.game_.cine) return true;                  // opening cutscene: no pause / map / inventory until it ends or is skipped
-    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
+    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'Store', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
   }
 
   onEsc() {
@@ -281,6 +284,14 @@ export default class UIScene extends Phaser.Scene {
     const useMed = button(this, 1160, 426, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
     const usePlate = button(this, 1160, 466, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
     c.add([this.medText, this.plateText, this.packText, this.statText, this.questText, useMed, usePlate]);
+    // everyday supplies bought in stores: one clickable chip per owned type (click = use one); B uses the most sensible one
+    c.add(label(this, 840, 560, 'EVERYDAY SUPPLIES  (click to use, B = best)', 13, '#9db890'));
+    this.supChips = SUPPLY_IDS.map((id) => {
+      const t = label(this, 840, 580, '', 13, '#ffe9a0').setInteractive({ useHandCursor: true }).setVisible(false);
+      t.on('pointerup', () => { const m = useSupply(this.p, id); this.toast(m || (SUPPLIES[id].heal && !SUPPLIES[id].stamina ? 'Your health is full' : 'You do not need that right now')); });
+      c.add(t);
+      return { id, t };
+    });
     c.add(label(this, 640, 642, this.touchMode ? 'Tap X to close - tap a weapon to equip it' : 'TAB / ESC to close - click a weapon to equip it (Z cycles melee, Q cycles all)', 14, '#7f9a72', 0.5, 0.5));
     c.add(button(this, 1150, 98, 'X', () => this.toggleInventory(), { w: 50, h: 44, size: 22 }));
   }
@@ -307,6 +318,8 @@ export default class UIScene extends Phaser.Scene {
     this.medText.setText(`Medkits  ${p.medkits}/${p.medCap()}`);
     this.plateText.setText(`Plates   ${p.plates}/${p.plateCap()}`);
     this.packText.setText(`Backpack Lv ${p.backpack}/2`);
+    let ci = 0;
+    this.supChips.forEach((s) => { const n = p.supplies[s.id] || 0; if (!n || ci >= 12) { s.t.setVisible(false); return; } s.t.setText(`${SUPPLIES[s.id].label} x${n}`).setPosition(840 + (ci % 2) * 190, 580 + Math.floor(ci / 2) * 16).setVisible(true); ci++; });
     const qi = (profile.flags.qitems || []);
     this.questText.setText(qi.length ? 'QUEST ITEMS: ' + qi.join(', ').replace(/q_/g, '') : '');
     this.statText.setText(`HP ${Math.ceil(p.hp)}/${p.maxHp}    Armor ${Math.ceil(p.armor)}/${p.maxArmor}    Wanted ${'*'.repeat(this.game_.wanted.level) || 'none'}`);
@@ -429,7 +442,7 @@ export default class UIScene extends Phaser.Scene {
     bar(60, 672 + this.bo, 260, 8, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
     this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
     this.arText.setText(String(Math.ceil(p.armor)));
-    this.supplyText.setText(`[H] Medkits ${p.medkits}/${p.medCap()}   [G] Plates ${p.plates}/${p.plateCap()}`);
+    this.supplyText.setText(`[H] Medkits ${p.medkits}/${p.medCap()}   [G] Plates ${p.plates}/${p.plateCap()}   [B] Supplies ${supplyCount(p)}`);
     this.supplyText.setY(588 + this.bo).setX(20);
 
     // weapon block
@@ -615,7 +628,7 @@ export default class UIScene extends Phaser.Scene {
     this.mmImg.setVisible(show); this.mmFrame.setVisible(show); this.mmHit.setVisible(show); this.mmLabel.setVisible(show);
     this.mmLabel.setText(g.casinoFloor === 2 ? "VIP LEVEL" : g.casinoFloor === 1 ? "CASINO" : "MAP");
     this.mmDots.clear();
-    if (!show) { this.ysTxt.setVisible(false); return; }
+    if (!show) { this.ysTxt.setVisible(false); if (this.mmIcons) this.mmIcons.forEach((im) => im.setVisible(false)); if (this.mmTesla) this.mmTesla.setVisible(false); return; }
     const ptx = p.x / TILE, pty = p.y / TILE;
     const cx0 = Phaser.Math.Clamp(Math.round(ptx - MM_TILES_X / 2), 0, MAP_W - MM_TILES_X);
     const cy0 = Phaser.Math.Clamp(Math.round(pty - MM_TILES_Y / 2), 0, MAP_H - MM_TILES_Y);
@@ -641,6 +654,25 @@ export default class UIScene extends Phaser.Scene {
     // custom map markers
     d.fillStyle(0xffd23a, 1);
     (g.markers || []).forEach((m) => { const x = sx(m.x), y = sy(m.y); if (inside(x, y)) d.fillTriangle(x, y - 6, x - 4, y, x + 4, y); });
+    // location icons: only those inside the window, at most 28 (a pooled set of images, no per-frame allocation)
+    const pool = this.mmIcons || (this.mmIcons = []);
+    let ni = 0;
+    for (const poi of g.wd.pois) {
+      const ty = poi.type;
+      if (!(MM_ICON_TYPES.has(ty) || ty.startsWith('gang_'))) continue;
+      const x = sx(poi.x), y = sy(poi.y);
+      if (x < MM_X + 6 || y < MM_Y + 6 || x > MM_X + MM_W - 6 || y > MM_Y + MM_H - 6) continue;
+      let im = pool[ni];
+      if (!im) im = pool[ni] = this.add.image(0, 0, 'mapicons', ty).setDepth(2).setScale(0.55);
+      if (im._f !== ty) { im.setFrame(ty); im._f = ty; }
+      im.setPosition(x, y).setVisible(true);
+      if (++ni >= 28) break;
+    }
+    for (let i = ni; i < pool.length; i++) pool[i].setVisible(false);
+    // the player's Tesla: shown on the minimap while it is inside the window and the player is not driving it
+    const tv = g.teslaVeh;
+    if (!this.mmTesla) this.mmTesla = this.add.image(0, 0, 'mapicons', 'tesla').setDepth(2).setScale(0.55).setVisible(false);
+    if (tv && tv.active && !p.vehicle) { const x = sx(tv.x), y = sy(tv.y); this.mmTesla.setVisible(x > MM_X + 6 && y > MM_Y + 6 && x < MM_X + MM_W - 6 && y < MM_Y + MM_H - 6).setPosition(x, y); } else this.mmTesla.setVisible(false);
     // police (blue) and hostile / visible armed NPCs (red)
     g.enemies.children.iterate((e) => {
       if (!e || !e.active) return;

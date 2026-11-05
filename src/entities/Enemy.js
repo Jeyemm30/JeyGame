@@ -409,7 +409,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const seated = this.sitting && this.ai === 'idle';
     const depth = sc.depthOf(this.x, this.y, seated ? 10 : 0);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
-    this.shadow.setVisible(vis).setPosition(this.x, this.y + 2);
+    this.shadow.setVisible(vis && !this.noShadow).setPosition(this.x, this.y + 2);
     this.gun.setVisible(vis && !seated);
     if (vis && !seated) {
       const aimA = (this.ai === 'attack' && this.aimAngle !== undefined) ? this.aimAngle : this.face;
