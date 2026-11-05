@@ -9,7 +9,7 @@ const MS = 4; // world-map texture pixels per tile (matches GameScene.buildMapTe
 const WORLD_TO_MAP = MS / TILE;
 const LEGEND = [
   ['police', 'Police'], ['hospital', 'Hospital'], ['shop', 'Shops'], ['restaurant', 'Restaurants'], ['gas', 'Gas stations'],
-  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking'], ['wise', 'WISE SOLE'], ['casino', 'Casino'], ['bank', 'Bank'], ['home', 'Your Home']
+  ['military', 'Military'], ['park', 'Parks'], ['house', 'Houses'], ['industrial', 'Industrial'], ['tower', 'Towers'], ['parking', 'Parking'], ['wise', 'WISE SOLE'], ['casino', 'Casino'], ['bank', 'Bank'], ['totoya', 'TOTOYA'], ['home', 'Your Home']
 ];
 
 // Full-screen world map. It is drawn from the real world data (tiles, buildings, POIs, zones),

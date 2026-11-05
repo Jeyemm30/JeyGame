@@ -76,16 +76,16 @@ export function makeMilitary(C) {
     [[9, 10], [18, 19], [27, 29]].forEach(([v0, v1]) => { const m = v0 === 27 ? 28 : v0; for (let u = 6; u <= W - 3; u += 2) if (obj[Y(m)][X(u)] === -1 && v0 !== 9 && v0 !== 18) ground[Y(m)][X(u)] = T.roadDash; });
     // ---- buildings
     const sgn = (k) => 'mil_sign_' + k;
-    building(X(6), Y(2), 10, 7, { dc: 5, sign: sgn('barracks'), kind: 'hq', fill: (P, XX, YY) => {            // BARRACKS: rows of bunks, lockers, benches
-      [1, 2, 3, 4, 6, 7, 8].forEach((c) => P(c, 1, T.milBunk)); [2, 3].forEach((r) => { P(1, r, T.locker); P(8, r, T.locker); }); [2, 3, 6, 7].forEach((c) => P(c, 4, T.bench)); P(3, 3, T.table); P(6, 3, T.table);
-      deco('mil_p_board', XX(5), YY(0) + 0, -2, 40, 0.5);
+    building(X(6), Y(2), 9, 7, { dc: 4, sign: sgn('barracks'), kind: 'hq', fill: (P, XX, YY) => {            // BARRACKS: rows of bunks, lockers, benches
+      [1, 2, 3, 5, 6, 7].forEach((c) => P(c, 1, T.milBunk)); [2, 3].forEach((r) => { P(1, r, T.locker); P(7, r, T.locker); }); [2, 3, 5, 6].forEach((c) => P(c, 4, T.bench)); P(3, 3, T.table); P(5, 3, T.table);
+      deco('mil_p_board', XX(4), YY(0) + 0, -2, 40, 0.5);
     } });
-    building(X(17), Y(2), 7, 7, { dc: 3, sign: sgn('armory'), kind: 'hq', lock: true, fill: (P, XX, YY) => {      // ARMORY: weapon racks, a service counter, ammunition and gear lockers
-      [1, 2, 3, 4, 5].forEach((c) => P(c, 1, T.weaponRack)); [1, 2, 4, 5].forEach((c) => P(c, 3, T.ctrInd)); P(1, 4, T.ammoCrate); P(5, 4, T.ammoCrate); P(1, 5, T.locker); P(5, 5, T.locker);
-      civ(XX(3), YY(2), 'patron', { role: 'military', act: 'cashier', face: Math.PI / 2 });
+    building(X(16), Y(2), 6, 7, { dc: 2, sign: sgn('armory'), kind: 'hq', lock: true, fill: (P, XX, YY) => {      // ARMORY: weapon racks, a service counter, ammunition and gear lockers
+      [1, 2, 3, 4].forEach((c) => P(c, 1, T.weaponRack)); [1, 3, 4].forEach((c) => P(c, 3, T.ctrInd)); P(1, 4, T.ammoCrate); P(4, 4, T.ammoCrate); P(1, 5, T.locker); P(4, 5, T.locker);
+      civ(XX(2), YY(2), 'patron', { role: 'military', act: 'cashier', face: Math.PI / 2 });
     } });
-    building(X(24), Y(2), 7, 7, { dc: 3, sign: sgn('medical'), kind: 'hq', fill: (P, XX, YY) => {              // MEDICAL: beds, first-aid cabinets and supply shelves, a medic
-      [1, 2, 4, 5].forEach((c) => P(c, 1, T.hospBed)); P(1, 3, T.medCab); P(5, 3, T.medCab); P(1, 4, T.medSh); P(5, 4, T.medSh); P(5, 5, T.fridge);
+    building(X(23), Y(2), 6, 7, { dc: 2, sign: sgn('medical'), kind: 'hq', fill: (P, XX, YY) => {              // MEDICAL: beds, first-aid cabinets and supply shelves, a medic
+      [1, 2, 4].forEach((c) => P(c, 1, T.hospBed)); P(1, 3, T.medCab); P(4, 3, T.medCab); P(1, 4, T.medSh); P(4, 4, T.medSh); P(4, 5, T.fridge);
       civ(XX(2), YY(3), 'medic');
     } });
     building(X(6), Y(11), 10, 7, { dc: 5, sign: sgn('hq'), kind: 'hq', roof: 'hq', fill: (P, XX, YY) => {          // HEADQUARTERS: command desks, radio consoles, a meeting table, the wall map
@@ -126,7 +126,7 @@ export function makeMilitary(C) {
     // ---- floodlights along the streets
     [[8, 9], [16, 9], [26, 9], [8, 18], [16, 18], [26, 18], [10, 29], [30, 29]].forEach(([u, v]) => { if (obj[Y(v)][X(u)] === -1) { obj[Y(v)][X(u)] = T.prop; out.props.push({ kind: 'lamp', x: px(X(u)), y: Y(v) * TILE + 30 }); } });
     // ---- towers: NW, NE, SE and beside the gate
-    tower(X(1), Y(1)); tower(X(31), Y(1)); tower(X(31), Y(26)); tower(X(7), Y(26));
+    tower(X(1), Y(1)); tower(X(31), Y(1)); tower(X(31), Y(26)); tower(X(1), Y(24));
     // ---- the people on duty
     enemy(X(1), Y(H - 3), 'military', 'rifle', 'guard', 24); enemy(X(5), Y(H - 3), 'military', 'rifle', 'guard', 24);              // gate guards (inside)
     enemy(X(3), Y(H - 5), 'mheavy', 'heavy', 'guard', 20);
@@ -149,17 +149,42 @@ export function makeMilitary(C) {
     const X0 = b.x1 - 21, Y0 = b.y1 - 15, W = 21, H = 15;                                               // x 398-418, y 148-162 (the south-east corner of the west block)
     const X = (u) => X0 + u, Y = (v) => Y0 + v;
     const DD = (key, u, v, sy, dz, cx) => deco(key, X(u), Y(v), sy, dz, cx);
+    // Dedicate the entire city block (b.x0..b.x1, b.y0..b.y1) to the Military Checkpoint & Staging Reserve
+    clear(b.x0 + 1, b.y0 + 1, b.x1 - 1, b.y1 - 1);
+    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+    for (let y = b.y0 + 1; y <= b.y1 - 1; y++) for (let x = b.x0 + 1; x <= b.x1 - 1; x++) {
+      if (inb(x, y)) { ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1; occ[y][x] = true; }
+    }
+    // North-south military logistics road connecting the north avenue (b.y0) to the checkpoint lanes
+    paint(X(10), b.y0, X(14), Y0 - 1, T.road);
+    for (let y = b.y0 + 2; y < Y0; y += 2) if (inb(X(12), y)) ground[y][X(12)] = T.roadDashV;
+    // West military staging pad & reserve motor pool (x = b.x0 + 3 .. X0 - 3, y = Y0 + 1 .. b.y1 - 2)
+    const sx0 = b.x0 + 3, sx1 = X0 - 3, sy0 = Y0 + 1, sy1 = b.y1 - 2;
+    paint(sx0, sy0, sx1, sy1, T.concrete);
+    for (let x = sx0; x <= sx1; x++) { put(x, sy0, T.fence); if (x < sx0 + 4 || x > sx1 - 4) put(x, sy1, T.fence); }
+    for (let y = sy0; y <= sy1; y++) { put(sx0, y, T.fence); put(sx1, y, T.fence); }
+    for (let x = sx0 + 4; x <= sx1 - 4; x++) if (inb(x, b.y1)) ground[b.y1][x] = T.concrete;
+    bays(sx0 + 2, sy0 + 2, 2, 4, [['truck', 0], ['jeep', 0]]);
+    // Landscaped military buffer trees & warning signs in the north/west lawn
+    for (let x = b.x0 + 3; x <= b.x1 - 3; x += 5) {
+      if (x >= X(8) && x <= X(16)) continue;
+      if (inb(x, b.y0 + 3) && obj[b.y0 + 3][x] === -1) obj[b.y0 + 3][x] = T.tree;
+      if (x < X0 - 2 && inb(x, b.y0 + 9) && obj[b.y0 + 9][x] === -1) obj[b.y0 + 9][x] = T.tree;
+    }
+    deco('mil_sign_zone', b.x0 + 6, b.y1 - 1, -8, 70);
+    deco('mil_sign_zone', X(8), b.y0 + 2, -8, 40);
+
     clear(X0 - 1, Y0 - 1, X0 + W, Y0 + H);
     paint(X(0), Y(0), X(W - 1), Y(H - 1), T.concrete);
     mark(X0 - 1, Y0 - 1, W + 2, H + 1, 0);
     // ---- the enclosure: a south wall with the lane gates, concrete barriers west and north, a fence on the road side
-    for (let u = 0; u < W; u++) { obj[Y(H - 1)][X(u)] = T.wall2; skinWall(X(u), Y(H - 1), T.milWall); put(X(u), Y(0), T.jersey); }
+    for (let u = 0; u < W; u++) { obj[Y(H - 1)][X(u)] = T.wall2; skinWall(X(u), Y(H - 1), T.milWall); if (u < 10 || u > 14) put(X(u), Y(0), T.jersey); }
     for (let v = 1; v < H - 1; v++) { put(X(0), Y(v), T.jersey); obj[Y(v)][X(W - 1)] = T.fence; }
     // entry lane (u10-u11) and exit lane (u13-u14), a concrete median between them (u12); a boom gate on each lane in the south wall
     [10, 11].forEach((u) => { obj[Y(H - 1)][X(u)] = T.doorClosed; out.doors.push({ x: X(u), y: Y(H - 1) }); skinDoor(X(u), Y(H - 1), T.milBoom, T.milBoomOpen); autoDoor(X(u), Y(H - 1), true); });
     [13, 14].forEach((u) => { obj[Y(H - 1)][X(u)] = T.doorClosed; out.doors.push({ x: X(u), y: Y(H - 1) }); skinDoor(X(u), Y(H - 1), T.milBoom, T.milBoomOpen); autoDoor(X(u), Y(H - 1), true); });
-    paint(X(10), Y(6), X(14), Y(H - 2), T.road);
-    for (let v = 6; v <= H - 2; v++) { ground[Y(v)][X(12)] = T.concrete; if (v >= 7) put(X(12), Y(v), T.jersey); }
+    paint(X(10), Y(0), X(14), Y(H - 2), T.road);
+    for (let v = 0; v <= H - 2; v++) { ground[Y(v)][X(12)] = T.concrete; if (v >= 7) put(X(12), Y(v), T.jersey); }
     put(X(12), Y(H - 2), T.jersey);
     for (let v = 7; v <= H - 3; v += 3) { out.rugs.push({ key: 'mil_arrow_up', x: (X(10) + 1) * TILE, y: Y(v) * TILE + 16 }); out.rugs.push({ key: 'mil_arrow_down', x: (X(13) + 1) * TILE, y: Y(v) * TILE + 16 }); }
     for (let u = 9; u <= 15; u++) if (inb(X(u), Y(H))) { ground[Y(H)][X(u)] = T.concrete; }          // the apron on the sidewalk row in front of the gates

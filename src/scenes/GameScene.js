@@ -177,17 +177,21 @@ export default class GameScene extends Phaser.Scene {
       if (veh.mode === 'patrol' || veh.mode === 'traffic') this.placeOnRoad(veh);
       this.ensureFree(veh);
     });
-    // The player's Tesla (id 'tesla_home'): handed over ONCE (a new game, or an older save that never had it) in the driveway of the home. From then on it is just a
-    // saved owned vehicle: wherever the player leaves it is remembered, and nothing ever creates a second one (a record is only added while flags.tesla is unset, and only
-    // one 'tesla' record with that id is ever spawned).
-    if (!profile.flags.tesla && this.wd.home) {
-      const t = this.wd.home.tesla;
-      if (!(profile.ownedVehicles || []).some((o) => o.id === 'tesla_home')) profile.ownedVehicles.push({ id: 'tesla_home', type: 'tesla', variant: 0, x: t.x, y: t.y, heading: t.heading, hp: VEHICLES.tesla.hp, fuel: 100 });
-      profile.flags.tesla = true;
-    }
+    // The unique player Tesla (id 'tesla_home') is ONLY spawned via Mark Sterling at TOTOYA (or restored if it was already spawned in a saved game).
     this.teslaVeh = null;
     const seenOwned = new Set();
-    profile.ownedVehicles = (profile.ownedVehicles || []).filter((o) => { const ok = !seenOwned.has(o.id) && (o.type !== 'tesla' || o.id === 'tesla_home'); if (ok) seenOwned.add(o.id); return ok; });
+    profile.ownedVehicles = (profile.ownedVehicles || []).filter((o) => {
+      if (o.type === 'tesla' || o.id === 'tesla_home') {
+        if (!profile.flags.teslaSpawned) {
+          profile.flags.teslaSaved = { hp: o.hp ?? VEHICLES.tesla.hp, fuel: o.fuel ?? 100 };
+          return false;
+        }
+        if (o.id !== 'tesla_home' || seenOwned.has('tesla_home')) return false;
+      }
+      const ok = !seenOwned.has(o.id);
+      if (ok) seenOwned.add(o.id);
+      return ok;
+    });
     profile.ownedVehicles.forEach((o) => {
       const v = this.spawnVehicle({ type: o.type, variant: o.variant, x: o.x, y: o.y, heading: o.heading || 0, hp: o.hp, fuel: o.fuel, mode: 'parked', ownedId: o.id, locked: true });
       this.ensureFree(v);
@@ -547,7 +551,7 @@ export default class GameScene extends Phaser.Scene {
     const shade = (c) => { if (!c || !c.active) return; c.noShadow = sd <= 0 || (Math.abs(c.x - p.x) > sd || Math.abs(c.y - p.y) > sd * 0.75); };
     this.civilians.children.iterate(shade); this.enemies.children.iterate(shade);
     for (const pi of this.porchImgs || []) { const on = v.contains(pi.x, pi.y); if (pi.visible !== on) pi.setVisible(on); }
-    for (const f of this.facade) { const on = v.contains(f.gx, f.gy); if (f.img.visible !== on) f.img.setVisible(on); }
+    for (const f of this.facade) { const on = v.contains(f.gx, f.gy) && (!f.reyesFloor || f.reyesFloor === (this.reyesFloor || 1)); if (f.img.visible !== on) f.img.setVisible(on); }
     for (const it of this.items) { const on = v.contains(it.x, it.y); if (it.visible !== on) { it.setVisible(on); if (it.glow) it.glow.setVisible(on); } }
     this.crates.getChildren().forEach((c) => { const on = v.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
     this.vehicles.children.iterate((c) => { if (!c) return; const on = vv.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
@@ -578,14 +582,82 @@ export default class GameScene extends Phaser.Scene {
     r.fgDrawn = true;
     const x0 = b.x * TILE, x1 = (b.x + b.w) * TILE, y0 = b.y * TILE, y1 = (b.y + b.h) * TILE;
     const sides = [{ nx: 0, ny: 1, a: [x0, y1], b: [x1, y1] }, { nx: 0, ny: -1, a: [x1, y0], b: [x0, y0] }, { nx: 1, ny: 0, a: [x1, y1], b: [x1, y0] }, { nx: -1, ny: 0, a: [x0, y0], b: [x0, y1] }];
+    const lerpPt = (p0, p1, t) => ({ x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t });
+    const bilerp = (b0, b1, t0, t1, u, v) => {
+      const pBot = lerpPt(b0, b1, u);
+      const pTop = lerpPt(t0, t1, u);
+      return lerpPt(pBot, pTop, v);
+    };
     for (const s of sides) {
       const facing = s.nx * this.sn + s.ny * this.cs;                 // screen-vertical component of the outward normal
       if (facing <= 0.02) continue;
       const side = -s.nx * this.cs + s.ny * this.sn;                   // sideways lean (for shading)
       const k = 0.62 + 0.38 * Math.min(1, facing) - 0.08 * side;
+      const bot0 = { x: s.a[0] - E.x, y: s.a[1] - E.y }, bot1 = { x: s.b[0] - E.x, y: s.b[1] - E.y }, top0 = { x: s.a[0], y: s.a[1] }, top1 = { x: s.b[0], y: s.b[1] };
+
+      if (b.look === 'reyes') {
+        // Prestigious 4-story glass & granite corporate curtain-wall architecture for Reyes Holdings Tower
+        const baseWall = Phaser.Display.Color.GetColor(Math.round(24 * k + 8), Math.round(38 * k + 12), Math.round(58 * k + 18));
+        const granitePier = Phaser.Display.Color.GetColor(Math.round(42 * k + 12), Math.round(52 * k + 16), Math.round(68 * k + 20));
+        const goldTrim = Phaser.Display.Color.GetColor(Math.round(188 * k + 24), Math.round(148 * k + 18), Math.round(38 * k + 8));
+        const glassDay = Phaser.Display.Color.GetColor(Math.round(56 * k + 20), Math.round(112 * k + 30), Math.round(168 * k + 38));
+        const glassWarm = Phaser.Display.Color.GetColor(Math.round(175 * k + 40), Math.round(158 * k + 35), Math.round(108 * k + 22));
+        const glassRefl = Phaser.Display.Color.GetColor(Math.round(135 * k + 40), Math.round(195 * k + 40), Math.round(238 * k + 15));
+
+        g.fillStyle(baseWall, 1).fillPoints([bot0, bot1, top1, top0], true);
+
+        const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+        const nBays = Math.max(4, Math.round(len / 48));
+        const nFloors = 4;
+
+        // Draw multi-story reflective curtain-wall window bays across all 4 upper tiers
+        for (let fl = 0; fl < nFloors; fl++) {
+          const v0 = fl / nFloors + 0.04;
+          const v1 = (fl + 1) / nFloors - 0.05;
+          for (let bay = 0; bay < nBays; bay++) {
+            const u0 = (bay + 0.14) / nBays;
+            const u1 = (bay + 0.86) / nBays;
+            const p00 = bilerp(bot0, bot1, top0, top1, u0, v0);
+            const p10 = bilerp(bot0, bot1, top0, top1, u1, v0);
+            const p11 = bilerp(bot0, bot1, top0, top1, u1, v1);
+            const p01 = bilerp(bot0, bot1, top0, top1, u0, v1);
+            const lit = ((bay * 3 + fl * 5 + (s.nx + 2)) % 5 === 0) || fl === nFloors - 1;
+            g.fillStyle(lit ? glassWarm : glassDay, 0.92).fillPoints([p00, p10, p11, p01], true);
+
+            // Upper glass reflection band inside each window pane
+            const r00 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.06);
+            const r10 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.06);
+            const r11 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.01);
+            const r01 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.01);
+            g.fillStyle(glassRefl, 0.38).fillPoints([r00, r10, r11, r01], true);
+          }
+        }
+
+        // Horizontal spandrel floor beams & brushed gold cornice bands
+        for (let fl = 1; fl < nFloors; fl++) {
+          const t = fl / nFloors;
+          const a = lerpPt(bot0, top0, t), bPt = lerpPt(bot1, top1, t);
+          g.lineStyle(3, granitePier, 0.95).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          g.lineStyle(1, goldTrim, 0.78).lineBetween(a.x, a.y, bPt.x, bPt.y);
+        }
+
+        // Vertical granite structural piers & gold mullions
+        for (let bay = 0; bay <= nBays; bay++) {
+          const t = bay / nBays;
+          const a = lerpPt(bot0, bot1, t), bPt = lerpPt(top0, top1, t);
+          const isCorner = bay === 0 || bay === nBays || bay === Math.floor(nBays / 2);
+          g.lineStyle(isCorner ? 4 : 2, granitePier, 0.95).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          if (isCorner) g.lineStyle(1, goldTrim, 0.75).lineBetween(a.x, a.y, bPt.x, bPt.y);
+        }
+
+        // Crown gold cornice & base shadow
+        g.lineStyle(3, goldTrim, 0.92).lineBetween(top0.x, top0.y, top1.x, top1.y);
+        g.lineStyle(3, 0x050a14, 0.55).lineBetween(bot0.x, bot0.y, bot1.x, bot1.y);
+        continue;
+      }
+
       const cas = b.look === 'casino';
       const col = cas ? Phaser.Display.Color.GetColor(Math.round(52 * k + 14), Math.round(26 * k + 8), Math.round(84 * k + 20)) : Phaser.Display.Color.GetColor(Math.round(70 * k + 20), Math.round(120 * k + 25), Math.round(170 * k + 30));
-      const bot0 = { x: s.a[0] - E.x, y: s.a[1] - E.y }, bot1 = { x: s.b[0] - E.x, y: s.b[1] - E.y }, top0 = { x: s.a[0], y: s.a[1] }, top1 = { x: s.b[0], y: s.b[1] };
       g.fillStyle(col, 1).fillPoints([bot0, bot1, top1, top0], true);
       const dark = cas ? Phaser.Display.Color.GetColor(Math.round(150 * k + 20), Math.round(110 * k + 16), Math.round(30 * k + 8)) : Phaser.Display.Color.GetColor(Math.round(30 * k + 8), Math.round(60 * k + 12), Math.round(90 * k + 16));
       g.lineStyle(1, dark, 0.8);
@@ -802,8 +874,8 @@ export default class GameScene extends Phaser.Scene {
     };
     this.initWalls(addScenery);
     wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
-    wd.decor.forEach((d) => { d.it = addScenery(d.x, d.y, d.kind, 1); });
-    (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; });      // rugs lie flat on the floor
+    wd.decor.forEach((d) => { d.it = addScenery(d.x, d.y, d.kind, 1); if (d.reyesFloor) { d.it.reyesFloor = d.reyesFloor; d.it.hidden = d.reyesFloor !== 1; } });
+    (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; if (r.reyesFloor) { it.reyesFloor = r.reyesFloor; it.hidden = r.reyesFloor !== 1; } });      // rugs lie flat on the floor
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
       if (key) p.it = addScenery(p.x, p.y, key, 1);
@@ -831,6 +903,68 @@ export default class GameScene extends Phaser.Scene {
       this.bankVaultImg = dec('vault_door_0', bk.vaultDoor.x, bk.vaultDoor.y, 0, 0, 0.5, 1, 6);
     }
     (wd.policeDecor || []).forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // the police station: badge, cameras, lamps outside; wall boards, map, cameras inside
+    if (wd.fire && wd.fire.decor) { this.fireExt = []; wd.fire.decor.forEach((n) => { const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40); if (n.ext) this.fireExt.push(im); }); }
+    this.fireBays = []; this.fireBayKeys = new Set();
+    if (wd.fire && wd.fire.bays) wd.fire.bays.forEach((b) => {
+      b.tiles.forEach((t) => { const k = t.ty * W + t.tx; this.noFace[k] = 1; this.fireBayKeys.add(k); });
+      this.fireBays.push({ tiles: b.tiles, cx: b.cx, cy: b.cy, state: 'closed', evs: [], img: dec('fs_gdoor_0', b.cx, b.gy, 0, 0, 0.5, 1, 6) });
+    });
+    if (wd.totoya) {
+      const tt = wd.totoya;
+      this.totoyaSign = dec(tt.sign.key, tt.sign.x, tt.sign.y, 0, -42, 0.5, 1, 60);
+      this.totoyaDecs = []; this.totoyaExt = [];
+      (tt.neons || []).forEach((n) => (n.ext ? this.totoyaExt : this.totoyaDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
+      if (tt.bayDoor) {
+        const b = tt.bayDoor;
+        b.tiles.forEach((t) => { const k = t.ty * W + t.tx; this.noFace[k] = 1; this.fireBayKeys.add(k); });
+        this.totoyaBay = {
+          tiles: b.tiles,
+          cx: b.cx,
+          cy: b.cy,
+          state: 'closed',
+          evs: [],
+          texPrefix: b.texPrefix || 'totoya_gdoor_',
+          promptLabel: b.promptLabel || 'Garage',
+          halfW: b.halfW || 96,
+          img: dec((b.texPrefix || 'totoya_gdoor_') + '0', b.cx, b.gy, 0, 0, 0.5, 1, 6)
+        };
+        this.fireBays.push(this.totoyaBay);
+      }
+    }
+    this.reyesFloor = 1;
+    this.reyesFloorDecs = [];
+    if (wd.reyes) {
+      const ry = wd.reyes;
+      this.reyesSign = dec(ry.sign.key, ry.sign.x, ry.sign.y, 0, -56, 0.5, 1, 60);
+      this.reyesCanopy = dec(ry.canopy.key, ry.canopy.x, ry.canopy.y, 0, -10, 0.5, 0, 14);
+      this.reyesDecs = []; this.reyesExt = [this.reyesCanopy];
+      (ry.neons || []).forEach((n) => {
+        const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (n.ext) this.reyesExt.push(im);
+        else this.reyesDecs.push(im);
+        if (n.reyesFloor) {
+          fEntry.reyesFloor = n.reyesFloor;
+          this.reyesFloorDecs.push({ img: im, reyesFloor: n.reyesFloor });
+          if (n.reyesFloor !== 1) im.setVisible(false);
+        }
+      });
+      if (ry.frontDoor && ry.frontDoor.tiles) {
+        ry.frontDoor.tiles.forEach(([tx, ty]) => { this.noFace[ty * W + tx] = 1; });
+        const [[tx0, ty0], [tx1, ty1]] = ry.frontDoor.tiles;
+        const doorImg = dec('reyes_door_0', ry.frontDoor.x, ry.frontDoor.y - 1, 0, 0, 0.5, 1, 6);
+        const doorEntry = this.facade[this.facade.length - 1];
+        doorEntry.reyesFloor = 1;
+        this.reyesDoor = {
+          t0: { tx: tx0, ty: ty0 },
+          t1: { tx: tx1, ty: ty1 },
+          state: 'closed',
+          evs: [],
+          nearAt: 0,
+          img: doorImg
+        };
+      }
+    }
     if (wd.wise && wd.wise.wallDecor) wd.wise.wallDecor.forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // WISE SOLE: the back-wall sign, spot lights and the logo panel
     if (wd.wise) {
       this.wiseSign = dec('wise_sign', wd.wise.door.x, wd.wise.door.y - 34, 0, -24, 0.5, 1, 60);              // the official logo sign above the entrance
@@ -857,7 +991,7 @@ export default class GameScene extends Phaser.Scene {
       (this.porchImgs = this.porchImgs || []).push(this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2));
       if (!d.abandoned) dec('awning' + (i % 5), d.x, d.y - 32, 0, -6, 0.5, 0, 12, 0.8);   // anchored on the door tile
     });
-    wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name]) return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
+    wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name] || d.kind === 'totoya' || d.name === 'Reyes Holdings Tower') return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
     // window flower boxes + shutters on house fronts, balconies on apartment blocks
     wd.buildings.forEach((b) => {
       if (b.kind !== 'house' || b.broken) return;
@@ -889,13 +1023,127 @@ export default class GameScene extends Phaser.Scene {
       parts.push(this.add.tileSprite(x, y, w, h, key).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y, w, 2, 0xffffff, 0.25).setOrigin(0, 0));
       parts.push(this.add.rectangle(x + w - 2, y, 2, h, 0x000000, 0.3).setOrigin(0, 0));
-      if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
+      if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent' || b.style === 'totoya') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
       if (b.tint) parts[0].setTint(b.tint);                          // store roofs take their business colour
       if (b.look === 'casino') {                                    // the casino roof: dark plum with illuminated edges
         parts[0].setTint(0x6a5a8a);
         parts.push(this.add.rectangle(x, y + h - 8, w, 3, 0xffd24a, 0.95).setOrigin(0, 0), this.add.rectangle(x, y + h - 12, w, 2, 0xff3a8a, 0.8).setOrigin(0, 0), this.add.rectangle(x, y, 3, h, 0xb06aff, 0.85).setOrigin(0, 0), this.add.rectangle(x + w - 3, y, 3, h, 0x3ad8ff, 0.85).setOrigin(0, 0), this.add.rectangle(x, y, w, 3, 0xff3a5a, 0.7).setOrigin(0, 0));
+      } else if (b.look === 'totoya') {
+        // TOTOYA architectural roof coping, skylight bays, and signature crimson + electric-blue front parapet fascia
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+        // Heavy dark-steel perimeter parapet border & inner bevel
+        R2(x, y, w, 5, 0x181d26, 0.96); R2(x + 4, y + 5, w - 8, 2, 0x465264, 0.85);
+        R2(x, y, 5, h, 0x181d26, 0.96); R2(x + 5, y + 5, 2, h - 14, 0x465264, 0.85);
+        R2(x + w - 5, y, 5, h, 0x181d26, 0.96); R2(x + w - 7, y + 5, 2, h - 14, 0x465264, 0.85);
+        // Structural partition ridge dividing the showroom wing (left) and the high-bay workshop (right)
+        R2(x + 8 * TILE + 2, y + 5, 6, h - 14, 0x1a2029, 0.92);
+        R2(x + 8 * TILE + 4, y + 5, 2, h - 14, 0x4e5b70, 0.85);
+        // Tinted glass skylights over showroom and Tesla service bay
+        for (const [sx, sw] of [[x + 44, 156], [x + 330, 184], [x + 544, 184]]) {
+          const sy = y + 48, sh2 = 96;
+          R2(sx + 4, sy + 4, sw, sh2, 0x000000, 0.3);
+          R2(sx, sy, sw, sh2, 0x1b222c, 1);
+          R2(sx + 4, sy + 4, sw - 8, sh2 - 8, 0x1c3a52, 0.95);
+          for (let mx = sx + 34; mx < sx + sw - 12; mx += 32) R2(mx, sy + 4, 3, sh2 - 8, 0x2c3644, 1);
+          R2(sx + 4, sy + 4 + Math.floor((sh2 - 8) / 2), sw - 8, 2, 0x2c3644, 1);
+          R2(sx + 8, sy + 8, sw - 20, 6, 0x62d8ff, 0.25);
+        }
+        // Front parapet fascia molding (TOTOYA crimson red + electric cyan trim)
+        R2(x - 2, y + h - 10, w + 4, 8, 0x161b24, 0.98);
+        R2(x, y + h - 9, w, 4, 0xe63946, 0.96);
+        R2(x, y + h - 4, w, 2, 0x2ec4ff, 0.92);
+      } else if (b.look === 'reyes') {
+        // REYES HOLDINGS TOWER: Prestigious corporate skyscraper crown, architectural parapets,
+        // elevator penthouse machine room, central glass skylight atrium, and dual HVAC chiller plants + ductwork.
+        parts[0].setTint(0x283444);
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+
+        // 1. Stepped dark-granite & brushed-gold perimeter parapet wall
+        R2(x, y, w, 10, 0x121a28, 0.98);
+        R2(x, y, 10, h, 0x121a28, 0.98);
+        R2(x + w - 10, y, 10, h, 0x121a28, 0.98);
+        R2(x, y + h - 14, w, 14, 0x121a28, 0.98);
+        // Gold parapet coping & inner architectural reveal
+        R2(x + 2, y + 2, w - 4, 2, 0xd4a82a, 0.95);
+        R2(x + 2, y + 2, 2, h - 4, 0xd4a82a, 0.95);
+        R2(x + w - 4, y + 2, 2, h - 4, 0xd4a82a, 0.95);
+        R2(x + 10, y + 10, w - 20, h - 24, 0x1c2636, 0.72);
+        R2(x + 14, y + 14, w - 28, h - 32, 0x263346, 0.88);
+        // Structural roof grid Expansion joints
+        for (let gx = x + 64; gx < x + w - 32; gx += 64) R2(gx, y + 14, 2, h - 32, 0x182230, 0.65);
+        for (let gy = y + 64; gy < y + h - 32; gy += 64) R2(x + 14, gy, w - 28, 2, 0x182230, 0.65);
+
+        // 2. North-Center Elevator Penthouse & Mechanical Overrun House (aligned with the 4-floor elevator core)
+        const ex = x + Math.floor(w / 2) - 96, ey = y + 22, ew = 192, eh = 92;
+        R2(ex + 6, ey + 6, ew, eh, 0x000000, 0.38);
+        R2(ex, ey, ew, eh, 0x162234, 1);
+        R2(ex + 3, ey + 3, ew - 6, eh - 6, 0x22344e, 1);
+        R2(ex, ey, ew, 4, 0xd4a82a, 0.95);
+        R2(ex, ey + eh - 4, ew, 4, 0xd4a82a, 0.95);
+        // Penthouse louver vents & service door
+        for (let vx = ex + 18; vx < ex + ew - 30; vx += 38) {
+          R2(vx, ey + 18, 26, 52, 0x121c2c, 1);
+          for (let ly = ey + 22; ly < ey + 66; ly += 6) R2(vx + 3, ly, 20, 2, 0x566a82, 0.9);
+        }
+        // Aviation warning beacons on elevator penthouse corners
+        R2(ex + 6, ey + 6, 6, 6, 0xff3838, 0.95);
+        R2(ex + ew - 12, ey + 6, 6, 6, 0xff3838, 0.95);
+
+        // 3. Central Executive Penthouse Glass Skylight Atrium (over Councilman Reyes' 4F Presidential Suite)
+        const sx = x + Math.floor(w / 2) - 136, sy = y + 142, sw = 272, sh2 = 168;
+        R2(sx + 6, sy + 6, sw, sh2, 0x000000, 0.35);
+        R2(sx, sy, sw, sh2, 0x121e30, 1);
+        R2(sx + 3, sy + 3, sw - 6, sh2 - 6, 0xd4a82a, 0.92);
+        R2(sx + 7, sy + 7, sw - 14, sh2 - 14, 0x1b3c5e, 0.96);
+        // Skylight glass panes, warm interior glow & diagonal reflections
+        for (let mx = sx + 45; mx < sx + sw - 16; mx += 44) R2(mx, sy + 7, 3, sh2 - 14, 0x0e1a2a, 0.95);
+        for (let my = sy + 45; my < sy + sh2 - 16; my += 42) R2(sx + 7, my, sw - 14, 3, 0x0e1a2a, 0.95);
+        R2(sx + 16, sy + 14, sw - 36, 10, 0x8ad4ff, 0.28);
+        R2(sx + 34, sy + 56, sw - 72, 56, 0xffe69a, 0.16);
+
+        // 4. West & East Industrial HVAC Chiller Plants + Aluminum Ventilation Ductwork
+        for (const sideX of [x + 34, x + w - 166]) {
+          const cy0 = y + 44;
+          // Concrete equipment pad
+          R2(sideX - 6, cy0 - 6, 138, 276, 0x18202c, 0.92);
+          R2(sideX - 4, cy0 - 4, 134, 272, 0x323e4e, 0.9);
+          // Dual Heavy Chiller Units with dual turbine fan housings
+          for (let u = 0; u < 2; u++) {
+            const uy = cy0 + u * 116;
+            R2(sideX + 4, uy + 4, 118, 92, 0x000000, 0.32);
+            R2(sideX, uy, 118, 92, 0x566476, 1);
+            R2(sideX + 3, uy + 3, 112, 86, 0x738296, 1);
+            R2(sideX, uy, 118, 4, 0xa8b6c8, 1);
+            // Twin circular/octagonal fan shrouds per chiller
+            for (const fx of [sideX + 12, sideX + 64]) {
+              R2(fx, uy + 14, 42, 42, 0x1e2632, 1);
+              R2(fx + 4, uy + 18, 34, 34, 0x0d1218, 1);
+              R2(fx + 19, uy + 18, 4, 34, 0x627286, 0.9);
+              R2(fx + 4, uy + 33, 34, 4, 0x627286, 0.9);
+              R2(fx + 16, uy + 30, 10, 10, 0xd4a82a, 0.95);
+            }
+            // Control panel status LEDs
+            R2(sideX + 12, uy + 66, 94, 14, 0x222c38, 1);
+            R2(sideX + 18, uy + 71, 6, 4, 0x4aff88, 1);
+            R2(sideX + 28, uy + 71, 6, 4, 0xffaa33, 1);
+          }
+          // Main supply & return ventilation ductwork connecting chillers to central shaft
+          const ductX = sideX < x + w / 2 ? sideX + 118 : ex + ew;
+          const ductW = sideX < x + w / 2 ? ex - (sideX + 118) : sideX - (ex + ew);
+          if (ductW > 0) {
+            R2(ductX, y + 56, ductW, 22, 0x8a98aa, 1);
+            R2(ductX, y + 56, ductW, 4, 0xc4d0de, 1);
+            R2(ductX, y + 92, ductW, 18, 0x788698, 1);
+          }
+        }
+
+        // 5. Monumental Front Crown Cornice (Navy & Brushed Gold)
+        R2(x - 2, y + h - 14, w + 4, 12, 0x0c1626, 0.98);
+        R2(x, y + h - 13, w, 4, 0xd4a82a, 0.98);
+        R2(x, y + h - 8, w, 2, 0xffe688, 0.95);
+        R2(x, y + h - 4, w, 3, 0x1e3a62, 0.95);
       }
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
       let fg = null;
@@ -1264,9 +1512,38 @@ export default class GameScene extends Phaser.Scene {
 
   openDoorAt(x, y) {
     const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
-    if (this.lockedDoors.has(ty * W + tx)) return false;
+    if (this.lockedDoors.has(ty * W + tx) || (this.fireBayKeys && this.fireBayKeys.has(ty * W + tx))) return false;
     if (this.doorState(tx, ty) === 'closed') { this.setDoor(tx, ty, true); return true; }
     return false;
+  }
+
+  toggleFireBay(b) {
+    if (!b || b.state === 'opening' || b.state === 'closing') return;
+    const open = b.state === 'closed';
+    const hw = b.halfW || 80;
+    if (!open) {
+      let blocked = false;
+      const inWay = (o, rx, ry) => o && o.active && !o.dead && Math.abs(o.x - b.cx) < rx && Math.abs(o.y - b.cy) < ry;
+      if (inWay(this.player, hw + 2, 24)) blocked = true;
+      this.vehicles.children.iterate((v) => { if (inWay(v, hw + 10, 44)) blocked = true; });
+      this.civilians.children.iterate((c) => { if (inWay(c, hw + 2, 24)) blocked = true; });
+      this.enemies.children.iterate((e) => { if (inWay(e, hw + 2, 24)) blocked = true; });
+      if (blocked) { this.events.emit('toast', 'Something is blocking the garage door'); return; }
+      b.tiles.forEach((t) => this.setDoor(t.tx, t.ty, false, true));
+    }
+    b.evs.forEach((e) => e.remove(false)); b.evs = [];
+    b.state = open ? 'opening' : 'closing';
+    if (Math.hypot(this.player.x - b.cx, this.player.y - b.cy) < 520) (open ? sfx.door() : sfx.doorClose());
+    this.alertNoise(b.cx, b.cy, 110, 'step');
+    const pfx = b.texPrefix || 'fs_gdoor_';
+    const seq = open ? [1, 2, 3, 4] : [3, 2, 1, 0];
+    seq.forEach((fr, i) => b.evs.push(this.time.delayedCall(85 * (i + 1), () => {
+      if (b.img && b.img.scene) b.img.setTexture(pfx + fr);
+      if (i === seq.length - 1) {
+        if (open) b.tiles.forEach((t) => this.setDoor(t.tx, t.ty, true, true));
+        b.state = open ? 'open' : 'closed';
+      }
+    })));
   }
 
   // The safehouse front door stays locked until the story hands you the key.
@@ -1337,6 +1614,7 @@ export default class GameScene extends Phaser.Scene {
     if (!w) return null;
     const p = this.places[w.place];
     if (!p) return null;
+    if (w.place === 'reyes_office') return { x: p.x + w.off[0], y: p.y + w.off[1], place: w.place };
     const spot = this.freeSpotNear(p.x + w.off[0], p.y + w.off[1], 120) || p;
     return { x: spot.x, y: spot.y, place: w.place };
   }
@@ -1372,6 +1650,12 @@ export default class GameScene extends Phaser.Scene {
     Object.keys(this.storyNpcs).forEach((id) => {
       const n = this.storyNpcs[id];
       if (!n || !n.active) return;
+      if (n.reyesFloor && (this.reyesFloor || 1) !== n.reyesFloor) {
+        if (n.tag && n.tag.visible) n.tag.setVisible(false);
+        if (n.mark && n.mark.visible) n.mark.setVisible(false);
+        if (n.chat && n.chat.visible) n.chat.setVisible(false);
+        return;
+      }
       if (Math.abs(p.x - n.x) > 1500 || Math.abs(p.y - n.y) > 1300) { if (n.tag && n.tag.visible) n.tag.setVisible(false); if (n.mark && n.mark.visible) n.mark.setVisible(false); if (n.chat && n.chat.visible) n.chat.setVisible(false); return; }       // far away: tag, exclamation mark and chat bubble stay hidden
       if (n.tag && n.tag.text !== STORY_NPCS[id].name) n.tag.setText(STORY_NPCS[id].name);
       if (!n.tag) n.tag = this.add.text(0, 0, STORY_NPCS[id].name, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: STORY_NPCS[id].color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
@@ -1449,6 +1733,9 @@ export default class GameScene extends Phaser.Scene {
 
   // pick free walkable tiles inside a building (for quest items)
   interiorSpots(kind, n) {
+    if (kind === 'tower' && this.wd.reyes && this.wd.reyes.questSpots) {
+      return this.wd.reyes.questSpots.slice(0, n);
+    }
     const b = this.wd.buildings.find((q) => q.kind === kind);
     if (!b) return [this.places.tower];
     const cand = [];
@@ -1921,6 +2208,7 @@ export default class GameScene extends Phaser.Scene {
     }
     if (npcId === 'kenny') { this.openArms(); return; }
     if (npcId === 'ezekiel') { this.openWise(); return; }
+    if (npcId === 'mark') { this.markTalk(); return; }
     if (npcId === 'sean' || npcId === 'jiro') { this.openCasino('lobby', npcId); return; }
     if (npcId === 'gordy') { this.events.emit('toast', "Gordy: \"Take a look at the lot.\""); this.openShop('dealer', "Gordy's Used Cars"); return; }
     this.startDialogue(null, { dialogue: chatDialogue(npcId, dialogueState(this)) });
@@ -1980,8 +2268,543 @@ export default class GameScene extends Phaser.Scene {
 
   handleScript(name) {
     if (name === 'yosen_accept') { this.yosenAccepted = true; return; }
+    if (name === 'totoya_spawn') { this.spawnOrRetrieveTesla(); return; }
+    if (name && name.startsWith('totoya_repair:')) { this.repairTesla(Number(name.split(':')[1]) || 0); return; }
+    if (name && name.startsWith('reyes_floor:')) { this.transitionReyesFloor(Number(name.split(':')[1]) || 1, 'elevator'); return; }
     if (name && name.startsWith('gang')) { this.gangScript(name); return; }
     if (name === 'm7_start_chase') this.events.emit('toast', 'Sirens! Take the van and lose them!');
+  }
+
+  /* ------------------------------------------------------------- TOTOYA & Tesla Service */
+  findUniqueTesla() {
+    let found = (this.teslaVeh && this.teslaVeh.active) ? this.teslaVeh : null;
+    this.vehicles.children.iterate((v) => {
+      if (!v || !v.active) return;
+      if (v.ownedId === 'tesla_home' || v.vtype === 'tesla') {
+        if (!found) found = v;
+        else if (v !== found) {
+          // Enforce single unique Tesla invariant
+          if (this.player.vehicle === v) found = v;
+          else { v.destroyParts(); v.destroy(); }
+        }
+      }
+    });
+    this.teslaVeh = found;
+    return found;
+  }
+
+  findNonTeslaInTotoya() {
+    const p = this.player;
+    if (p.vehicle && p.vehicle.vtype !== 'tesla') return p.vehicle;
+    const g = this.wd.totoya && this.wd.totoya.garageRect;
+    if (!g) return null;
+    let other = null;
+    this.vehicles.children.iterate((v) => {
+      if (!other && v && v.active && v.vtype !== 'tesla' && v.x >= g.x0 && v.x <= g.x1 && v.y >= g.y0 && v.y <= g.y1) other = v;
+    });
+    return other;
+  }
+
+  markTalk() {
+    const tt = this.wd.totoya;
+    if (!tt) return;
+    const bay = tt.bay, gRect = tt.garageRect, p = this.player;
+    const tesla = this.findUniqueTesla();
+    const atBay = !!(tesla && tesla.active && !tesla.wrecked && bay && Math.hypot(tesla.x - bay.x, tesla.y - bay.y) < 76);
+    const inTotoya = !!(tesla && tesla.active && gRect && tesla.x >= gRect.x0 - 32 && tesla.x <= gRect.x1 + 32 && tesla.y >= gRect.y0 - 16 && tesla.y <= gRect.y1 + 64);
+    const nonTesla = this.findNonTeslaInTotoya();
+
+    const maxHp = (tesla && tesla.maxHp) || VEHICLES.tesla.hp;
+    const curHp = tesla ? Math.max(0, Math.round(tesla.hp)) : (profile.flags.teslaSaved ? Math.round(profile.flags.teslaSaved.hp ?? maxHp) : maxHp);
+    const needsRepair = !!(tesla && tesla.active && (tesla.hp < tesla.maxHp - 0.5 || tesla.wrecked));
+    const dmg = tesla ? Math.max(0, tesla.maxHp - Math.max(0, tesla.hp)) : 0;
+    const repairCost = needsRepair ? Math.max(30, Math.ceil(dmg * 1.5)) : 0;
+
+    let greet;
+    if (p.vehicle && p.vehicle.vtype !== 'tesla') {
+      const vName = (VEHICLES[p.vehicle.vtype] && VEHICLES[p.vehicle.vtype].name) || 'vehicle';
+      greet = `Hold up! I'm Mark Sterling, owner of TOTOYA. That ${vName} runs on combustion — TOTOYA only services Tesla vehicles. Your Tesla is ready. Want me to bring it out?`;
+    } else if (!tesla) {
+      greet = "Welcome to TOTOYA! I'm Mark Sterling. We're Port City's exclusive Tesla service workshop. Your Tesla is ready. Want me to bring it out?";
+    } else if (inTotoya && needsRepair) {
+      greet = `Welcome back to TOTOYA! Your Tesla is in the service bay at ${curHp}/${maxHp} HP. I can run a full high-voltage battery & body restoration for $${repairCost}. Your Tesla is ready — how can I help?`;
+    } else if (atBay) {
+      greet = `Good to see you! Your Tesla is parked right here in the TOTOYA service bay at ${curHp}/${maxHp} HP and ready for the road. What can I do for you?`;
+    } else {
+      greet = "Welcome to TOTOYA! I'm Mark Sterling. We're the only shop in Port City certified for Tesla repairs and retrieval. Your Tesla is ready. Want me to bring it out?";
+    }
+
+    const choices = [
+      { text: 'Spawn / Retrieve My Tesla', next: 'spawn' }
+    ];
+
+    if (tesla && inTotoya && needsRepair) {
+      choices.push({ text: `Repair My Tesla ($${repairCost})`, next: 'repair_ask' });
+    } else if (nonTesla && (!tesla || !inTotoya)) {
+      const vName = (VEHICLES[nonTesla.vtype] && VEHICLES[nonTesla.vtype].name) || 'Car';
+      choices.push({ text: `Repair this ${vName}`, next: 'non_tesla' });
+    } else if (tesla && inTotoya && !needsRepair) {
+      choices.push({ text: 'Repair My Tesla (Already 100% HP)', next: 'repair_full' });
+    } else {
+      choices.push({ text: 'Repair My Tesla', next: nonTesla ? 'non_tesla' : 'repair_bring' });
+    }
+
+    choices.push(
+      { text: "About TOTOYA's Tesla Services", next: 'about' },
+      { text: 'Leave', next: 'bye' }
+    );
+
+    const nodes = {
+      a: { who: 'mark', text: greet, choices },
+      spawn: atBay && p.vehicle !== tesla
+        ? { who: 'mark', text: "Your Tesla is already sitting right here in the TOTOYA service bay! No need to bring out another — hop in whenever you're ready.", next: 'a' }
+        : { who: 'mark', text: tesla
+          ? "Consider it done. I've recalled your Tesla from its previous location and positioned it right here in the TOTOYA service bay."
+          : "Here she is! I've brought your unique Tesla out into the TOTOYA service bay. She's all yours.",
+          effects: { event: 'totoya_spawn' }, end: true },
+      repair_ask: {
+        who: 'mark',
+        text: `Full Tesla diagnostic, battery pack balancing, and structural repair will cost $${repairCost} (restores ${curHp}/${maxHp} HP to ${maxHp}/${maxHp} HP). Would you like me to start the repair?`,
+        choices: [
+          { text: `Confirm Repair ($${repairCost})`, next: profile.money >= repairCost ? 'repair_ok' : 'repair_poor' },
+          { text: 'Cancel', next: 'a' }
+        ]
+      },
+      repair_ok: {
+        who: 'mark',
+        text: `All finished! High-voltage pack is balanced, dual motors are calibrated, and the bodywork is spotless. Your Tesla is back to ${maxHp}/${maxHp} HP.`,
+        effects: { event: 'totoya_repair:' + repairCost },
+        end: true
+      },
+      repair_poor: {
+        who: 'mark',
+        text: `The parts and calibration come to $${repairCost}, and you only have $${Math.floor(profile.money)} on you. Come back when you've got the cash!`,
+        next: 'a'
+      },
+      repair_full: {
+        who: 'mark',
+        text: `I just ran a full diagnostic on your Tesla — she's already at 100% health (${maxHp}/${maxHp} HP). You don't owe me a dime!`,
+        next: 'a'
+      },
+      repair_bring: {
+        who: 'mark',
+        text: "To repair your Tesla, drive it into the TOTOYA garage bay — or choose 'Spawn / Retrieve My Tesla' first so I can bring it into the bay for you!",
+        next: 'a'
+      },
+      non_tesla: {
+        who: 'mark',
+        text: "Sorry, friend — TOTOYA only services Tesla vehicles! We don't work on regular gas cars, police cruisers, or trucks. Bring your Tesla into the bay and I'll take care of her.",
+        next: 'a'
+      },
+      about: {
+        who: 'mark',
+        text: "Gas stations around Port City only pump fuel now — they don't do vehicle repairs anymore. TOTOYA is the city's dedicated Tesla facility: we're the only shop that repairs Teslas, and I can retrieve your personal Tesla straight to our service bay anytime.",
+        next: 'a'
+      },
+      bye: {
+        who: 'mark',
+        text: "Drive safe out there! Whenever you need your Tesla retrieved or repaired, TOTOYA's bay doors are open.",
+        end: true
+      }
+    };
+
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  spawnOrRetrieveTesla() {
+    const tt = this.wd.totoya;
+    if (!tt || !tt.bay) return;
+    const bay = tt.bay, p = this.player;
+    const existing = this.findUniqueTesla();
+
+    // If the single unique Tesla is already parked in the bay and the player is not inside it, do not spawn another copy
+    if (existing && existing.active && !existing.wrecked && p.vehicle !== existing && Math.hypot(existing.x - bay.x, existing.y - bay.y) < 76) {
+      existing.setPosition(bay.x, bay.y);
+      existing.heading = bay.heading;
+      existing.speed = 0; existing.kv.x = 0; existing.kv.y = 0;
+      existing.refreshView(true);
+      const dy = existing.body.center.y - existing.y, dx = existing.body.center.x - existing.x;
+      existing.body.reset(existing.x - dx, existing.y - dy);
+      this.events.emit('toast', 'Your Tesla is already in the TOTOYA service bay');
+      return;
+    }
+
+    // Preserve the existing Tesla's condition (unless repaired)
+    let hp = VEHICLES.tesla.hp, fuel = 100;
+    if (existing) {
+      hp = existing.wrecked || existing.hp <= 0 ? 25 : Math.round(existing.hp);
+      fuel = Math.max(15, Math.round(existing.fuel ?? 100));
+    } else if (profile.flags.teslaSaved) {
+      hp = (profile.flags.teslaSaved.hp ?? VEHICLES.tesla.hp) <= 0 ? 25 : Math.round(profile.flags.teslaSaved.hp ?? VEHICLES.tesla.hp);
+      fuel = Math.max(15, Math.round(profile.flags.teslaSaved.fuel ?? 100));
+    } else {
+      const rec = (profile.ownedVehicles || []).find((o) => o.id === 'tesla_home' || o.type === 'tesla');
+      if (rec) {
+        hp = (rec.hp ?? VEHICLES.tesla.hp) <= 0 ? 25 : Math.round(rec.hp ?? VEHICLES.tesla.hp);
+        fuel = Math.max(15, Math.round(rec.fuel ?? 100));
+      }
+    }
+
+    // If the player was sitting inside a vehicle in the bay, exit first
+    if (p.vehicle && (p.vehicle === existing || Math.hypot(p.vehicle.x - bay.x, p.vehicle.y - bay.y) < 90)) {
+      this.exitVehicle(true);
+    }
+
+    // Despawn ALL existing Tesla instances in the world so only ONE unique Tesla ever exists
+    const toDestroy = [];
+    this.vehicles.children.iterate((v) => {
+      if (v && v.active && (v.ownedId === 'tesla_home' || v.vtype === 'tesla')) toDestroy.push(v);
+    });
+    toDestroy.forEach((v) => {
+      if (p.vehicle === v) this.exitVehicle(true);
+      v.destroyParts();
+      v.destroy();
+    });
+    this.teslaVeh = null;
+
+    // Move any non-Tesla vehicle blocking the TOTOYA bay out to the driveway
+    this.vehicles.children.iterate((v) => {
+      if (v && v.active && Math.hypot(v.x - bay.x, v.y - bay.y) < 78) {
+        const outX = (tt.X + tt.W + 3.5) * TILE, outY = (tt.Y + 13) * TILE;
+        v.setPosition(outX, outY);
+        v.body.reset(outX, outY);
+      }
+    });
+
+    // Ensure the player on foot isn't standing directly inside the bay spawn footprint
+    if (!p.vehicle && Math.hypot(p.x - bay.x, p.y - bay.y) < 44) {
+      const safeX = bay.x - 56, safeY = bay.y;
+      p.setPosition(safeX, safeY);
+      p.body.reset(safeX, safeY);
+    }
+
+    // Spawn the single unique Tesla in the TOTOYA service bay
+    const veh = this.spawnVehicle({
+      type: 'tesla',
+      variant: 0,
+      x: bay.x,
+      y: bay.y,
+      heading: bay.heading,
+      hp,
+      fuel,
+      mode: 'parked',
+      ownedId: 'tesla_home',
+      locked: true
+    });
+    const dy = veh.body.center.y - veh.y, dx = veh.body.center.x - veh.x;
+    veh.body.reset(veh.x - dx, veh.y - dy);
+
+    this.teslaVeh = veh;
+    profile.flags.tesla = true;
+    profile.flags.teslaSpawned = true;
+    profile.flags.teslaSaved = { hp: Math.round(veh.hp), fuel: Math.round(veh.fuel) };
+    if (this.totoyaBay && this.totoyaBay.state === 'closed') this.toggleFireBay(this.totoyaBay);
+    this.collectOwnedVehicles();
+    sfx.doorSlam();
+    this.events.emit('toast', 'Mark brought your Tesla into the TOTOYA service bay!');
+  }
+
+  repairTesla(cost) {
+    const tesla = this.findUniqueTesla();
+    if (!tesla || !tesla.active) {
+      this.events.emit('toast', 'Bring or spawn your Tesla into the bay first!');
+      return;
+    }
+    if (profile.money < cost) {
+      this.events.emit('toast', `Not enough cash ($${cost} needed)`);
+      return;
+    }
+    profile.money -= cost;
+    tesla.repair();
+    profile.flags.teslaSaved = { hp: Math.round(tesla.hp), fuel: Math.round(tesla.fuel) };
+    this.collectOwnedVehicles();
+    sfx.heal();
+    this.events.emit('profile');
+    this.events.emit('toast', `Tesla repaired to 100% HP (-$${cost})`);
+  }
+
+  /* ------------------------------------------------------------- REYES HOLDINGS TOWER (4 Connected Floors) */
+  inReyesTower(p = this.player) {
+    const ry = this.wd && this.wd.reyes;
+    if (!ry || !p) return false;
+    return p.x >= ry.X * TILE && p.x < (ry.X + ry.W) * TILE && p.y >= ry.Y * TILE && p.y < (ry.Y + ry.H) * TILE;
+  }
+
+  setReyesFloor(targetFloor) {
+    const ry = this.wd && this.wd.reyes;
+    if (!ry || !ry.floors || !ry.floors[targetFloor]) return;
+    const fl = ry.floors[targetFloor];
+    this.reyesFloor = targetFloor;
+    const RX = ry.X, RY = ry.Y, RW = ry.W, RH = ry.H;
+    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
+
+    // 1. Update ground & object tiles for the unified tower footprint
+    for (let ly = 0; ly < RH; ly++) {
+      for (let lx = 0; lx < RW; lx++) {
+        const tx = RX + lx, ty = RY + ly, i = ty * W + tx;
+        const gIdx = fl.ground[ly][lx];
+        this.wd.ground[ty][tx] = gIdx;
+        this.groundLayer.putTileAt(gIdx, tx, ty);
+
+        let oIdx = fl.obj[ly][lx];
+        // Convert interior wall tiles to cap tiles where another wall cell sits immediately south
+        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass) {
+          const southObj = ly + 1 < RH ? fl.obj[ly + 1][lx] : this.wd.obj[ty + 1]?.[tx];
+          if (WALL_FAMILY.has(southObj)) {
+            oIdx = oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
+          }
+        }
+        this.wd.obj[ty][tx] = oIdx;
+
+        if (oIdx >= 0) {
+          const tile = this.objLayer.putTileAt(oIdx, tx, ty);
+          if (tile) {
+            const collide = SOLID.has(oIdx);
+            tile.setCollision(collide, collide, collide, collide);
+            tile.alpha = WALL_TOPS.has(oIdx) ? 1 : 0;
+          }
+        } else {
+          this.objLayer.removeTileAt(tx, ty);
+        }
+
+        // Reset wall & furniture rendering flags for this cell
+        this.isWall[i] = 0;
+        this.isLow[i] = 0;
+        this.wallFace[i] = 0;
+        this.noFace[i] = 0;
+        if (this.doorSkin) this.doorSkin.delete(i);
+
+        if (this.lowH && this.lowH.has(oIdx)) {
+          this.isLow[i] = 1;
+          this.wallFace[i] = oIdx;
+        } else if (WALL_FAMILY.has(oIdx)) {
+          this.isWall[i] = 1;
+          this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
+          if ((ly === 0 || ly === RH - 1) && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.wallCap || oIdx === T.wall2Cap)) {
+            this.wallFace[i] = T.facPolice;
+          }
+        }
+        this.refreshCell(tx, ty);
+      }
+    }
+
+    // 2. Apply floor-specific wall & interior door skins
+    (fl.skins || []).forEach((s) => {
+      const tx = RX + s.lx, ty = RY + s.ly, i = ty * W + tx;
+      if (s.doorSkin && this.doorSkin) {
+        this.doorSkin.set(i, s.doorSkin);
+        if (this.isWall[i]) this.wallFace[i] = this.wd.obj[ty][tx] === T.doorOpen ? s.doorSkin[1] : s.doorSkin[0];
+      } else if (s.face !== undefined && this.isWall[i]) {
+        this.wallFace[i] = s.face;
+      }
+      if (s.noFace) this.noFace[i] = 1;
+    });
+
+    // 3. Toggle front double glass door sprite (active on 1F, replaced by upper-floor curtain wall windows on 2F-4F)
+    if (this.reyesDoor && this.reyesDoor.img) {
+      this.reyesDoor.img.setVisible(targetFloor === 1);
+    }
+
+    // 4. Toggle floor-tagged rugs and 3D decor items across active chunks
+    this.chunks.forEach((c) => {
+      for (const it of c.items) {
+        if (it.reyesFloor) {
+          it.hidden = it.reyesFloor !== targetFloor;
+          if (it.im) it.im.setVisible(!it.hidden);
+        }
+      }
+    });
+
+    // 5. Toggle floor-tagged upright wall decorations (logos, elevator doors, staircases, boards, clocks)
+    if (this.reyesFloorDecs) {
+      this.reyesFloorDecs.forEach((d) => {
+        if (d.img) d.img.setVisible(d.reyesFloor === targetFloor);
+      });
+    }
+
+    // 6. Wake NPCs on the active floor and hide NPCs on inactive floors
+    this.civilians.children.iterate((c) => {
+      if (!c || !c.reyesFloor || c.dead) return;
+      if (c.reyesFloor === targetFloor) {
+        c.sleeping = false;
+        c.body.enable = true;
+        c.setVisible(true);
+        c.shadow.setVisible(true);
+      } else {
+        c.sleeping = true;
+        c.stop();
+        c.body.enable = false;
+        c.setVisible(false);
+        c.shadow.setVisible(false);
+        if (c.carryImg) c.carryImg.setVisible(false);
+      }
+    });
+
+    this.wallBuild.dirty = true;
+  }
+
+  transitionReyesFloor(targetFloor, via = 'elevator') {
+    const ry = this.wd && this.wd.reyes;
+    if (!ry || this.stairBusy || this.over) return;
+    const fl = ry.floors && ry.floors[targetFloor];
+    if (!fl) return;
+    if (targetFloor === (this.reyesFloor || 1)) {
+      this.events.emit('toast', `You are already on Floor ${targetFloor}F`);
+      return;
+    }
+    const cam = this.cameras.main;
+    this.stairBusy = true;
+    sfx.door();
+    cam.fadeOut(220, 0, 0, 0);
+    this.time.delayedCall(240, () => {
+      this.setReyesFloor(targetFloor);
+      const p = this.player;
+      let destX = ry.elevator.x, destY = ry.elevator.arriveY;
+      if (via === 'stairsUp') {
+        destX = targetFloor > 1 ? ry.stairsDown.x : ry.elevator.x;
+        destY = ry.stairsDown.arriveY;
+      } else if (via === 'stairsDown') {
+        destX = targetFloor < 4 ? ry.stairsUp.x : ry.elevator.x;
+        destY = ry.stairsUp.arriveY;
+      }
+      p.setPosition(destX, destY);
+      p.body.reset(destX, destY);
+      p.setVelocity(0, 0);
+      cam.fadeIn(250, 0, 0, 0);
+      this.events.emit('banner', {
+        title: fl.name,
+        sub: fl.subtitle,
+        color: '#ffd870'
+      });
+      this.time.delayedCall(280, () => {
+        this.stairBusy = false;
+      });
+    });
+  }
+
+  openReyesElevator() {
+    const cur = this.reyesFloor || 1;
+    const floorLabels = [
+      [1, '1F — Main Corporate Lobby (Reception & Plaza Exit)'],
+      [2, '2F — Corporate Offices (Workspaces & Meeting Rooms)'],
+      [3, '3F — Executive Department (Boardroom & Server Vault)'],
+      [4, "4F — Penthouse Office (Councilman Aurelio Reyes)"]
+    ];
+    const choices = floorLabels.map(([fl, label]) => ({
+      text: fl === cur ? `${label} [Current Floor]` : label,
+      next: fl === cur ? 'same' : `go_${fl}`
+    }));
+    choices.push({ text: 'Step Back', next: 'bye' });
+
+    const nodes = {
+      a: {
+        who: 'player',
+        text: `REYES HOLDINGS TOWER — EXPRESS ELEVATOR\nCurrent Floor: ${cur}F. Select a destination floor:`,
+        choices
+      },
+      same: {
+        who: 'player',
+        text: `You are already on Floor ${cur}F.`,
+        end: true
+      },
+      go_1: { who: 'player', text: 'Elevator descending to 1F — Main Corporate Lobby...', effects: { event: 'reyes_floor:1' }, end: true },
+      go_2: { who: 'player', text: `Elevator ${cur < 2 ? 'ascending' : 'descending'} to 2F — Corporate Offices...`, effects: { event: 'reyes_floor:2' }, end: true },
+      go_3: { who: 'player', text: `Elevator ${cur < 3 ? 'ascending' : 'descending'} to 3F — Executive Department...`, effects: { event: 'reyes_floor:3' }, end: true },
+      go_4: { who: 'player', text: "Elevator ascending to 4F — Councilman Reyes' Private Penthouse...", effects: { event: 'reyes_floor:4' }, end: true },
+      bye: { who: 'player', text: 'You step away from the elevator panel.', end: true }
+    };
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  reyesReceptionistTalk() {
+    const nodes = {
+      a: {
+        who: 'civilian',
+        text: "Welcome to Reyes Holdings Tower, Port City's premier corporate headquarters. How may I direct you today?",
+        choices: [
+          { text: 'Tell me about the floors in this tower.', next: 'directory' },
+          { text: 'Where can I find Councilman Reyes?', next: 'reyes_info' },
+          { text: 'Take the elevator to an upper floor.', next: 'elev' },
+          { text: 'Thank you.', next: 'bye' }
+        ]
+      },
+      directory: {
+        who: 'civilian',
+        text: "1F is our Main Corporate Lobby and Security Checkpoint. 2F houses Corporate Operations and Glass Meeting Rooms. 3F is the Executive Department, Grand Boardroom, and Records Vault. 4F is Councilman Reyes' Private Penthouse Office.",
+        next: 'a'
+      },
+      reyes_info: {
+        who: 'civilian',
+        text: 'Councilman Aurelio Reyes works from his private Penthouse Suite on the 4th Floor. You can take the central Elevator or the Staircase behind the security checkpoint right up to 4F.',
+        next: 'a'
+      },
+      elev: {
+        who: 'civilian',
+        text: 'Right through the security arch behind me — the express elevator and staircases connect all four floors.',
+        choices: [
+          { text: 'Go to 2F — Corporate Offices', next: 'go2' },
+          { text: 'Go to 3F — Executive Department', next: 'go3' },
+          { text: "Go to 4F — Councilman Reyes' Penthouse", next: 'go4' },
+          { text: 'Stay in 1F Lobby', next: 'bye' }
+        ]
+      },
+      go2: { who: 'civilian', text: 'Sending you up to 2F — Corporate Offices.', effects: { event: 'reyes_floor:2' }, end: true },
+      go3: { who: 'civilian', text: 'Sending you up to 3F — Executive Department.', effects: { event: 'reyes_floor:3' }, end: true },
+      go4: { who: 'civilian', text: "Sending you up to 4F — Councilman Reyes' Penthouse.", effects: { event: 'reyes_floor:4' }, end: true },
+      bye: {
+        who: 'civilian',
+        text: 'Enjoy your visit to Reyes Holdings Tower.',
+        end: true
+      }
+    };
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  reyesDoorTick(now) {
+    const d = this.reyesDoor;
+    if (!d || (this.reyesFloor || 1) !== 1 || now - (d.chk || 0) < 120) return;
+    d.chk = now;
+    const cx = (d.t0.tx + 1) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 68, R_HOLD = 82;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => { if (!hit && c && c.state !== 'inside' && (!c.reyesFloor || c.reyesFloor === 1) && near(c, r)) hit = true; });
+      return hit;
+    };
+    if (d.state === 'closed') {
+      if (anyNear(R_OPEN)) this.reyesDoorSet(true);
+    } else if (d.state === 'open') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (now - d.nearAt > 1800) this.reyesDoorSet(false);
+    }
+  }
+
+  reyesDoorSet(open) {
+    const d = this.reyesDoor;
+    if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    d.nearAt = this.gt;
+    if ((this.reyesFloor || 1) === 1) {
+      this.setDoor(d.t0.tx, d.t0.ty, open, true);
+      this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    }
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture('reyes_door_' + fr);
+      if (i === seq.length - 1) d.state = open ? 'open' : 'closed';
+    })));
+  }
+
+  reyesTick(now) {
+    if (!this.wd || !this.wd.reyes || this.stairBusy || now - (this.ryChk || 0) < 350) return;
+    this.ryChk = now;
+    if ((this.reyesFloor || 1) !== 1 && !this.inReyesTower(this.player)) {
+      this.setReyesFloor(1);
+    }
   }
 
   missionEvent(name, payload) { if (this.missions) this.missions.onEvent(name, payload); }
@@ -2075,10 +2898,19 @@ export default class GameScene extends Phaser.Scene {
   collectOwnedVehicles() {
     const out = [];
     this.vehicles.children.iterate((v) => {
-      if (v && v.active && v.ownedId) out.push({ id: v.ownedId, type: v.vtype, variant: v.variant, x: Math.round(v.x), y: Math.round(v.y), heading: v.heading, hp: Math.round(v.hp), fuel: Math.round(v.fuel) });
+      if (v && v.active && v.ownedId) {
+        if (v.ownedId === 'tesla_home') {
+          if (out.some((q) => q.id === 'tesla_home')) return;
+          profile.flags.teslaSaved = { hp: Math.round(v.hp), fuel: Math.round(v.fuel) };
+        }
+        out.push({ id: v.ownedId, type: v.vtype, variant: v.variant, x: Math.round(v.x), y: Math.round(v.y), heading: v.heading, hp: Math.round(v.hp), fuel: Math.round(v.fuel) });
+      }
     });
-    // owned vehicles that are not loaded keep their old record
-    (profile.ownedVehicles || []).forEach((o) => { if (!out.find((q) => q.id === o.id)) out.push(o); });
+    // owned vehicles that are not loaded keep their old record (only keep tesla_home if it has been spawned via Mark)
+    (profile.ownedVehicles || []).forEach((o) => {
+      if (o.id === 'tesla_home' && !profile.flags.teslaSpawned) return;
+      if (!out.find((q) => q.id === o.id)) out.push(o);
+    });
     profile.ownedVehicles = out;
     return out;
   }
@@ -2795,6 +3627,56 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       }
       this.bankHeist.lootTargets(p, consider);
     }
+    if (this.wd.reyes && !p.vehicle && this.inReyesTower(p)) {
+      const ry = this.wd.reyes;
+      const curFl = this.reyesFloor || 1;
+      const de = Math.hypot(ry.elevator.x - p.x, ry.elevator.y - p.y);
+      if (de < 52) {
+        consider(de - 4, {
+          kind: 'reyes_elev',
+          x: ry.elevator.x,
+          y: ry.elevator.y,
+          label: `Use Elevator (${curFl}F)`,
+          rawLabel: `Press E to Use Elevator (${curFl}F)`
+        });
+      }
+      if (curFl < 4) {
+        const du = Math.hypot(ry.stairsUp.x - p.x, ry.stairsUp.y - p.y);
+        if (du < 48) {
+          consider(du - 3, {
+            kind: 'reyes_stairs_up',
+            x: ry.stairsUp.x,
+            y: ry.stairsUp.y,
+            label: `Take Stairs Up to ${curFl + 1}F`,
+            rawLabel: `Press E to Take Stairs Up to ${curFl + 1}F`
+          });
+        }
+      }
+      if (curFl > 1) {
+        const dd = Math.hypot(ry.stairsDown.x - p.x, ry.stairsDown.y - p.y);
+        if (dd < 48) {
+          consider(dd - 3, {
+            kind: 'reyes_stairs_down',
+            x: ry.stairsDown.x,
+            y: ry.stairsDown.y,
+            label: `Take Stairs Down to ${curFl - 1}F`,
+            rawLabel: `Press E to Take Stairs Down to ${curFl - 1}F`
+          });
+        }
+      }
+      if (curFl === 1 && ry.receptionistSpot) {
+        const dr = Math.hypot(ry.receptionistSpot.x - p.x, ry.receptionistSpot.y - p.y);
+        if (dr < 54) {
+          consider(dr, {
+            kind: 'reyes_reception',
+            x: ry.receptionistSpot.x,
+            y: ry.receptionistSpot.y - 24,
+            label: 'Speak with Receptionist',
+            rawLabel: 'Press E to Speak with Receptionist'
+          });
+        }
+      }
+    }
     for (const dr of this.wd.doors) {
       const cx = dr.x * TILE + TILE / 2, cy = dr.y * TILE + TILE / 2;
       const d = Math.hypot(cx - p.x, cy - p.y);
@@ -2802,6 +3684,18 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         const locked = this.lockedDoors.has(dr.y * W + dr.x);
         const bk = this.bankHeist && this.bankHeist.wd && this.bankHeist.doorHandled(dr.y * W + dr.x) && (locked || this.bankHeist.keys.vault.includes(dr.y * W + dr.x)) ? this.bankHeist.doorLabel(dr.y * W + dr.x) : null;
         consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: bk ? bk : locked ? ((this.casinoGateKeys || []).some((g) => g.key === dr.y * W + dr.x) ? 'Private room (VIP Gold only)' : 'Locked door') : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
+      }
+    }
+    if (this.fireBays) {
+      for (const b of this.fireBays) {
+        if (b.state !== 'closed' && b.state !== 'open') continue;
+        const hw = b.halfW || 80;
+        const dx = Math.max(0, Math.abs(p.x - b.cx) - (hw - 16)), dy = Math.abs(p.y - b.cy), d = Math.hypot(dx, dy);
+        if (d < 64 && Math.abs(p.x - b.cx) < hw + 12) {
+          const act = b.state === 'closed' ? 'Open' : 'Close';
+          const lbl = b.promptLabel || 'Garage Door';
+          consider(d, { kind: 'firebay', ref: b, halfW: hw, x: b.cx, y: b.cy, label: `${act} ${lbl}`, rawLabel: `Press E to ${act} ${lbl}` });
+        }
       }
     }
     this.vehicles.children.iterate((v) => {
@@ -2812,10 +3706,30 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c.state === 'flee' || c.state === 'phone') return;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d > (c.npcId === 'ezekiel' ? 74 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;                // Ezekiel stands behind his counter: he can be talked to from the front of it
+      if (d > (c.npcId === 'ezekiel' ? 74 : (c.npcId === 'mark' || c.npcId === 'reyes' || c.isReceptionist) ? 84 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;                // Ezekiel stands behind his counter; Mark & Reyes can be talked to across their desks
       if (c.kind === 'story') {
         if (c.npcId === 'fare') return;
-        consider(d + 4, { kind: 'story', ref: c, x: c.x, y: c.y, label: `Talk to ${this.npcName(c.npcId)}` });
+        const isMark = c.npcId === 'mark';
+        const isReyes = c.npcId === 'reyes';
+        consider(d + 4, {
+          kind: 'story',
+          ref: c,
+          x: c.x,
+          y: c.y,
+          label: isMark ? 'Talk to Mark' : isReyes ? 'Talk to Councilman Reyes' : `Talk to ${this.npcName(c.npcId)}`,
+          rawLabel: isMark ? 'Press E to Talk to Mark' : isReyes ? 'Press E to Talk to Councilman Reyes' : undefined
+        });
+      } else if (c.isReceptionist) {
+        if (d < 84) {
+          consider(d + 4, {
+            kind: 'reyes_reception',
+            ref: c,
+            x: c.x,
+            y: c.y,
+            label: 'Speak with Receptionist',
+            rawLabel: 'Press E to Speak with Receptionist'
+          });
+        }
       } else if (c.kind === 'shopkeeper') {
         if (p.y < c.y + 8 || Math.abs(p.x - c.x) > 80) return;                  // only from the customer side of the counter (never through the back wall, shelves or the side units)
         consider(d + 6, { kind: 'shop', ref: c, x: c.x, y: c.y, label: `Browse ${c.shopName || 'shop'}` });
@@ -2881,6 +3795,14 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       else this.bankHeist.startRobbery();
     } else if (t.kind === 'bankloot') {
       this.bankHeist.take(t.ref);
+    } else if (t.kind === 'reyes_elev') {
+      this.openReyesElevator();
+    } else if (t.kind === 'reyes_stairs_up') {
+      this.transitionReyesFloor((this.reyesFloor || 1) + 1, 'stairsUp');
+    } else if (t.kind === 'reyes_stairs_down') {
+      this.transitionReyesFloor((this.reyesFloor || 1) - 1, 'stairsDown');
+    } else if (t.kind === 'reyes_reception') {
+      this.reyesReceptionistTalk();
     } else if (t.kind === 'crate') {
       this.openCrate(t.ref);
     } else if (t.kind === 'container') {
@@ -2910,6 +3832,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       t.ref.playerHitAt = this.gt;
       t.ref.die(true);
       this.events.emit('toast', 'Silent takedown');
+    } else if (t.kind === 'firebay') {
+      p.pickupUntil = this.gt + 320;
+      this.toggleFireBay(t.ref);
     } else if (t.kind === 'door') {
       p.pickupUntil = this.gt + 320;
       const { x, y } = t.ref;
@@ -3077,7 +4002,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
-    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.storeDoorTick(now); this.policeDoorTick(now); this.policeStaffTick(now); this.casinoDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.storeDoorTick(now); this.policeDoorTick(now); this.policeStaffTick(now); this.casinoDoorTick(now); this.reyesTick(now); this.reyesDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;
@@ -3111,6 +4036,11 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (this.casinoSign) this.casinoSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.bankSign) this.bankSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.bankExt && this.bankExtIn !== this.insideBuilding) { this.bankExtIn = this.insideBuilding; this.bankExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
+    if (this.fireExt && this.fireExtIn !== this.insideBuilding) { this.fireExtIn = this.insideBuilding; this.fireExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
+    if (this.totoyaSign) this.totoyaSign.setAlpha(this.insideBuilding ? 0.1 : 1);
+    if (this.totoyaExt && this.totoyaExtIn !== this.insideBuilding) { this.totoyaExtIn = this.insideBuilding; this.totoyaExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
+    if (this.reyesSign) this.reyesSign.setAlpha(this.insideBuilding ? 0.08 : 1);
+    if (this.reyesExt && this.reyesExtIn !== this.insideBuilding) { this.reyesExtIn = this.insideBuilding; this.reyesExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.08 : 1)); }
     if (this.casinoExt && this.casinoExt.length && this.casinoExtIn !== this.insideBuilding) { this.casinoExtIn = this.insideBuilding; this.casinoExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }       // keep the big storefront sign out of the way indoors
 
     this.updateCamera(now, Math.min(delta, 250), aimWorld);       // the camera eases with the REAL frame time (dt is capped at 50 ms for the game logic, so on a slow frame the player used to outrun the camera)
@@ -3185,8 +4115,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       this.gfx.lineStyle(2, 0xffffff, 0.75);
       if (it.kind === 'item') this.gfx.strokeEllipse(it.x, it.y, 34, 14);
       else if (it.kind === 'vehicle') this.gfx.strokeEllipse(it.x, it.y + 6, 60, 24);
+      else if (it.kind === 'firebay') { const hw = it.halfW || 80; this.gfx.strokeRect(it.x - hw, it.y - 16, hw * 2, 32); }
       else this.gfx.strokeRect(it.x - 18, it.y - 18, 36, 36);
-      const pressed = Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('interact');
+      const pressed = Phaser.Input.Keyboard.JustDown(k.F) || Phaser.Input.Keyboard.JustDown(k.E) || consumeAction('interact');
       const held = (k.F.isDown || touch.interactHeld) && it.kind === 'item' && now - this.lastPick > 180;
       if (pressed || held) { this.lastPick = now; this.doInteract(it); }
     }
@@ -3209,23 +4140,33 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
     if (Phaser.Input.Keyboard.JustDown(k.F) || consumeAction('interact')) { this.exitVehicle(); if (!p.vehicle) return; }
 
-    // refuel (hold F / FUEL) and repair (R) at a gas station
+    // refuel (hold G / FUEL) at a gas station (fuel only; no repair service at gas stations)
     const pump = this.nearestPump(v);
-    this.interact = { kind: 'drive', label: 'Exit vehicle', x: v.x, y: v.y };
+    let nearBay = null, nearBayD = 116;
+    if (this.fireBays) for (const b of this.fireBays) {
+      if (b.state !== 'closed' && b.state !== 'open') continue;
+      const hw = b.halfW || 80;
+      const d = Math.hypot(Math.max(0, Math.abs(v.x - b.cx) - (hw - 32)), v.y - b.cy);
+      if (d < nearBayD && Math.abs(v.x - b.cx) < hw + 12) { nearBayD = d; nearBay = b; }
+    }
+    const tt = this.wd.totoya, gRect = tt && tt.garageRect;
+    const inTotoyaBay = !!(gRect && Math.abs(v.speed) < 45 && v.x >= gRect.x0 && v.x <= gRect.x1 && v.y >= gRect.y0 && v.y <= gRect.y1);
+    if (nearBay) {
+      const act = nearBay.state === 'closed' ? 'Open' : 'Close';
+      const lbl = nearBay.promptLabel || 'Garage Door';
+      this.interact = { kind: 'firebay', ref: nearBay, label: `${act} ${lbl}`, rawLabel: `Press E to ${act} ${lbl}`, x: nearBay.cx, y: nearBay.cy };
+      if (Phaser.Input.Keyboard.JustDown(k.E)) this.toggleFireBay(nearBay);
+    } else if (inTotoyaBay) {
+      this.interact = { kind: 'drive', label: 'Talk to Mark', rawLabel: 'Press E to Talk to Mark', x: tt.mark.x, y: tt.mark.y };
+      if (Phaser.Input.Keyboard.JustDown(k.E)) this.markTalk();
+    } else this.interact = { kind: 'drive', label: 'Exit vehicle', x: v.x, y: v.y };
     if (pump && Math.abs(v.speed) < 40) {
       if (v.fuel < 99) this.interact = { kind: 'drive', label: 'Hold G to refuel ($1 per 2 units)', x: v.x, y: v.y };
-      else if (v.hp < v.maxHp) this.interact = { kind: 'drive', label: `Press R to repair ($${Math.ceil((v.maxHp - v.hp) * 0.9)})`, x: v.x, y: v.y };
       if ((k.G.isDown || touch.refuel) && v.fuel < 100) {
         const add = Math.min(100 - v.fuel, 26 * dt / 1000);
         const cost = add * 0.5;
         if (profile.money >= cost) { v.fuel += add; profile.money -= cost; this.events.emit('profile'); if (now - this.refuelMsgAt > 600) { this.refuelMsgAt = now; sfx.click(); } }
         else if (now - this.refuelMsgAt > 1500) { this.refuelMsgAt = now; this.events.emit('toast', 'Not enough money for fuel'); }
-      }
-      if (Phaser.Input.Keyboard.JustDown(k.R) || consumeAction('repair')) {
-        const cost = Math.ceil((v.maxHp - v.hp) * 0.9);
-        if (v.hp >= v.maxHp) this.events.emit('toast', 'No repairs needed');
-        else if (profile.money < cost) this.events.emit('toast', `Repairs cost $${cost}`);
-        else { profile.money -= cost; v.repair(); sfx.heal(); this.events.emit('toast', `Vehicle repaired (-$${cost})`); this.events.emit('profile'); }
       }
     }
     if (v.fuel <= 0 && now - this.refuelMsgAt > 3000) { this.refuelMsgAt = now; this.events.emit('toast', 'Out of fuel! Walk to a gas station or wait for a pump...'); }
@@ -3347,7 +4288,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       [T.tree]: '#1c3d1c', [T.fence]: '#b0b0b0', [T.barricade]: '#8a5a2a', [T.water]: '#2f6fb0', [T.sandbag]: '#b79a62',
       [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.propHigh]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'
     };
-    const bld = { house: '#9a6a52', abandoned: '#6a5a50', shop: '#c9a24a', restaurant: '#d98a3a', police: '#3a62c0', hospital: '#d96a6a', tower: '#3f8aa8', casino: '#b04aa8', warehouse: '#7a6a9a', tent: '#6a7a46', hq: '#56663c' };
+    const bld = { house: '#9a6a52', abandoned: '#6a5a50', shop: '#c9a24a', restaurant: '#d98a3a', police: '#3a62c0', hospital: '#d96a6a', tower: '#3f8aa8', casino: '#b04aa8', warehouse: '#7a6a9a', tent: '#6a7a46', hq: '#56663c', totoya: '#c82e3b' };
     const mk = (key, scale, detail) => {
       if (this.textures.exists(key)) this.textures.remove(key);
       const tex = this.textures.createCanvas(key, W * scale, H * scale);

@@ -30,8 +30,10 @@ Object.assign(T, { facPharm: 86, facGrocery: 87, facHardware: 88, facClothing: 8
   obsWin: 106, facPolice: 107, winPolice: 108, cooler: 109, ctrPolice: 110, evShelf: 111, radioShelf: 112, ctrPlain: 113,
   polWallPaint: 114, polWallSecure: 115, polDoorSteel: 116, polDoorSteelOpen: 117, polDoorCell: 118, polDoorCellOpen: 119, polDoorGlass: 120, polDoorGlassOpen: 121, polWallRoom: 122, metalTable: 123, steelChair: 124,
   milBunk: 125, weaponRack: 126, ammoCrate: 127, workbench: 128, jersey: 129, milConsole: 130, milFacade: 131, milWall: 132, milGate: 133, milGateOpen: 134, milBoom: 135, milBoomOpen: 136, milDoor: 137, milDoorOpen: 138 });
-export const NTILES = 139;
-export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138];
+// FIRE DEPARTMENT: exterior facade, bay-front window, interior wall paint, interior steel door (closed / open) and the glass entrance door (closed / open)
+Object.assign(T, { facFire: 139, winFire: 140, fireWallIn: 141, fireDoor: 142, fireDoorOpen: 143, fireGlass: 144, fireGlassOpen: 145 });
+export const NTILES = 146;
+export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145];
 export const SHOP_WINDOWS = [96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108];
 export const STORE_FIX = [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85];
 
@@ -41,7 +43,7 @@ export const SOLID = new Set([
   T.doorClosed, T.window, T.windowBroken, T.prop, T.propHigh, T.tree,
   T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
   T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3,
-  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 127, 128, 129, 130
+  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 127, 128, 129, 130, 140
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
@@ -52,9 +54,9 @@ export const LOS_BLOCK = new Set([
 export const BULLET_PASS = new Set([
   T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser,
   T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf,
-  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 128, 130
+  64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 128, 130, 140
 ]);
-export const WALL_FAMILY = new Set([96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
+export const WALL_FAMILY = new Set([96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, 140, T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
 
 export const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
 
@@ -466,6 +468,12 @@ function drawChar(c, ox, oy, dir, f, a) {
     if (a.hat === 2) { P(10, 2, 12, 6, hatC); P(11, 1, 10, 1, hatC); P(10, 6, 12, 2, shade(hatC, -0.25)); P(14, 0, 4, 2, shade(hatC, 0.3)); }
     if (a.hat === 3) { P(10, 1, 12, 8, hatC); P(10, 1, 12, 2, shade(hatC, 0.2)); P(10, 7, 12, 2, shade(hatC, -0.3)); P(12, 4, 3, 2, shade(hatC, -0.2)); P(9, 8, 14, 1, shade(hatC, -0.4)); }
     if (a.hat === 4) { P(12, 0, 8, 5, hatC); P(12, 3, 8, 1, shade(hatC, -0.4)); P(6, 5, 20, 2, shade(hatC, -0.1)); P(7, 7, 18, 1, shade(hatC, -0.4)); P(6, 5, 20, 1, shade(hatC, 0.2)); }
+    if (a.hat === 5) {
+      P(14, 0, 4, 2, shade(hatC, 0.25));
+      P(10, 1, 12, 6, hatC); P(10, 1, 12, 1, shade(hatC, 0.25)); P(10, 5, 12, 2, shade(hatC, -0.2));
+      P(8, 6, 16, 2, shade(hatC, -0.15)); P(8, 7, 16, 1, shade(hatC, -0.35)); P(9, 6, 14, 1, shade(hatC, 0.15));
+      P(14, 2, 4, 4, '#1b1d22'); P(15, 2, 2, 1, '#f2e04a'); P(14, 3, 4, 2, hatC === '#c0392b' ? '#f2e04a' : '#c0392b'); P(15, 4, 2, 1, '#ffffff');
+    }
   };
 
   if (dir === 'd' || dir === 'u') {
@@ -507,7 +515,7 @@ function drawChar(c, ox, oy, dir, f, a) {
     if (!back) { P(13, 8 + bob, 2, 2, '#1a1a1a'); P(17, 8 + bob, 2, 2, '#1a1a1a'); P(15, 11 + bob, 2, 1, skinD); }
     // hair
     const hy = bob;
-    if (a.hair !== 0 && !(a.hat === 3 || a.hat === 2) || (back && a.hair !== 0 && a.hat !== 3)) {
+    if (a.hair !== 0 && !(a.hat === 3 || a.hat === 2 || a.hat === 5) || (back && a.hair !== 0 && a.hat !== 3 && a.hat !== 5)) {
       if (a.hair === 1) { P(10, 2 + hy, 12, 4, hairC); if (back) P(10, 2 + hy, 12, 9, hairC); else { P(10, 5 + hy, 2, 3, hairC); P(20, 5 + hy, 2, 3, hairC); } }
       if (a.hair === 2) { P(11, 3 + hy, 10, 2, hairC); if (back) P(11, 3 + hy, 10, 5, hairC); }
       if (a.hair === 3) { P(10, 2 + hy, 12, 4, hairC); P(9, 4 + hy, 3, 14, hairC); P(20, 4 + hy, 3, 14, hairC); if (back) P(10, 2 + hy, 12, 16, hairC); }
@@ -527,6 +535,11 @@ function drawChar(c, ox, oy, dir, f, a) {
       hatFront();
       if (back && a.hat === 1) { P(11, 6, 10, 1, shade(hatC, -0.2)); }
       if (back && (a.hat === 2 || a.hat === 3)) { P(10, 6, 12, 3, hatC); }
+      if (back && a.hat === 5) {
+        P(10, 1, 12, 6, hatC); P(10, 1, 12, 1, shade(hatC, 0.25)); P(14, 0, 4, 6, shade(hatC, 0.2));
+        P(8, 6, 16, 2, shade(hatC, -0.2)); P(11, 5, 10, 1, '#f2e04a');
+        P(9, 8, 14, 3, '#1e222a'); P(10, 10, 12, 2, '#14161c');
+      }
     }
     // back view backpack
     if (back && a.backpack > 0) {
@@ -569,7 +582,7 @@ function drawChar(c, ox, oy, dir, f, a) {
     P(18, 7 + bob, 2, 2, '#1a1a1a');
     // hair
     const hy = bob;
-    if (a.hair !== 0 && a.hat !== 3 && a.hat !== 2) {
+    if (a.hair !== 0 && a.hat !== 3 && a.hat !== 2 && a.hat !== 5) {
       if (a.hair === 1) { P(11, 2 + hy, 10, 4, hairC); P(11, 5 + hy, 4, 6, hairC); }
       if (a.hair === 2) { P(12, 3 + hy, 9, 2, hairC); P(12, 3 + hy, 3, 5, hairC); }
       if (a.hair === 3) { P(11, 2 + hy, 10, 4, hairC); P(10, 4 + hy, 6, 14, hairC); }
@@ -586,6 +599,13 @@ function drawChar(c, ox, oy, dir, f, a) {
     if (a.hat === 2) { P(11, 2, 11, 6, hatC); P(11, 6, 11, 2, shade(hatC, -0.25)); P(14, 0, 5, 2, shade(hatC, 0.3)); }
     if (a.hat === 3) { P(11, 1, 11, 8, hatC); P(11, 1, 11, 2, shade(hatC, 0.2)); P(11, 7, 11, 2, shade(hatC, -0.3)); P(20, 8, 3, 1, shade(hatC, -0.4)); }
     if (a.hat === 4) { P(13, 0, 7, 5, hatC); P(13, 3, 7, 1, shade(hatC, -0.4)); P(7, 5, 19, 2, shade(hatC, -0.1)); P(8, 7, 17, 1, shade(hatC, -0.4)); P(7, 5, 19, 1, shade(hatC, 0.2)); }
+    if (a.hat === 5) {
+      P(13, 0, 6, 2, shade(hatC, 0.25));
+      P(11, 1, 10, 6, hatC); P(11, 1, 10, 1, shade(hatC, 0.25)); P(11, 5, 10, 2, shade(hatC, -0.2));
+      P(12, 4, 8, 1, '#e8eef4'); P(20, 2, 2, 4, hatC === '#c0392b' ? '#f2e04a' : '#c0392b'); P(21, 3, 1, 2, '#ffffff');
+      P(8, 6, 15, 2, shade(hatC, -0.15)); P(8, 7, 15, 1, shade(hatC, -0.35));
+      P(9, 8, 5, 3, '#1e222a'); P(9, 10, 4, 1, '#14161c');
+    }
   }
   accessories(P, a, dir, bob);
 }
@@ -653,14 +673,17 @@ function drawPose(c, ox, oy, dir, f, a) {
     if (dir === 'r') {
       R(c, 13, 33, 14, 6, pc); R(c, 13, 33, 14, 1, pl); R(c, 13, 38, 14, 1, pd);              // thigh, pointing forward
       R(c, 23, 39, 5, 6, pc); R(c, 23, 39, 1, 6, pl); R(c, 27, 39, 1, 6, pd);                  // shin down from the knee
-      R(c, 23, 45, 7, 3, sc); R(c, 23, 45, 7, 1, shade(sc, 0.25));                             // shoe
+      if (a.pants === 7) { R(c, 23, 42, 5, 2, '#f2e04a'); R(c, 23, 43, 5, 1, '#e8eef4'); }
+      R(c, 23, 45, 7, 3, sc); R(c, 23, 45, 7, 1, a.pants === 7 ? '#f2e04a' : shade(sc, 0.25)); // shoe
     } else if (dir === 'u') {
       R(c, 10, 33, 12, 10, pc); R(c, 10, 33, 12, 1, pl); R(c, 15, 38, 2, 5, pd);              // seen from behind: hips and the backs of the legs, down to the shoes (no gap)
+      if (a.pants === 7) { R(c, 10, 40, 12, 2, '#f2e04a'); R(c, 10, 41, 12, 1, '#e8eef4'); }
       R(c, 10, 43, 5, 3, sc); R(c, 17, 43, 5, 3, sc);
     } else {
       R(c, 10, 33, 12, 6, pc); R(c, 10, 33, 12, 1, pl); R(c, 15, 34, 2, 5, pd);                // two thighs toward the viewer
       R(c, 10, 39, 5, 6, pc); R(c, 17, 39, 5, 6, pc); R(c, 10, 39, 1, 6, pl); R(c, 17, 39, 1, 6, pl); R(c, 14, 39, 1, 6, pd); R(c, 21, 39, 1, 6, pd);      // shins
-      R(c, 9, 45, 7, 3, sc); R(c, 16, 45, 7, 3, sc); R(c, 9, 45, 7, 1, shade(sc, 0.25)); R(c, 16, 45, 7, 1, shade(sc, 0.25));                              // shoes
+      if (a.pants === 7) { R(c, 10, 42, 5, 2, '#f2e04a'); R(c, 17, 42, 5, 2, '#f2e04a'); R(c, 10, 43, 5, 1, '#e8eef4'); R(c, 17, 43, 5, 1, '#e8eef4'); }
+      R(c, 9, 45, 7, 3, sc); R(c, 16, 45, 7, 3, sc); R(c, 9, 45, 7, 1, a.pants === 7 ? '#f2e04a' : shade(sc, 0.25)); R(c, 16, 45, 7, 1, a.pants === 7 ? '#f2e04a' : shade(sc, 0.25));                              // shoes
     }
   } else if (f === 14) {
     c.drawImage(tmp, 0, 0);

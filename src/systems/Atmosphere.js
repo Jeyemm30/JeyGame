@@ -40,7 +40,7 @@ export default class Atmosphere {
     this.rainG = scene.add.graphics().setScrollFactor(0).setDepth(4998).setPosition(640, 360);
     this.drops = Array.from({ length: 170 }, () => ({ x: Math.random() * 1280, y: Math.random() * 720, s: 0.7 + Math.random() * 0.6 }));
     this.lamps = (scene.wd.props || []).filter((p) => p.kind === 'lamp');
-    this.hideLights = [...((scene.wd.hideout && scene.wd.hideout.lights) || []), ...((scene.wd.wise && scene.wd.wise.lights) || []), ...((scene.wd.casino && scene.wd.casino.lights) || []), ...((scene.wd.bank && scene.wd.bank.lights) || []), ...Object.values(scene.wd.gangs || {}).flatMap((g) => g.lights || [])].map((l, i) => ({ ...l, ph: i * 1.7 }));
+    this.hideLights = [...((scene.wd.hideout && scene.wd.hideout.lights) || []), ...((scene.wd.wise && scene.wd.wise.lights) || []), ...((scene.wd.casino && scene.wd.casino.lights) || []), ...((scene.wd.bank && scene.wd.bank.lights) || []), ...((scene.wd.fire && scene.wd.fire.lights) || []), ...((scene.wd.totoya && scene.wd.totoya.lights) || []), ...((scene.wd.reyes && scene.wd.reyes.lights) || []), ...Object.values(scene.wd.gangs || {}).flatMap((g) => g.lights || [])].map((l, i) => ({ ...l, ph: i * 1.7 }));
     this.flash = 0;
     // puddles on road tiles, drawn only while it is (or just was) raining
     this.puddleG = scene.add.graphics().setDepth(3.1);
@@ -117,6 +117,7 @@ export default class Atmosphere {
       for (const L of this.hideLights) {
         if (!vv.contains(L.x, L.y)) continue;
         if (L.indoor && !this.scene.insideBuilding) continue;                // interior lights stay hidden under the roof when you are outside
+        if (L.reyesFloor && (this.scene.reyesFloor || 1) !== L.reyesFloor) continue;
         const k = this.clock;
         const on = L.fire || L.steady ? 1 : (Math.sin(k / 130 + L.ph) * Math.sin(k / 47 + L.ph * 2) > -0.6 ? 1 : 0.25);   // sputtering bulbs
         const s = (L.steady ? 0.35 + 0.65 * nt : 0.55 + 0.45 * nt) * on * (L.fire ? 0.85 + 0.15 * Math.sin(k / 60 + L.ph) : 1);

@@ -11,8 +11,8 @@ import { SKIN_TONES, CLOTH_COLORS, SHOE_COLORS, shade } from './textures.js';
      necklace 1 gold chain 2 silver chain                       mask 1 surgical 2 black 3 red bandana
    Casino additions: shirt 8 Long Coat 9 Tuxedo | pierceBrow / pierceNose / pierceLip (bool) | earring 1 stud 2 hoop 3 dangling | rings 1 silver 2 gold + gems | hair 6 swept quiff
 */
-export const SHIRT_BASE = { 4: 0, 5: 1, 6: 0, 7: 0, 8: 1, 9: 1 };      // styles that start from an existing look
-export const PANTS_BASE = { 3: 0, 4: 0, 5: 0, 6: 1 };
+export const SHIRT_BASE = { 4: 0, 5: 1, 6: 0, 7: 0, 8: 1, 9: 1, 10: 1, 11: 1 };      // styles that start from an existing look
+export const PANTS_BASE = { 3: 0, 4: 0, 5: 0, 6: 1, 7: 1 };
 
 export const shoeAccent = (a) => SHOE_COLORS[a.shoeAccent ?? 1] || '#e8e8e8';
 
@@ -36,6 +36,12 @@ export function legsFront(P, a, pantsC, legBot, liftL, liftR, skin) {
   if (a.pants === 6) {                                   // tactical: cargo pockets, knee pads, utility belt
     P(lx, 31, 2, 4, dk); P(20, 31, 2, 4, dk); P(lx + 1, 36, 3, 3, '#26262a'); P(18, 36, 3, 3, '#26262a'); P(lx + 1, 36, 3, 1, '#4a4a52'); P(18, 36, 3, 1, '#4a4a52');
   }
+  if (a.pants === 7) {                                   // firefighter bunker pants: reinforced knees + yellow/silver reflective safety stripes
+    P(lx, 31, 1, 4, dk); P(21, 31, 1, 4, dk);
+    P(lx + 1, 32 + liftL, 3, 3, '#22242a'); P(18, 32 + liftR, 3, 3, '#22242a');
+    P(lx, 35 + liftL, lw, 2, '#f2e04a'); P(17, 35 + liftR, lw, 2, '#f2e04a');
+    P(lx, 36 + liftL, lw, 1, '#e8eef4'); P(17, 36 + liftR, lw, 1, '#e8eef4');
+  }
 }
 
 export function legsSide(P, a, s, pantsC, skin) {
@@ -49,6 +55,10 @@ export function legsSide(P, a, s, pantsC, skin) {
   if (a.pants === 4) { P(14 + s, 29, 5, 1, '#f0f0f0'); P(14 + s, 37, 5, 3, shade(pantsC, 0.18)); P(13 - s, 37, 5, 3, shade(pantsC, -0.1)); P(15 + s, 30, 1, 7, '#f0f0f0'); }
   if (a.pants === 5) { P(15 + s, 31, 1, 7, shade(pantsC, -0.22)); P(14 + s - lo, 39, lw, 1, dk); }
   if (a.pants === 6) { P(15 + s, 31, 3, 4, dk); P(15 + s, 36, 4, 3, '#26262a'); P(15 + s, 36, 4, 1, '#4a4a52'); }
+  if (a.pants === 7) {
+    P(15 + s, 32, 3, 3, '#22242a');
+    P(13 - s, 35, 5, 2, shade('#f2e04a', -0.18)); P(14 + s, 35, 5, 2, '#f2e04a'); P(14 + s, 36, 5, 1, '#e8eef4');
+  }
 }
 
 /* ------------------------------------------------------------------ shoes */
@@ -57,7 +67,7 @@ export function shoesFront(P, a, legBot, liftL, liftR, shoeC, skin, pantsC) {
   const sole = (x, y, w, col) => P(x, y, w, 1, col);
   [[11, legBot + liftL], [17, legBot + liftR]].forEach(([x, y]) => {
     switch (st) {
-      case 1: P(x, y - 3, 5, 7, shoeC); P(x, y - 3, 5, 1, shade(shoeC, 0.25)); sole(x - 1, y + 3, 6, shade(shoeC, -0.4)); P(x, y - 3, 1, 7, shade(shoeC, -0.2)); break;                       // boots
+      case 1: P(x, y - 3, 5, 7, shoeC); P(x, y - 3, 5, 1, a.pants === 7 ? '#f2e04a' : shade(shoeC, 0.25)); sole(x - 1, y + 3, 6, shade(shoeC, -0.4)); P(x, y - 3, 1, 7, shade(shoeC, -0.2)); if (a.pants === 7) P(x + 1, y + 2, 3, 1, '#d4af37'); break;                       // boots
       case 2: P(x, y - 3, 5, 7, shoeC); P(x, y + 1, 5, 2, acc); P(x + 2, y - 3, 1, 3, '#f4f4f4'); P(x, y - 3, 5, 1, acc); sole(x - 1, y + 3, 6, '#f4f4f4'); P(x, y - 1, 1, 1, '#f4f4f4'); break;   // high-tops
       case 3: P(x, y, 5, 4, shoeC); P(x, y + 1, 5, 1, acc); P(x + 1, y, 3, 1, shade(shoeC, 0.3)); sole(x - 1, y + 3, 6, '#f4f4f4'); P(x - 1, y + 4, 6, 1, acc); break;                     // runners
       case 4: P(x, y - 4, 5, 8, shoeC); P(x + 1, y - 1, 3, 3, acc); P(x, y - 4, 5, 1, acc); P(x + 2, y - 4, 1, 3, '#f4f4f4'); sole(x - 1, y + 3, 6, '#f4f4f4'); P(x - 1, y + 4, 6, 1, shade(acc, -0.2)); break;   // basketball
@@ -75,7 +85,7 @@ export function shoesSide(P, a, s, shoeC, skin) {
   [[13 - s, -0.15], [14 + s, 0]].forEach(([x, sh]) => {
     const c0 = sh ? shade(shoeC, sh) : shoeC;
     switch (st) {
-      case 1: P(x, 37, 7, 7, c0); P(x, 37, 4, 1, shade(c0, 0.25)); P(x, 43, 8, 1, shade(c0, -0.4)); P(x + 6, 41, 1, 2, shade(c0, -0.2)); break;
+      case 1: P(x, 37, 7, 7, c0); P(x, 37, 4, 1, a.pants === 7 ? '#f2e04a' : shade(c0, 0.25)); P(x, 43, 8, 1, shade(c0, -0.4)); P(x + 6, 41, 1, 2, a.pants === 7 ? '#d4af37' : shade(c0, -0.2)); break;
       case 2: P(x, 37, 7, 7, c0); P(x + 4, 41, 3, 3, acc); P(x, 37, 4, 1, acc); P(x + 2, 38, 2, 1, '#f4f4f4'); P(x - 1, 43, 9, 1, '#f4f4f4'); break;
       case 3: P(x, 39, 7, 4, c0); P(x + 1, 40, 5, 1, acc); P(x + 5, 39, 2, 1, shade(c0, 0.3)); P(x - 1, 43, 9, 1, '#f4f4f4'); P(x - 1, 44, 9, 1, acc); break;
       case 4: P(x, 36, 7, 8, c0); P(x + 1, 39, 4, 3, acc); P(x, 36, 4, 1, acc); P(x + 2, 37, 2, 1, '#f4f4f4'); P(x - 1, 43, 9, 1, '#f4f4f4'); P(x - 1, 44, 9, 1, shade(acc, -0.2)); break;
@@ -120,6 +130,38 @@ export function topFront(P, a, ty, bob, shirtC, skin, back) {
       if (!back) { P(13, ty, 6, 12, '#f2f2f2'); P(11, ty, 3, 12, lt); P(18, ty, 3, 12, lt); P(11, ty, 1, 12, shade(shirtC, 0.5)); P(20, ty, 1, 12, shade(shirtC, 0.5)); P(14, ty, 4, 1, '#d8d8d8'); P(14, ty - 1, 1, 2, '#15151a'); P(17, ty - 1, 1, 2, '#15151a'); P(15, ty - 1, 2, 2, '#c0262c'); P(15, ty + 4, 1, 1, '#15151a'); P(15, ty + 7, 1, 1, '#15151a'); P(10, ty + 11, 12, 3, '#7a1a22'); }
       else { P(10, ty, 12, 1, lt); P(15, ty, 2, 14, shade(shirtC, -0.3)); }
       break;
+    case 10:  // firefighter turnout coat: storm collar, reflective yellow/silver stripes, brass clasps, gloves
+      P(10, ty, 12, 15, shirtC); P(10, ty, 2, 15, shade(shirtC, -0.15)); P(20, ty, 2, 15, dk); P(10, ty + 14, 12, 1, shade(shirtC, -0.35));
+      P(12, ty - 1, 8, 2, shade(shirtC, -0.15)); P(13, ty - 1, 6, 1, '#f2e04a');
+      P(10, ty + 4, 12, 2, '#f2e04a'); P(10, ty + 5, 12, 1, '#e8eef4');
+      P(10, ty + 11, 12, 3, '#f2e04a'); P(10, ty + 12, 12, 1, '#e8eef4');
+      P(7, 16 + bob + 6, 3, 2, '#f2e04a'); P(22, 16 + bob + 6, 3, 2, '#f2e04a');
+      P(7, 16 + bob + 7, 3, 1, '#e8eef4'); P(22, 16 + bob + 7, 3, 1, '#e8eef4');
+      P(7, 16 + bob + 9, 3, 3, '#22242a'); P(22, 16 + bob + 9, 3, 3, '#22242a');
+      if (!back) {
+        P(15, ty, 2, 14, shade(shirtC, -0.3));
+        P(15, ty + 2, 1, 1, '#d4af37'); P(15, ty + 8, 1, 1, '#d4af37'); P(15, ty + 13, 1, 1, '#d4af37');
+        P(18, ty + 2, 2, 2, '#f2e04a'); P(12, ty + 2, 2, 2, '#181a20'); P(12, ty + 1, 1, 1, '#c0392b');
+      } else {
+        P(12, ty + 1, 8, 1, '#f2e04a'); P(15, ty + 2, 2, 9, '#f2e04a'); P(15, ty + 5, 2, 1, '#e8eef4');
+      }
+      break;
+    case 11:  // TOTOYA master mechanic uniform jacket: dark navy/charcoal work jacket, red & cyan TOTOYA stripes, chest badge, mechanic gloves
+      P(10, ty, 12, 14, shirtC); P(10, ty, 2, 14, shade(shirtC, -0.15)); P(20, ty, 2, 14, dk); P(10, ty + 13, 12, 1, shade(shirtC, -0.35));
+      P(12, ty - 1, 8, 2, shade(shirtC, -0.18));
+      P(10, ty + 3, 12, 1, '#e63946'); P(10, ty + 4, 12, 1, '#2ec4ff');
+      P(7, 16 + bob + 4, 3, 1, '#e63946'); P(22, 16 + bob + 4, 3, 1, '#e63946');
+      P(7, 16 + bob + 5, 3, 1, '#2ec4ff'); P(22, 16 + bob + 5, 3, 1, '#2ec4ff');
+      P(7, 16 + bob + 9, 3, 3, '#181c24'); P(22, 16 + bob + 9, 3, 3, '#181c24');
+      if (!back) {
+        P(15, ty, 2, 13, '#262c36'); P(15, ty + 1, 1, 12, '#b8c4d0');
+        P(17, ty + 1, 3, 2, '#e63946'); P(18, ty + 1, 1, 1, '#ffffff');
+        P(11, ty + 1, 3, 1, '#e8eef4');
+        P(11, ty + 7, 3, 4, shade(shirtC, -0.28)); P(12, ty + 6, 1, 2, '#c8d2dc');
+      } else {
+        P(12, ty + 6, 8, 3, '#e63946'); P(13, ty + 7, 6, 1, '#ffffff');
+      }
+      break;
     default: break;
   }
 }
@@ -133,6 +175,25 @@ export function topSide(P, a, ty, bob, shirtC, skin) {
     case 7: P(14, 16 + bob, 4, 12, skin); P(14, 16 + bob, 1, 12, shade(skin, -0.2)); P(14, ty, 5, 3, skin); P(12, ty + 3, 1, 10, skin); break;
     case 8: P(12, ty, 9, 25, shirtC); P(12, ty, 9, 1, lt); P(12, ty, 2, 25, shade(shirtC, -0.15)); P(12, ty + 24, 9, 1, dk); P(19, ty, 2, 25, shade(shirtC, -0.3)); P(19, ty + 1, 2, 6, lt); P(18, ty + 10, 1, 1, '#c9b050'); break;
     case 9: P(18, ty, 3, 12, '#f2f2f2'); P(19, ty - 1, 3, 2, '#c0262c'); P(12, ty + 11, 9, 3, '#7a1a22'); P(14, ty, 2, 10, lt); break;
+    case 10:
+      P(12, ty, 9, 15, shirtC); P(13, ty - 1, 6, 2, shade(shirtC, -0.15)); P(14, ty - 1, 5, 1, '#f2e04a');
+      P(12, ty, 2, 15, shade(shirtC, -0.2)); P(12, ty + 14, 9, 1, shade(shirtC, -0.35));
+      P(12, ty + 4, 9, 2, '#f2e04a'); P(12, ty + 5, 9, 1, '#e8eef4');
+      P(12, ty + 11, 9, 3, '#f2e04a'); P(12, ty + 12, 9, 1, '#e8eef4');
+      P(14, 16 + bob, 4, 9, shirtC); P(14, 16 + bob, 1, 9, shade(shirtC, -0.25));
+      P(15, 18 + bob, 2, 2, '#c0392b');
+      P(14, 16 + bob + 6, 4, 2, '#f2e04a'); P(14, 16 + bob + 7, 4, 1, '#e8eef4');
+      P(14, 16 + bob + 9, 4, 3, '#22242a');
+      break;
+    case 11:
+      P(12, ty, 9, 14, shirtC); P(13, ty - 1, 6, 2, shade(shirtC, -0.18));
+      P(12, ty, 2, 14, shade(shirtC, -0.2)); P(12, ty + 13, 9, 1, shade(shirtC, -0.35));
+      P(12, ty + 3, 9, 1, '#e63946'); P(12, ty + 4, 9, 1, '#2ec4ff');
+      P(14, 16 + bob, 4, 9, shirtC); P(14, 16 + bob, 1, 9, shade(shirtC, -0.25));
+      P(15, 18 + bob, 2, 2, '#e63946'); P(15, 18 + bob, 1, 1, '#ffffff');
+      P(14, 16 + bob + 4, 4, 1, '#e63946'); P(14, 16 + bob + 5, 4, 1, '#2ec4ff');
+      P(14, 16 + bob + 9, 4, 3, '#181c24');
+      break;
     default: break;
   }
 }

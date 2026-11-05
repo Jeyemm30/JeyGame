@@ -18,7 +18,7 @@ const SHOP_TALK = ['Welcome! Take a look around.', 'Do not touch the shelves unl
 export default class Civilian extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const kind = spec.kind;
-    const tex = kind === 'story' ? 'story_' + spec.npcId : kind === 'patron' && spec.role ? 'npc_' + spec.role : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
+    const tex = kind === 'story' ? 'story_' + spec.npcId : spec.role ? 'npc_' + spec.role : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
     super(scene, spec.x, spec.y, tex, 'd0');
     this.kind = kind;
     this.npcId = spec.npcId || null;
@@ -39,6 +39,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     // casino guests / staff: a station to keep (act), a seat or post (face), an optional walking route
     this.act = spec.act || null; this.seated = !!spec.sit; this.sitFace = spec.face; this.seed = spec.seed || 0; this.vip = !!spec.vip; this.poseNow = null; this.soft = !!spec.soft;       // soft shoppers (WISE SOLE) never block the player's way
     this.route = spec.route || null; this.routeI = 0; this.pChk = 0; this.pPos = { x: spec.x, y: spec.y };
+    this.reyesFloor = spec.reyesFloor || (spec.npcId === 'reyes' ? 4 : null);
+    this.isReceptionist = !!spec.isReceptionist;
+    this.fixedFace = spec.fixedFace;
+    if (this.fixedFace !== undefined) { this.face = this.fixedFace; this.faceGoal = this.fixedFace; }
     if (this.act) { this.state = this.seated ? 'sit' : 'idle'; if (spec.face !== undefined) { this.face = spec.face; this.faceGoal = spec.face; } }
     this.node = spec.node ?? -1;
     this.prevNode = -1;
@@ -74,6 +78,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     if (this.npcId === 'yosen') { this.smk = { phase: 'idle', at: 0, wait: 2200 + Math.random() * 3200, wisp: 0 }; this.face = Math.PI / 2; this.faceGoal = this.face; this.baseFace = this.face; }       // Yosen smokes while he waits
     this.shadow = scene.add.sprite(spec.x, spec.y, 'shadow').setDepth(3.5);
     if (this.state === 'sit') { this.face = Math.PI / 2; }
+    if (this.reyesFloor && this.reyesFloor !== (scene.reyesFloor || 1)) { this.sleeping = true; this.setVisible(false); this.shadow.setVisible(false); this.body.enable = false; }
   }
 
   /* ------------------------------------------------------------ reactions */
@@ -188,6 +193,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
   /* ------------------------------------------------------------------- AI */
   updateCivilian(time, dt) {
+    if (this.reyesFloor && (this.scene.reyesFloor || 1) !== this.reyesFloor) {
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); }
+      return;
+    }
     const sc = this.scene;
     const p = sc.player;
     const dist = Math.hypot(p.x - this.x, p.y - this.y);
@@ -468,7 +477,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
         const tx = this.home.x + Math.cos(a) * d, ty = this.home.y + Math.sin(a) * d;
         if (!this.scene.solidAt(tx, ty)) { this.target = { x: tx, y: ty }; this.targetUntil = time + 5000; }
       } else {
-        this.faceGoal = this.face + rand(-2, 2);
+        this.faceGoal = this.fixedFace !== undefined ? this.fixedFace + rand(-0.25, 0.25) : this.face + rand(-2, 2);
       }
       this.waitUntil = time + rand(2500, 6000);
     }
@@ -513,8 +522,8 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.setFrame(key + (this.smk ? this.smokeFrame(time) : poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
       sit: this.state === 'sit', hurt: time < this.hurtUntil,
-      talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
-      pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'gus' && Math.floor(time / 1000) % 9 === 5 && time % 1000 < 1100) || (this.npcId === 'dex' && Math.floor(time / 1000) % 11 === 6) || (this.npcId === 'gordy' && Math.floor(time / 1000) % 12 === 8) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6)) && this.moveSpeed === 0,
+      talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro' || this.npcId === 'reyes') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
+      pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'gus' && Math.floor(time / 1000) % 9 === 5 && time % 1000 < 1100) || (this.npcId === 'dex' && Math.floor(time / 1000) % 11 === 6) || (this.npcId === 'gordy' && Math.floor(time / 1000) % 12 === 8) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6) || (this.npcId === 'reyes' && Math.floor(time / 1000) % 10 === 6)) && this.moveSpeed === 0,
       panic: this.state === 'flee' || (this.npcId === 'sean' && this.moveSpeed === 0 && Math.floor(time / 1000) % 11 === 2 && time % 1000 < 700) || (this.npcId === 'ezekiel' && this.moveSpeed === 0 && Math.floor(time / 1000) % 9 === 2 && time % 1000 < 650),   // Ezekiel throws his arms up when he is excited about a sneaker       // Kenny counts his cash / reaches under the counter
       lean: (this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 10 === 8),
       ...(this.poseNow || {})

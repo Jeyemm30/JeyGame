@@ -26,6 +26,8 @@ export const STORY_NPCS = {
   },
   kenny: { name: 'Kenny Aquiles', title: 'Weapon dealer', color: '#ffb060', where: () => ({ place: 'kenny', off: [0, 0] }) },
   ezekiel: { name: 'Ezekiel Blackwell', title: 'WISE SOLE owner', color: '#ffe27a', where: () => ({ place: 'wise', off: [0, 0] }) },
+  mark: { name: 'Mark Sterling', title: 'TOTOYA Owner & Tesla Specialist', color: '#52e0ff', where: () => ({ place: 'totoya', off: [0, 0] }) },
+  reyes: { name: 'Councilman Reyes', title: 'CEO, Reyes Holdings & City Councilman', color: '#ffd870', where: () => ({ place: 'reyes_office', off: [0, 0] }) },
   sean: { name: 'Sean Whitlock', title: 'Casino host', color: '#8affd8', where: () => ({ place: 'sean', off: [0, 0] }) },
   jiro: { name: 'Jiro Kurogane', title: 'Card room dealer', color: '#c8a8ff', where: () => ({ place: 'jiro', off: [0, 0] }) },
   dante: { name: 'Dante "Frost" Reyes', title: 'Cobalt Wolves boss', color: '#8ab8ff', where: () => null },

@@ -35,7 +35,7 @@ export const DIALOGUES = {
     start: 'a',
     nodes: {
       a: { who: 'dex', text: "Marla's runner? Finally. Hand it over.", next: 'b', effects: { take: 'q_package' } },
-      b: { who: 'dex', text: "Good. Quick, quiet and on time. I like that. I'm Dex - I fix cars, sell gas and move paperwork nobody else wants to carry.", next: 'c' },
+      b: { who: 'dex', text: "Good. Quick, quiet and on time. I like that. I'm Dex - I sell gas and move paperwork nobody else wants to carry.", next: 'c' },
       c: { who: Y, text: '...', choices: [
         { text: "Anytime you need a runner, I'm in.", next: 'd1', effects: { rep: 2, flags: { dex_friend: true } } },
         { text: "Next time, I want a bigger cut.", next: 'd2', effects: { money: 30 } }

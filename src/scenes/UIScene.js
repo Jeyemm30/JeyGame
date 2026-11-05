@@ -10,7 +10,7 @@ import { SUPPLIES, SUPPLY_IDS, useSupply, supplyCount } from '../systems/Supplie
 
 // minimap: shows an 80x64 tile window around the player at 2px per tile
 // location icons on the minimap (same badges as the world map); gang hideouts and Kenny's alley appear once discovered (they join wd.pois then)
-const MM_ICON_TYPES = new Set(['police', 'hospital', 'shop', 'gas', 'wise', 'casino', 'bank', 'kenny', 'home']);
+const MM_ICON_TYPES = new Set(['police', 'hospital', 'shop', 'gas', 'wise', 'casino', 'bank', 'kenny', 'home', 'totoya']);
 const MM_X = 1100, MM_Y = 20, MM_W = 160, MM_H = 128, MM_TILES_X = 80, MM_TILES_Y = 64, MM_SCALE = 2;
 
 function drawStar(g, cx, cy, r, fill, alpha = 1, stroke = 0x000000) {
@@ -350,7 +350,6 @@ export default class UIScene extends Phaser.Scene {
     mk(1140, 590, 'HORN', 30, act('horn'));
     mk(1140, 510, 'MELEE', 30, act('melee-swap'));
     mk(1060, 590, 'FUEL', 30, () => { touch.refuel = true; }, () => { touch.refuel = false; });
-    mk(1060, 510, 'FIX', 30, act('repair'));
     mk(452, 38, 'II', 31, () => this.openPause());
     mk(526, 38, 'BAG', 31, () => this.toggleInventory());
     mk(600, 38, 'MAP', 31, () => this.openMap());
@@ -505,7 +504,7 @@ export default class UIScene extends Phaser.Scene {
 
     // prompt / toast
     const it = g.interact;
-    this.prompt.setText(it && !this.invOpen ? (this.touchMode ? it.label : `[F] ${it.label}`) : '');
+    this.prompt.setText(it && !this.invOpen ? (this.touchMode ? it.label : (it.rawLabel || `[F] ${it.label}`)) : '');
     if (this.time.now > this.toastUntil) this.toastText.setAlpha(Math.max(0, this.toastText.alpha - 0.05));
     if (p.hp < 30 && !p.dead) this.vignette.setFillStyle(0xff0000, 0.08 + 0.06 * Math.sin(this.time.now / 180));
     if (this.touchMode) this.updateTouch();

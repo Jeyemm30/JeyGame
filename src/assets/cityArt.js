@@ -11,6 +11,9 @@ import { drawWiseStoreArt } from './wiseStoreArt.js';
 import { drawStoreArt } from './storeArt.js';
 import { drawParkArt } from './parkArt.js';
 import { drawBankArt } from './bankArt.js';
+import { drawFireArt } from './fireArt.js';
+import { drawTotoyaArt } from './totoyaArt.js';
+import { drawReyesArt } from './reyesArt.js';
 import { drawNewVehicles } from './vehicleArt.js';
 
 /* ------------------------------------------------------------- outfits */
@@ -40,7 +43,16 @@ export const ROLE_LOOKS = {
   gang2: { skin: 1, hair: 5, hairColor: 2, hat: 0, hatColor: 4, shirt: 1, shirtColor: 1, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#c0392b' },
   gang3: { skin: 4, hair: 0, hairColor: 0, hat: 1, hatColor: 9, shirt: 2, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 1, backpack: 1, backpackColor: 4, armband: '#c0392b' },
   gang4: { skin: 2, hair: 3, hairColor: 6, hat: 2, hatColor: 5, shirt: 0, shirtColor: 4, pants: 2, pantsColor: 3, shoes: 1, shoeColor: 4, backpack: 0, backpackColor: 4, armband: '#c0392b' },
-  shopkeeper: { skin: 2, hair: 1, hairColor: 4, hat: 0, hatColor: 5, shirt: 0, shirtColor: 1, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, armband: null }
+  shopkeeper: { skin: 2, hair: 1, hairColor: 4, hat: 0, hatColor: 5, shirt: 0, shirtColor: 1, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, armband: null },
+  firefighter: { skin: 1, hair: 2, hairColor: 1, hat: 5, hatColor: 13, shirt: 10, shirtColor: 15, pants: 7, pantsColor: 15, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, armband: '#c0392b' },
+  firefighter2: { skin: 2, hair: 1, hairColor: 0, hat: 5, hatColor: 1, shirt: 10, shirtColor: 4, pants: 7, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, armband: '#f2e04a' },
+  firefighter3: { skin: 3, hair: 2, hairColor: 0, hat: 5, hatColor: 13, shirt: 10, shirtColor: 4, pants: 7, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, armband: '#c0392b' },
+  firefighter4: { skin: 0, hair: 1, hairColor: 2, hat: 5, hatColor: 1, shirt: 10, shirtColor: 15, pants: 7, pantsColor: 15, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, armband: '#f2e04a' },
+  totoya_tech: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 1, shirt: 11, shirtColor: 15, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, backpack: 0, backpackColor: 4 },
+  reyes_guard: { skin: 2, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4, armband: '#d4a82a' },
+  reyes_receptionist: { skin: 0, hair: 3, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, necklace: 1, backpack: 0, backpackColor: 4 },
+  reyes_worker: { skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, watch: 2, backpack: 0, backpackColor: 4 },
+  reyes_exec: { skin: 2, hair: 2, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 3, watch: 1, backpack: 0, backpackColor: 4 }
 };
 export const CIV_VARIANTS = 22;
 
@@ -62,7 +74,11 @@ export const STORY_LOOKS = {
   kenny: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 6, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 5, build: 'chubby', glasses: true },
   // Yosen Blackthorn: a thin young guy with a tall black curly mop, a teal hoodie, navy jeans and orange sneakers
   yosen: { skin: 2, hair: 7, hairColor: 0, hat: 0, hatColor: 4, shirt: 2, shirtColor: 12, pants: 0, pantsColor: 15, shoes: 2, shoeColor: 7, shoeAccent: 1, watch: 3, backpack: 0, backpackColor: 4, build: 'slim' },
-  fare: { skin: 1, hair: 1, hairColor: 3, hat: 0, hatColor: 5, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 3, backpack: 2, backpackColor: 9 }
+  fare: { skin: 1, hair: 1, hairColor: 3, hat: 0, hatColor: 5, shirt: 1, shirtColor: 9, pants: 0, pantsColor: 0, shoes: 0, shoeColor: 3, backpack: 2, backpackColor: 9 },
+  // Mark Sterling: TOTOYA owner & Tesla master mechanic
+  mark: { skin: 1, hair: 6, hairColor: 1, hat: 1, hatColor: 4, shirt: 11, shirtColor: 4, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, watch: 1, backpack: 0, backpackColor: 4 },
+  // Councilman Aurelio Reyes: CEO of Reyes Holdings & senior Port City Councilman (tailored navy suit, tie, silver-templed hair, gold watch)
+  reyes: { skin: 1, hair: 2, hairColor: 4, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, watch: 1, rings: 1, backpack: 0, backpackColor: 4 }
 };
 
 function civilianAppearance(i) {
@@ -343,6 +359,14 @@ function drawExtraTiles(scene) {
   polDoor(T.polDoorSteel, T.polDoorSteelOpen, baseSecure, '#7d8794', '#2f3743', (o) => { R(c, o + 12, 8, 8, 8, '#9fc4ea'); R(c, o + 12, 8, 8, 2, '#d8ecfa'); R(c, o + 10, 6, 12, 1, '#2f3743'); R(c, o + 22, 17, 3, 8, '#c8ccd2'); R(c, o + 22, 17, 1, 8, '#ffffff'); R(c, o + 7, 26, 18, 1, '#5a6470'); });
   polDoor(T.polDoorCell, T.polDoorCellOpen, baseSecure, '#3a3f48', '#1f242c', (o) => { for (let x = 6; x < 26; x += 3) R(c, o + x, 5, 1, 23, '#aab0ba'); R(c, o + 5, 12, 22, 2, '#6a727e'); R(c, o + 5, 22, 22, 2, '#6a727e'); R(c, o + 21, 15, 5, 6, '#c8a02a'); R(c, o + 22, 16, 3, 2, '#14161a'); });
   polDoor(T.polDoorGlass, T.polDoorGlassOpen, basePaint, '#a8d0ec', '#1f3a74', (o) => { R(c, o + 5, 4, 22, 14, '#c8e6f8'); R(c, o + 8, 6, 3, 10, 'rgba(255,255,255,0.5)'); R(c, o + 14, 4, 2, 25, '#1f3a74'); R(c, o + 5, 18, 22, 2, '#1f3a74'); R(c, o + 22, 20, 3, 6, '#c8ccd2'); R(c, o + 16, 20, 4, 6, '#2a5ac8'); });
+  /* ---- fire department: white upper wall, a red band with a white pinstripe, grey concrete plinth; the window, the cream interior paint, the steel and glass doors ---- */
+  const baseFireFac = (o) => { R(c, o, 0, 32, 32, '#e8e6e0'); for (let x = 0; x < 32; x += 8) R(c, o + x, 0, 1, 13, '#cfccc4'); R(c, o, 0, 32, 2, '#ffffff'); R(c, o, 12, 32, 1, '#b8b4aa'); R(c, o, 13, 32, 11, '#b8262a'); R(c, o, 13, 32, 1, '#ee4a44'); R(c, o, 17, 32, 1, '#f4f0e8'); R(c, o, 24, 32, 1, '#7a1418'); R(c, o, 25, 32, 7, '#7c828a'); R(c, o, 25, 32, 1, '#a4aab2'); for (let x = 0; x < 32; x += 16) R(c, o + x, 26, 1, 6, '#5e646c'); R(c, o, 29, 32, 3, 'rgba(0,0,0,0.25)'); };
+  clearTile(T.facFire); baseFireFac(ox(T.facFire));
+  clearTile(T.winFire); { const o = ox(T.winFire); baseFireFac(o); R(c, o + 3, 4, 26, 21, '#f6f4ee'); R(c, o + 5, 6, 22, 17, '#7aa2c4'); R(c, o + 5, 6, 22, 7, '#a8cce8'); R(c, o + 5, 6, 22, 2, 'rgba(255,255,255,0.55)'); R(c, o + 15, 6, 2, 17, '#f6f4ee'); R(c, o + 5, 13, 22, 1, '#f6f4ee'); R(c, o + 8, 16, 5, 6, 'rgba(255,255,255,0.18)'); R(c, o + 2, 24, 28, 2, '#b8262a'); R(c, o, 29, 32, 3, 'rgba(0,0,0,0.25)'); }
+  const baseFireIn = (o) => { R(c, o, 0, 32, 32, '#e6dcc4'); R(c, o, 0, 32, 3, '#f6eedc'); for (let y = 8; y < 16; y += 8) R(c, o, y, 32, 1, '#d2c8ae'); R(c, o, 16, 32, 3, '#b8262a'); R(c, o, 16, 32, 1, '#ee4a44'); R(c, o, 19, 32, 1, '#7a1418'); R(c, o, 24, 32, 8, '#4a4f58'); R(c, o, 24, 32, 1, '#6a707a'); R(c, o, 29, 32, 3, 'rgba(0,0,0,0.25)'); };
+  clearTile(T.fireWallIn); baseFireIn(ox(T.fireWallIn));
+  polDoor(T.fireDoor, T.fireDoorOpen, baseFireIn, '#aeb6c0', '#8a1a1e', (o) => { R(c, o + 12, 8, 8, 8, '#9fc4ea'); R(c, o + 12, 8, 8, 2, '#d8ecfa'); R(c, o + 7, 18, 18, 2, '#e6bf1d'); R(c, o + 22, 19, 3, 7, '#d0d6dc'); R(c, o + 9, 22, 12, 3, '#c0262a'); });
+  polDoor(T.fireGlass, T.fireGlassOpen, baseFireFac, '#a8d0ec', '#c0262a', (o) => { R(c, o + 5, 4, 22, 20, '#c8e6f8'); R(c, o + 8, 6, 3, 14, 'rgba(255,255,255,0.5)'); R(c, o + 14, 4, 2, 21, '#f4f0e8'); R(c, o + 5, 14, 22, 2, '#f4f0e8'); R(c, o + 19, 18, 3, 5, '#c8ccd2'); R(c, o + 10, 18, 3, 5, '#c8ccd2'); });
   clearTile(T.obsWin); { const o = ox(T.obsWin); baseSecure(o); R(c, o + 3, 8, 26, 20, '#2a3040'); R(c, o + 5, 10, 22, 16, '#3a4a66'); for (let k = 0; k < 4; k++) R(c, o + 7 + k * 6, 11, 2, 14, 'rgba(255,255,255,0.18)'); R(c, o + 5, 10, 22, 2, 'rgba(255,255,255,0.3)'); R(c, o + 3, 28, 26, 2, '#1a1e28'); R(c, o, 29, 32, 3, 'rgba(0,0,0,0.25)'); }
   fx(T.cooler, (o) => {                                            // water dispenser
     R(c, o + 9, 14, 14, 14, '#e8eef2'); R(c, o + 9, 14, 14, 2, '#ffffff'); R(c, o + 22, 14, 1, 14, '#aab4ba'); R(c, o + 10, 4, 12, 11, '#8fd0f0'); R(c, o + 10, 4, 12, 2, '#d8f2fc'); R(c, o + 11, 7, 2, 7, 'rgba(255,255,255,0.5)');
@@ -579,7 +603,7 @@ function drawProps(scene) {
   mk('siren_b', 10, 10, (c) => { disc(c, 5, 5, 5, 'rgba(60,110,255,0.8)'); });
 }
 
-export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker', 'bank', 'yosen_q', 'yosen', 'home', 'tesla'];
+export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker', 'bank', 'yosen_q', 'yosen', 'home', 'tesla', 'totoya'];
 function drawIcons(scene) {
   const n = MAP_ICON_NAMES.length;
   const tex = makeCanvas(scene, 'mapicons', 18 * n, 18, (c) => {
@@ -614,6 +638,7 @@ function drawIcons(scene) {
     i = MAP_ICON_NAMES.indexOf('yosen'); badge(i, '#2ac0d0'); c.font = 'bold 12px "Courier New", monospace'; c.fillStyle = '#06222a'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('Y', o(i) + 9, 10); R(c, o(i) + 11, 13, 4, 1, '#ff7a1a');
     i = MAP_ICON_NAMES.indexOf('home'); badge(i, '#1f9aa0'); R(c, o(i) + 4, 9, 10, 6, '#ffffff'); c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(o(i) + 2, 9); c.lineTo(o(i) + 9, 3); c.lineTo(o(i) + 16, 9); c.closePath(); c.fill(); R(c, o(i) + 8, 11, 3, 4, '#1f9aa0'); R(c, o(i) + 12, 3, 2, 4, '#ffffff');
     i = MAP_ICON_NAMES.indexOf('tesla'); badge(i, '#2a2d36'); R(c, o(i) + 3, 9, 12, 4, '#f2f4f6'); R(c, o(i) + 5, 6, 8, 4, '#f2f4f6'); R(c, o(i) + 6, 7, 6, 2, '#2a4a5c'); disc(c, o(i) + 6, 13, 2, '#101010'); disc(c, o(i) + 12, 13, 2, '#101010');
+    i = MAP_ICON_NAMES.indexOf('totoya'); badge(i, '#e63946'); R(c, o(i) + 4, 5, 10, 2, '#ffffff'); R(c, o(i) + 8, 5, 2, 9, '#ffffff'); R(c, o(i) + 4, 13, 10, 1, '#2ec4ff');
     i = MAP_ICON_NAMES.indexOf('marker'); R(c, o(i) + 4, 1, 2, 16, '#101410'); R(c, o(i) + 5, 2, 10, 7, '#101410'); R(c, o(i) + 5, 2, 2, 15, '#ffd23a'); R(c, o(i) + 6, 3, 8, 5, '#ff4a3a');
   });
   MAP_ICON_NAMES.forEach((name, i) => { if (!tex.has(name)) tex.add(name, 0, i * 18, 0, 18, 18); });
@@ -739,6 +764,9 @@ export function generateCityArt(scene) {
   drawStoreArt(scene);
   drawParkArt(scene);
   drawBankArt(scene);
+  drawFireArt(scene);
+  drawTotoyaArt(scene);
+  drawReyesArt(scene);
   drawQuestIcons(scene);
   Object.keys(STORY_LOOKS).forEach((k) => (k === 'yosen' ? generateSmoker : generateCharacter)(scene, 'story_' + k, STORY_LOOKS[k]));
   Object.keys(ROLE_LOOKS).forEach((k) => generateCharacter(scene, 'npc_' + k, ROLE_LOOKS[k]));

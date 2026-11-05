@@ -1111,49 +1111,60 @@ export function generateWorld(seed = 20240) {
   }
 
   function residential(b, abandonedChance = 0.08) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    const bh = iy1 - iy0 + 1;
-    const rowsDef = [];
-    if (bh >= 28) {
-      rowsDef.push({ bottom: iy0 + 9, front: 'alley' });
-      rowsDef.push({ bottom: iy1 - 2, front: 'street' });
-      // alley across the whole block
-      const ay = iy0 + 12;
-      for (let x = b.x0; x <= b.x1; x++) for (let y = ay; y <= ay + 1; y++) { if (inb(x, y) && obj[y][x] === -1) ground[y][x] = isRoadT(ground[y][x]) ? ground[y][x] : T.road; }
-      mark(b.x0, ay, b.x1 - b.x0 + 1, 2, 0);
-      b.alley = ay;
-    } else if (bh >= 14) {
-      rowsDef.push({ bottom: iy1 - 2, front: 'street' });
-    } else {
-      rowsDef.push({ bottom: iy1 - 1, front: 'street' });
-    }
-    rowsDef.forEach((row) => {
-      let x = ix0;
-      while (x + 8 <= ix1) {
-        if (b.c === 1 && b.r === 4 && row.front === 'street' && !out.home && x + 24 <= ix1) { const hm = playerHome(x, row.bottom, b); x += hm.w + 8; continue; }      // the player's home takes the first street-side plot of this block
-        const w = Math.min(ri(9, 12), ix1 - x + 1);
-        if (w < 8) break;
-        const h = ri(8, 9);
-        const y = row.bottom - h + 1;
-        if (y < iy0) { x += w + 2; continue; }
-        const ab = rng() < abandonedChance;
-        const hs = house(x, y, w, h, { abandoned: ab, roof: 'shingle' });
-        addPoi(ab ? 'house' : 'house', ab ? 'Abandoned house' : 'House', x, y, w, h);
-        if (ab) { if (rng() < 0.6) enemy(hs.free[0]?.x ?? x + 2, hs.free[0]?.y ?? y + 2, 'gang', rng() < 0.5 ? 'pistol' : 'shotgun', 'guard', 50); }
-        else if (rng() < 0.45) civ(hs.doorX, hs.doorY + 2, 'stand');
-        x += w + ri(2, 3);
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 31) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      const bh = iy1 - iy0 + 1;
+      const rowsDef = [];
+      if (bh >= 28) {
+        rowsDef.push({ bottom: iy0 + 9, front: 'alley' });
+        rowsDef.push({ bottom: iy1 - 2, front: 'street' });
+        // alley across the whole block
+        const ay = iy0 + 12;
+        for (let x = b.x0; x <= b.x1; x++) for (let y = ay; y <= ay + 1; y++) { if (inb(x, y) && obj[y][x] === -1) ground[y][x] = isRoadT(ground[y][x]) ? ground[y][x] : T.road; }
+        mark(b.x0, ay, b.x1 - b.x0 + 1, 2, 0);
+        b.alley = ay;
+      } else if (bh >= 14) {
+        rowsDef.push({ bottom: iy1 - 2, front: 'street' });
+      } else {
+        rowsDef.push({ bottom: iy1 - 1, front: 'street' });
       }
-    });
-    // yard greenery
-    for (let i = 0; i < 26; i++) {
-      const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
-      if (occ[ty][tx] || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
-      if (rng() < 0.5) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 });
-    }
-    // gang / criminal presence in the alley
-    if (b.alley !== undefined) {
-      if (rng() < 0.55) enemy(ri(ix0 + 4, ix1 - 4), b.alley, 'gang', 'pistol', 'guard', 60);
-      if (rng() < 0.3) enemy(ri(ix0 + 4, ix1 - 4), b.alley + 1, 'criminal', 'pistol', 'guard', 50);
+      rowsDef.forEach((row) => {
+        const isHomeRow = b.c === 1 && b.r === 4 && row.front === 'street';
+        // Reserve the SE corner of res_gas blocks for a dedicated Gas Station lot
+        const rowMaxX = (b.kind === 'res_gas' && row.front === 'street') ? ix1 - 16 : ix1 - 1;
+        let x = isHomeRow ? ix0 : ix0 + 1;
+        while (x + 9 <= rowMaxX) {
+          if (isHomeRow && !out.home && x + 24 <= ix1) { const hm = playerHome(x, row.bottom, b); x += hm.w + 8; continue; }      // the player's home takes the first street-side plot of this block
+          const w = Math.min(ri(9, 11), rowMaxX - x + 1);
+          if (w < 9) break;
+          const h = ri(8, 9);
+          const y = row.bottom - h + 1;
+          if (y < iy0) { x += w + 4; continue; }
+          const ab = rng() < abandonedChance;
+          const hs = house(x, y, w, h, { abandoned: ab, roof: 'shingle' });
+          addPoi(ab ? 'house' : 'house', ab ? 'Abandoned house' : 'House', x, y, w, h);
+          if (ab) { if (rng() < 0.6) enemy(hs.free[0]?.x ?? x + 2, hs.free[0]?.y ?? y + 2, 'gang', rng() < 0.5 ? 'pistol' : 'shotgun', 'guard', 50); }
+          else if (rng() < 0.45) civ(hs.doorX, hs.doorY + 2, 'stand');
+          x += w + ri(4, 5);
+        }
+      });
+      // yard greenery
+      for (let i = 0; i < 22; i++) {
+        const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
+        if (b.kind === 'res_gas' && tx >= b.x1 - 16 && ty >= b.y1 - 15) continue;
+        if (occ[ty][tx] || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
+        if (rng() < 0.5) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 });
+      }
+      // gang / criminal presence in the alley
+      if (b.alley !== undefined) {
+        if (rng() < 0.55) enemy(ri(ix0 + 4, ix1 - 4), b.alley, 'gang', 'pistol', 'guard', 60);
+        if (rng() < 0.3) enemy(ri(ix0 + 4, ix1 - 4), b.alley + 1, 'criminal', 'pistol', 'guard', 50);
+      }
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
   }
 
@@ -1482,100 +1493,260 @@ export function generateWorld(seed = 20240) {
   }
 
   function commercial(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    const bottoms = [iy0 + 9, iy1 - 2];
-    bottoms.forEach((bottom, rowI) => {
-      let x = ix0;
-      if (b.c === 2 && b.r === 3 && rowI === 1) { wiseSole(x, bottom - 12, 14, 13); x += 15; }     // WISE SOLE opens at the west end of Market Street
-      while (x + 9 <= ix1) {
-        const w = Math.min(ri(9, 12), ix1 - x + 1);
-        if (w < 9) break;
-        const h = ri(8, 10);
-        const spec = pick(SHOP_KINDS);
-        const ab = rng() < 0.08;
-        shop(x, bottom - h + 1, w, h, spec, { abandoned: ab });
-        x += w + 1;
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 19) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      const putLamp = (tx, ty) => { if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: ty * TILE + 30 }); } };
+      const putBench = (tx, ty) => { if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); } };
+
+      // Port City Trust (c=1, r=3) and TOTOYA (c=3, r=4) have their own dedicated full-block builders later
+      if ((b.c === 1 && b.r === 3) || (b.c === 3 && b.r === 4)) {
+        mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+        return;
       }
-    });
-    // parking lot between the two rows
-    const ly0 = iy0 + 12, ly1 = iy1 - 12;
-    for (let y = ly0; y <= ly1; y++) for (let x = ix0; x <= ix1; x++) { if (obj[y][x] === -1 && !occ[y][x]) { ground[y][x] = T.parking; } }
-    mark(ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1, 0);
-    out.lots.push({ x0: ix0, y0: ly0, x1: ix1, y1: ly1 });
-    addPoi('parking', 'Parking Lot', ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1);
-    if (rng() < 0.6) enemy(ri(ix0 + 3, ix1 - 3), ly0 + 1, 'guard', 'pistol', 'guard', 80);
+
+      // Dedicated flagship block for WISE SOLE on Market Street (c=2, r=3)
+      if (b.c === 2 && b.r === 3) {
+        mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+        for (let y = b.y0 + 1; y <= b.y1 - 1; y++) for (let x = b.x0 + 1; x <= b.x1 - 1; x++) {
+          if (obj[y][x] === -1) ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1;
+        }
+        const wx = b.x0 + 4, wy = b.y1 - 17, ww = 14, wh = 13, wfy = wy + wh - 1;
+        wiseSole(wx, wy, ww, wh);
+        // Expanded flagship front plaza & side promenade
+        for (let y = wfy + 1; y <= b.y1 - 1; y++) for (let x = wx - 1; x <= wx + ww + 1; x++) {
+          if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.plaza;
+        }
+        for (let y = wy - 1; y <= wfy; y++) if (obj[y][wx + ww] === -1) ground[y][wx + ww] = T.plaza;
+        // Dedicated East Customer Parking Lot & Driveway (x = wx + ww + 1 .. ix1, y = wy - 4 .. b.y1 - 1)
+        const dx0 = wx + ww + 1, dx1 = wx + ww + 3, px0 = dx1 + 1, px1 = ix1, py0 = wy - 4, py1 = wfy + 1;
+        for (let y = py0; y <= b.y1; y++) for (let x = dx0; x <= dx1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.road;
+        for (let y = py0; y <= py1; y++) for (let x = px0; x <= px1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.parking;
+        out.lots.push({ x0: px0, y0: py0, x1: px1, y1: py1 });
+        addPoi('parking', 'WISE SOLE Parking', dx0, py0, px1 - dx0 + 1, py1 - py0 + 1);
+        vehicle('sports', 0, (px0 + 2) * TILE, (py0 + 2) * TILE, Math.PI / 2, 'parked');
+        vehicle('luxury', 1, (px0 + 6) * TILE, (py0 + 8) * TILE, -Math.PI / 2, 'parked');
+        // North Landscaped Market Street Courtyard (y = iy0 .. wy - 3)
+        const cy = iy0 + 4;
+        for (let y = cy; y <= cy + 1; y++) for (let x = ix0; x <= dx1; x++) if (obj[y][x] === -1) ground[y][x] = T.plaza;
+        for (let y = cy + 1; y < wy; y++) for (let x = wx + 5; x <= wx + 6; x++) if (obj[y][x] === -1) ground[y][x] = T.plaza;
+        putBench(wx + 2, cy - 1); putBench(wx + 9, cy - 1); putBench(wx + 2, wfy + 2); putBench(wx + 11, wfy + 2);
+        putLamp(wx - 1, wfy + 2); putLamp(dx0 - 1, wfy + 2); putLamp(dx0 - 1, py0 + 1); putLamp(px1, py0 + 1); putLamp(wx + 4, cy - 1);
+        for (let x = ix0 + 1; x <= ix1 - 1; x += 5) {
+          if (inb(x, iy0 + 1) && obj[iy0 + 1][x] === -1) obj[iy0 + 1][x] = T.tree;
+        }
+        [[wx - 2, wy + 3], [wx - 2, wy + 9], [px1, iy0 + 4]].forEach(([tx, ty]) => { if (inb(tx, ty) && obj[ty][tx] === -1) obj[ty][tx] = T.tree; });
+        for (let x = wx; x <= wx + ww - 1; x += 2) {
+          if (obj[wy - 2][x] === -1) out.decor.push({ kind: x % 4 === 0 ? 'bush' : 'flower_a', x: px(x), y: (wy - 2) * TILE + 26 });
+        }
+        return;
+      }
+
+      // Dedicated single-establishment commercial lot for Supermarkets, Restaurants, Hardware, Pharmacy, and Clothing
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      for (let y = b.y0 + 1; y <= b.y1 - 1; y++) for (let x = b.x0 + 1; x <= b.x1 - 1; x++) {
+        if (obj[y][x] === -1) ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1;
+      }
+      const KIND_BY_BLOCK = {
+        '2,5': 'Diner',
+        '6,3': 'Hardware',
+        '7,2': 'Grocery',
+        '8,3': 'Pharmacy',
+        '10,2': 'Cafe',
+        '10,3': 'Clothing',
+        '3,8': 'Pizza',
+        '10,8': 'Grocery'
+      };
+      const targetKind = KIND_BY_BLOCK[`${b.c},${b.r}`];
+      const spec = SHOP_KINDS.find((s) => s.kind === targetKind) || pick(SHOP_KINDS);
+      const w = 18, h = 11;
+      const bx = ix0 + 1, by = iy1 - 1 - h, bfy = by + h - 1;
+      shop(bx, by, w, h, spec, { abandoned: false });
+
+      // Front entrance plaza & perimeter walkway
+      for (let y = bfy + 1; y <= b.y1 - 1; y++) for (let x = bx - 1; x <= bx + w + 1; x++) {
+        if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.plaza;
+      }
+      for (let y = by - 1; y <= bfy; y++) {
+        if (obj[y][bx - 1] === -1) ground[y][bx - 1] = T.plaza;
+        if (obj[y][bx + w] === -1) ground[y][bx + w] = T.plaza;
+      }
+      for (let x = bx - 1; x <= bx + w; x++) if (obj[by - 1][x] === -1) ground[by - 1][x] = T.plaza;
+
+      // Outdoor dining patio for Restaurants (Diner, Cafe, Pizza) or display planters/benches for Retail
+      if (spec.tables) {
+        [[bx + 3, bfy + 2], [bx + 8, bfy + 2]].forEach(([tx, ty]) => {
+          if (obj[ty][tx] === -1 && obj[ty][tx - 1] === -1 && obj[ty][tx + 1] === -1) {
+            obj[ty][tx] = T.prop;
+            out.decor.push({ kind: 'outdoor_table', x: px(tx), y: ty * TILE + 38 });
+            obj[ty][tx - 1] = T.chair;
+            obj[ty][tx + 1] = T.chair;
+          }
+        });
+      } else {
+        putBench(bx + 3, bfy + 2);
+        putBench(bx + 9, bfy + 2);
+      }
+      [[bx + 1, bfy + 1], [bx + w - 2, bfy + 1]].forEach(([tx, ty]) => {
+        if (obj[ty][tx] === -1) out.decor.push({ kind: 'planter', x: px(tx), y: ty * TILE + 32 });
+      });
+
+      // Dedicated East Customer Parking Lot & Street Driveway
+      const dx0 = bx + w + 1, dx1 = bx + w + 3, lx0 = dx1 + 1, lx1 = ix1, ly0 = by - 3, ly1 = bfy + 1;
+      for (let y = ly0; y <= b.y1; y++) for (let x = dx0; x <= dx1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.road;
+      for (let y = ly0; y <= ly1; y++) for (let x = lx0; x <= lx1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.parking;
+      out.lots.push({ x0: lx0, y0: ly0, x1: lx1, y1: ly1 });
+      addPoi('parking', `${spec.kind} Parking`, dx0, ly0, lx1 - dx0 + 1, ly1 - ly0 + 1);
+
+      // North Landscaped Courtyard & Parkette behind the establishment (y = iy0 .. by - 3)
+      const py = iy0 + 4;
+      for (let y = py; y <= py + 1; y++) for (let x = ix0; x <= dx1; x++) if (obj[y][x] === -1) ground[y][x] = T.plaza;
+      putBench(bx + 4, py - 1);
+      putBench(bx + 11, py - 1);
+      putLamp(bx - 1, bfy + 2);
+      putLamp(dx0 - 1, bfy + 2);
+      putLamp(dx0 - 1, ly0 + 1);
+      putLamp(lx1, ly0 + 1);
+      putLamp(bx + 7, py - 1);
+      for (let x = ix0 + 1; x <= ix1 - 1; x += 5) {
+        if (inb(x, iy0 + 1) && obj[iy0 + 1][x] === -1) obj[iy0 + 1][x] = T.tree;
+      }
+      for (let x = bx + 1; x <= bx + w - 2; x += 2) {
+        if (obj[by - 2][x] === -1) out.decor.push({ kind: x % 4 === 0 ? 'bush' : 'flower_b', x: px(x), y: (by - 2) * TILE + 26 });
+      }
+      if (rng() < 0.5) enemy(dx0 + 1, ly0 + 2, 'guard', 'pistol', 'guard', 80);
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
+    }
   }
 
   function downtown(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) if (obj[y][x] === -1 && isGrass(ground[y][x])) ground[y][x] = T.plaza;
-    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
-    const bottoms = [iy0 + 15, iy1 - 2];
-    bottoms.forEach((bottom) => {
-      let x = ix0;
-      while (x + 12 <= ix1) {
-        const w = Math.min(ri(13, 17), ix1 - x + 1);
-        if (w < 12) break;
-        let h = ri(12, 14);
-        while (h > 9 && out.buildings.some((q) => x < q.x + q.w + 1 && q.x < x + w + 1 && bottom - h + 1 < q.y + q.h + 2 && q.y < bottom + 2)) h--;       // never overlap a tower of the first row
-        const t = house(x, bottom - h + 1, w, h, { wall: T.glass, office: true, roof: 'tower', lift: 64, kind: 'tower', wideDoor: true, windowChance: 0 });
-        addPoi('tower', pick(['Apex Tower', 'Meridian Plaza', 'Harbor Bank', 'Orion Offices', 'City Hall Annex']), t.x, t.y, t.w, t.h);
-        publicDoor(t.doorX, t.doorY, 'office', 'Office');
-        if (rng() < 0.7) enemy(t.doorX, t.doorY + 2, 'guard', 'pistol', 'guard', 30);
-        x += w + 3;
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 23) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      if (b.c === 2 && b.r === 2) return; // Dedicated city block for Reyes Holdings Tower (built in its own custom generator below)
+      // Landscaped perimeter lawn + grand central stone plaza
+      for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) {
+        const isEdge = x <= b.x0 + 3 || x >= b.x1 - 3 || y <= b.y0 + 3;
+        if (obj[y][x] === -1) ground[y][x] = isEdge ? T.grass1 : T.plaza;
       }
-    });
-    // fountain + benches in the plaza
-    const fx = Math.floor((b.x0 + b.x1) / 2), fy = Math.floor((iy0 + iy1) / 2);
-    out.props.push({ kind: 'fountain', x: px(fx), y: fy * TILE + 40 });
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (inb(fx + dx, fy + dy)) obj[fy + dy][fx + dx] = T.prop;
-    for (let i = 0; i < 6; i++) {
-      const tx = fx - 6 + i * 2 + (i > 2 ? 2 : 0), ty = fy + 3;
-      if (obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); }
+      // Single monumental high-rise tower per downtown block (eliminates tall roof vertical overlaps)
+      const w = 20, h = 13;
+      const tx0 = b.x0 + 5, ty0 = iy0 + 3;
+      const t = house(tx0, ty0, w, h, { wall: T.glass, office: true, roof: 'tower', lift: 64, kind: 'tower', wideDoor: true, windowChance: 0 });
+      const towerName = b.c === 2 ? 'Reyes Holdings Tower' : b.c === 3 ? 'City Hall Annex' : 'Meridian Plaza';
+      addPoi('tower', towerName, t.x, t.y, t.w, t.h);
+      publicDoor(t.doorX, t.doorY, 'office', 'Office');
+      if (rng() < 0.7) enemy(t.doorX, t.doorY + 2, 'guard', 'pistol', 'guard', 30);
+
+      // Dedicated East Executive Parking Lot & Street Driveway
+      const dx0 = tx0 + w + 1, dx1 = tx0 + w + 3, lx0 = dx1 + 1, lx1 = ix1, ly0 = ty0, ly1 = iy1 - 2;
+      for (let y = ly0; y <= b.y1; y++) for (let x = dx0; x <= dx1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.road;
+      for (let y = ly0; y <= ly1; y++) for (let x = lx0; x <= lx1; x++) if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.parking;
+      out.lots.push({ x0: lx0, y0: ly0, x1: lx1, y1: ly1 });
+      addPoi('parking', `${towerName} Parking`, dx0, ly0, lx1 - dx0 + 1, ly1 - ly0 + 1);
+
+      // Grand Civic Fountain & Plaza Benches in front of the tower
+      const fx = tx0 + Math.floor(w / 2), fy = ty0 + h + 5;
+      out.props.push({ kind: 'fountain', x: px(fx), y: fy * TILE + 40 });
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (inb(fx + dx, fy + dy)) obj[fy + dy][fx + dx] = T.prop;
+      for (const bx of [fx - 5, fx - 3, fx + 3, fx + 5]) {
+        const by = fy + 3;
+        if (inb(bx, by) && obj[by][bx] === -1) { obj[by][bx] = T.bench; out.benches.push({ x: px(bx), y: px(by) + 8 }); }
+      }
+      [[tx0 + 2, ty0 + h + 1], [tx0 + w - 3, ty0 + h + 1]].forEach(([px0, py0]) => {
+        if (obj[py0][px0] === -1) out.decor.push({ kind: 'planter', x: px(px0), y: py0 * TILE + 32 });
+      });
+      [[tx0, ty0 + h + 2], [tx0 + w - 1, ty0 + h + 2], [fx - 6, fy], [fx + 6, fy]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      for (let y = b.y0 + 3; y <= b.y1 - 3; y += 5) {
+        if (inb(b.x0 + 2, y) && obj[y][b.x0 + 2] === -1) obj[y][b.x0 + 2] = T.tree;
+      }
+      for (let x = b.x0 + 4; x <= b.x1 - 4; x += 5) {
+        if (inb(x, b.y0 + 2) && obj[b.y0 + 2][x] === -1) obj[b.y0 + 2][x] = T.tree;
+      }
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
   }
 
   function industrial(b, withGas) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) if (obj[y][x] === -1 && isGrass(ground[y][x])) ground[y][x] = T.concrete;
-    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
-    const tallH = b.y1 - b.y0;
-    const rowsDef = tallH > 25 ? [iy0 + 11, iy1 - 3] : [iy1 - 2];
-    rowsDef.forEach((bottom) => {
-      let x = ix0;
-      while (x + 14 <= ix1) {
-        const w = Math.min(ri(14, 20), ix1 - x + 1);
-        if (w < 14) break;
-        const h = ri(10, 12);
-        const bd = block(x, bottom - h + 1, w, h, { wall: T.wall2, floor: T.concrete, crates: ri(5, 8), tier: rng() < 0.5 ? 'storage' : 'crate', wide: true, noPartition: true, layout: ['rows', 'bays', 'open'][(x * 3 + bottom) % 3], depot: (depotSeq++ % 4 === 1) && depotCount < 8 && w >= 14 && h >= 10, pallets: ri(2, 4), loose: 2, roof: 'metal', windowChance: 0.2, kind: 'warehouse' });
-        if (bd.depot) { depotCount++; addPoi('shop', 'Supply Depot', x, bottom - h + 1, w, h); } else addPoi('industrial', rng() < 0.5 ? 'Warehouse' : 'Factory', x, bottom - h + 1, w, h);
-        if (!bd.depot && bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, rng() < 0.6 ? 'guard' : 'criminal', 'pistol', 'guard', 60); }
-        civ(x + 2, bottom + 2, 'worker');
-        x += w + 3;
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 29) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      // Landscaped perimeter buffer + concrete industrial compound interior
+      for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) {
+        if (obj[y][x] !== -1) continue;
+        const isBorder = x === b.x0 + 1 || x === b.x1 - 1 || y === b.y0 + 1;
+        ground[y][x] = isBorder ? T.grass1 : T.concrete;
       }
-    });
-    // shipping containers + dumpsters in the yard
-    for (let i = 0; i < 9; i++) {
-      const tx = ri(ix0, ix1 - 3), ty = ri(iy0 + 2, iy1 - 2);
-      if (obj[ty][tx] === -1 && obj[ty][tx + 1] === -1 && obj[ty][tx + 2] === -1 && !occ[ty][tx] && !occ[ty][tx + 2]) {
-        for (let k = 0; k < 2; k++) obj[ty][tx + k] = T.prop;
-        out.props.push({ kind: 'container', variant: ri(0, 2), x: (tx + 1) * TILE, y: ty * TILE + 34 });
-        mark(tx, ty, 3, 1, 0);
+      const tallH = b.y1 - b.y0;
+      // Single primary industrial facility per block (Warehouse, Factory, or Supply Depot) with a spacious freight & loading yard
+      const w = 22, h = tallH > 25 ? 11 : 10;
+      const bx = ix0 + 2, by = iy0 + 2, bottom = by + h - 1;
+      const isDepot = (depotSeq++ % 3 === 1) && depotCount < 6;
+      const bd = block(bx, by, w, h, {
+        wall: T.wall2, floor: T.concrete, crates: ri(5, 8), tier: rng() < 0.5 ? 'storage' : 'crate',
+        wide: true, noPartition: true, layout: ['rows', 'bays', 'open'][(bx * 3 + bottom) % 3],
+        depot: isDepot, pallets: ri(2, 4), loose: 2, roof: 'metal', windowChance: 0.2, kind: 'warehouse'
+      });
+      if (bd.depot) { depotCount++; addPoi('shop', 'Supply Depot', bx, by, w, h); }
+      else addPoi('industrial', rng() < 0.5 ? 'Warehouse' : 'Factory', bx, by, w, h);
+      if (!bd.depot && bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, rng() < 0.6 ? 'guard' : 'criminal', 'pistol', 'guard', 60); }
+      civ(bx + 3, bottom + 2, 'worker');
+      civ(bx + w - 4, bottom + 2, 'worker');
+
+      // Street driveway curb cut from the freight yard to the south avenue
+      for (let x = bx + 6; x <= bx + 10; x++) if (inb(x, b.y1) && obj[b.y1][x] === -1) ground[b.y1][x] = T.road;
+
+      if (tallH > 25) {
+        // Reserve SE corner (x >= b.x1 - 16, y >= b.y1 - 15) if withGas so placeGasStations() has a clean dedicated corner lot
+        const yardMaxX = withGas ? b.x1 - 17 : ix1 - 1;
+        // Marked freight & employee parking lot in the south-west yard
+        const ly0 = bottom + 4, ly1 = iy1 - 1, lx0 = ix0 + 1, lx1 = Math.min(ix0 + 13, yardMaxX);
+        for (let y = ly0; y <= ly1; y++) for (let x = lx0; x <= lx1; x++) if (obj[y][x] === -1) ground[y][x] = T.parking;
+        out.lots.push({ x0: lx0, y0: ly0, x1: lx1, y1: ly1 });
+
+        // Organized shipping containers in the east yard (outside gas reserve)
+        const cSpots = withGas
+          ? [[bx + w + 2, by + 2], [bx + w + 2, by + 5], [bx + w + 2, by + 8]]
+          : [[bx + w + 2, by + 2], [bx + w + 2, by + 6], [bx + w + 2, bottom + 4], [bx + w + 2, bottom + 7]];
+        cSpots.forEach(([tx, ty], idx) => {
+          if (tx + 2 <= ix1 && obj[ty][tx] === -1 && obj[ty][tx + 1] === -1) {
+            obj[ty][tx] = T.prop; obj[ty][tx + 1] = T.prop;
+            out.props.push({ kind: 'container', variant: idx % 3, x: (tx + 1) * TILE, y: ty * TILE + 34 });
+          }
+        });
+        // Dumpsters beside the warehouse
+        [[bx - 1, bottom - 1], [bx + w, bottom - 1]].forEach(([tx, ty]) => {
+          if (inb(tx, ty) && obj[ty][tx] === -1) {
+            obj[ty][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: ty * TILE + 30 }); addContainer(tx, ty, 'trash', 'Dumpster');
+          }
+        });
+        // Yard lamps & cones
+        [[bx, bottom + 2], [bx + w - 1, bottom + 2]].forEach(([tx, ty]) => {
+          if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: ty * TILE + 30 }); }
+        });
+        enemy(bx + 8, iy1 - 1, 'guard', 'pistol', 'guard', 40);
       }
+      if (withGas) {
+        for (let y = b.y1 - 15; y <= b.y1 - 1; y++) for (let x = b.x1 - 16; x <= b.x1 - 1; x++) {
+          if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.concrete;
+        }
+        queueGas(b.x1 - 12, b.y1 - 13);
+      }
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
-    for (let i = 0; i < 5; i++) {
-      const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
-      if (obj[ty][tx] === -1 && !occ[ty][tx]) {
-        obj[ty][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: ty * TILE + 30 }); addContainer(tx, ty, 'trash', 'Dumpster');
-        mark(tx, ty, 1, 1, 0);
-      }
-    }
-    // construction cones + worker crew
-    for (let i = 0; i < 6; i++) { const tx = ri(ix0, ix1), ty = ri(iy0, iy1); if (obj[ty][tx] === -1 && !occ[ty][tx]) out.decor.push({ kind: 'cone', x: px(tx), y: ty * TILE + 28 }); }
-    civ(ri(ix0 + 2, ix1 - 2), ri(iy0 + 3, iy1 - 3), 'worker'); civ(ri(ix0 + 2, ix1 - 2), ri(iy0 + 3, iy1 - 3), 'worker');
-    // fenced yard gate guard
-    enemy(ri(ix0 + 4, ix1 - 4), iy1 - 1, 'guard', 'pistol', 'guard', 40);
-    if (withGas) queueGas(ix0 + 1, iy1 - 12);
   }
 
   /* ---- the city park: a public recreation area, not a field with random trees. Paved paths run from the middle of each side to a round fountain plaza in the
@@ -1645,57 +1816,133 @@ export function generateWorld(seed = 20240) {
   }
 
   function hospitalBlock(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) if (obj[y][x] === -1 && isGrass(ground[y][x]) && rng() < 0.15) { if (rng() < 0.4) obj[y][x] = T.tree; }
-    const hw = 26, hh = 16;
-    const hx = Math.floor((b.x0 + b.x1) / 2) - 13, hy = iy0 + 1;
-    hospital(hx, hy, hw, hh);
-    // parking lot in front
-    const ly0 = hy + hh + 1, ly1 = iy1 - 1;
-    for (let y = ly0; y <= ly1; y++) for (let x = ix0 + 2; x <= ix1 - 2; x++) { if (obj[y][x] === -1) { ground[y][x] = T.parking; occ[y][x] = true; } }
-    out.lots.push({ x0: ix0 + 2, y0: ly0, x1: ix1 - 2, y1: ly1, ambulances: 2 });
-    enemy(hx + 12, hy + hh + 2, 'guard', 'pistol', 'guard', 40);
-    civ(hx + 10, hy + hh + 2, 'stand'); civ(hx + 15, hy + hh + 3, 'stand');
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 37) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) {
+        if (obj[y][x] === -1) ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1;
+      }
+      const hw = 26, hh = 16;
+      const hx = Math.floor((b.x0 + b.x1) / 2) - 13, hy = iy0 + 1;
+      hospital(hx, hy, hw, hh);
+
+      // Paved walkway perimeter & emergency entrance plaza
+      for (let x = hx - 1; x <= hx + hw; x++) {
+        if (obj[hy + hh][x] === -1) ground[hy + hh][x] = T.plaza;
+        if (obj[hy - 1][x] === -1) ground[hy - 1][x] = T.plaza;
+      }
+      for (let y = hy - 1; y <= hy + hh; y++) {
+        if (obj[y][hx - 1] === -1) ground[y][hx - 1] = T.plaza;
+        if (obj[y][hx + hw] === -1) ground[y][hx + hw] = T.plaza;
+      }
+
+      // Dedicated Ambulance & Patient Parking Lot in front, split by a central Emergency Driveway to the south street
+      const ly0 = hy + hh + 1, ly1 = iy1 - 1, midX = hx + Math.floor(hw / 2);
+      for (let y = ly0; y <= ly1; y++) for (let x = ix0 + 2; x <= ix1 - 2; x++) {
+        if (obj[y][x] !== -1) continue;
+        if (Math.abs(x - midX) <= 1) ground[y][x] = T.road;
+        else if (Math.abs(x - midX) === 2) ground[y][x] = T.plaza;
+        else ground[y][x] = T.parking;
+        occ[y][x] = true;
+      }
+      // Curb cut connecting the emergency driveway through the south sidewalk to the public road
+      for (let y = ly1 + 1; y <= b.y1; y++) for (let x = midX - 1; x <= midX + 1; x++) {
+        if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.road;
+      }
+      out.lots.push({ x0: ix0 + 2, y0: ly0, x1: midX - 3, y1: ly1, ambulances: 2 });
+      out.lots.push({ x0: midX + 3, y0: ly0, x1: ix1 - 2, y1: ly1 });
+
+      // Campus landscaping: shade trees, hedges, benches, and street lamps along the west and east medical grounds
+      [[midX - 2, ly0 + 1], [midX + 2, ly0 + 1], [hx - 1, hy + hh + 1], [hx + hw, hy + hh + 1]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      [[midX - 2, ly0 + 4], [midX + 2, ly0 + 4]].forEach(([bx, by]) => {
+        if (inb(bx, by) && obj[by][bx] === -1) { obj[by][bx] = T.bench; out.benches.push({ x: px(bx), y: px(by) + 8 }); }
+      });
+      for (let y = hy + 1; y <= hy + hh - 1; y += 4) {
+        if (inb(b.x0 + 2, y) && obj[y][b.x0 + 2] === -1) obj[y][b.x0 + 2] = T.tree;
+        if (inb(b.x1 - 2, y) && obj[y][b.x1 - 2] === -1) obj[y][b.x1 - 2] = T.tree;
+      }
+      enemy(hx + 12, hy + hh + 2, 'guard', 'pistol', 'guard', 40);
+      civ(hx + 10, hy + hh + 2, 'stand'); civ(hx + 15, hy + hh + 3, 'stand');
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
+    }
   }
 
   function policeBlock(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    // small shops along the top, police station + lot at the bottom
-    let x = ix0;
-    while (x + 9 <= ix1) {
-      const w = Math.min(ri(9, 11), ix1 - x + 1);
-      if (w < 9) break;
-      shop(x, iy0 + 1, w, 9, pick(SHOP_KINDS), {});
-      x += w + 1;
-    }
-    const sw = 28, sh = 14;
-    const sx = Math.floor((b.x0 + b.x1) / 2) - 14, sy = iy1 - sh - 1;
-    policeStation(sx, sy, sw, sh, Math.floor((b.x0 + b.x1) / 2) - 11);
-    const ly0 = iy0 + 12, ly1 = sy - 2;
-    for (let y = ly0; y <= ly1; y++) for (let xx = ix0; xx <= ix1; xx++) { if (obj[y][xx] === -1 && !occ[y][xx]) ground[y][xx] = T.parking; }
-    out.lots.push({ x0: ix0, y0: ly0, x1: ix1, y1: ly1, police: 3 });
-    // behind the station: no parking. A staff-only service yard (open concrete pad with dumpsters, no fence) between the back wall and the street of shops.
-    {
-      const y8 = sy - 2, y9 = sy - 1;
-      for (let tx = sx + 3; tx <= sx + 24; tx++) for (const ty of [y8, y9]) if (inb(tx, ty) && obj[ty][tx] === -1) { ground[ty][tx] = T.concrete; occ[ty][tx] = true; }
-      [sx + 5, sx + 21].forEach((tx) => { if (obj[y9][tx] === -1) { obj[y9][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: y9 * TILE + 30 }); } });
-    }
-    // a paved promenade between the shop fronts and the station's service yard: two rows of pavers (the top row stays clear for walking), lamps, benches, planters and flower beds along the lower row
-    {
-      const p0 = sy - 3, p1 = sy - 2;
-      for (let tx = ix0; tx <= ix1; tx++) for (const ty of [p0, p1]) if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) { ground[ty][tx] = T.plaza; occ[ty][tx] = true; }
-      const ok = (tx) => inb(tx, p1) && obj[p1][tx] === -1 && ground[p1][tx] === T.plaza;
-      for (let tx = ix0 + 3, k = 0; tx <= ix1 - 2; tx += 4, k++) {
-        if (!ok(tx)) continue;
-        if (k % 3 === 0) { obj[p1][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: p1 * TILE + 30 }); }
-        else if (k % 3 === 1) obj[p1][tx] = T.bench;                                 // (no loiterer on these benches: the bench tile is solid, so he used to be moved into the shop doorway)
-        else out.decor.push({ kind: 'bush', x: px(tx), y: p1 * TILE + 28 }, { kind: k % 2 ? 'flower_a' : 'flower_b', x: px(tx + 1), y: p1 * TILE + 26 }, { kind: 'flower_b', x: px(tx - 1), y: p1 * TILE + 26 });
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 41) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      // Dedicate the entire block to the Police Department Precinct (no filler shops behind the station)
+      for (let y = b.y0 + 1; y < b.y1; y++) for (let x = b.x0 + 1; x < b.x1; x++) {
+        if (obj[y][x] === -1) ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1;
       }
+      const sw = 28, sh = 14;
+      const sx = Math.floor((b.x0 + b.x1) / 2) - 14, sy = iy1 - sh - 1;
+      policeStation(sx, sy, sw, sh, Math.floor((b.x0 + b.x1) / 2) - 11);
+
+      // North Police Precinct Motor Pool & Squad Car Compound (y = iy0 + 1 .. sy - 4)
+      const my0 = iy0 + 1, my1 = sy - 4, mx0 = sx + 1, mx1 = sx + sw - 2, gateX = sx + 13;
+      for (let y = my0; y <= my1; y++) for (let x = mx0; x <= mx1; x++) {
+        if (obj[y][x] !== -1) continue;
+        ground[y][x] = Math.abs(x - gateX) <= 1 ? T.road : T.parking;
+        occ[y][x] = true;
+      }
+      // North driveway curb cut connecting the motor pool to the north street
+      for (let y = b.y0; y < my0; y++) for (let x = gateX - 1; x <= gateX + 1; x++) {
+        if (inb(x, y) && obj[y][x] === -1) ground[y][x] = T.road;
+      }
+      // Perimeter security fence around the motor pool with a 3-tile north vehicle gate
+      for (let x = mx0 - 1; x <= mx1 + 1; x++) {
+        if (Math.abs(x - gateX) > 1 && obj[my0 - 1][x] === -1) obj[my0 - 1][x] = T.fence;
+      }
+      for (let y = my0 - 1; y <= my1; y++) {
+        if (obj[y][mx0 - 1] === -1) obj[y][mx0 - 1] = T.fence;
+        if (obj[y][mx1 + 1] === -1) obj[y][mx1 + 1] = T.fence;
+      }
+      out.lots.push({ x0: mx0, y0: my0 + 1, x1: gateX - 2, y1: my1, police: 3 });
+      out.lots.push({ x0: gateX + 2, y0: my0 + 1, x1: mx1, y1: my1, police: 2 });
+
+      // Staff service apron & dumpsters immediately behind the station (sy - 2 .. sy - 1)
+      {
+        const y8 = sy - 2, y9 = sy - 1;
+        for (let tx = sx + 3; tx <= sx + 24; tx++) for (const ty of [y8, y9]) if (inb(tx, ty) && obj[ty][tx] === -1) { ground[ty][tx] = T.concrete; occ[ty][tx] = true; }
+        [sx + 5, sx + 21].forEach((tx) => { if (obj[y9][tx] === -1) { obj[y9][tx] = T.prop; out.props.push({ kind: 'dumpster', x: px(tx), y: y9 * TILE + 30 }); } });
+      }
+      // Paved precinct promenade between the motor pool and the station's service yard
+      {
+        const p0 = sy - 3, p1 = sy - 2;
+        for (let tx = ix0; tx <= ix1; tx++) for (const ty of [p0, p1]) if (inb(tx, ty) && obj[ty][tx] === -1 && !isRoadT(ground[ty][tx]) && ground[ty][tx] !== T.water) { ground[ty][tx] = T.plaza; occ[ty][tx] = true; }
+        const ok = (tx) => inb(tx, p1) && obj[p1][tx] === -1 && ground[p1][tx] === T.plaza;
+        for (let tx = ix0 + 3, k = 0; tx <= ix1 - 2; tx += 4, k++) {
+          if (!ok(tx)) continue;
+          if (k % 3 === 0) { obj[p1][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: p1 * TILE + 30 }); }
+          else if (k % 3 === 1) obj[p1][tx] = T.bench;
+          else out.decor.push({ kind: 'bush', x: px(tx), y: p1 * TILE + 28 }, { kind: k % 2 ? 'flower_a' : 'flower_b', x: px(tx + 1), y: p1 * TILE + 26 }, { kind: 'flower_b', x: px(tx - 1), y: p1 * TILE + 26 });
+        }
+      }
+      // Side lawn trees & precinct floodlights
+      [[mx0, my0], [mx1, my0], [gateX - 2, my0], [gateX + 2, my0]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      for (let y = b.y0 + 3; y <= b.y1 - 4; y += 5) {
+        if (inb(b.x0 + 2, y) && obj[y][b.x0 + 2] === -1) obj[y][b.x0 + 2] = T.tree;
+        if (inb(b.x1 - 2, y) && obj[y][b.x1 - 2] === -1) obj[y][b.x1 - 2] = T.tree;
+      }
+      // two officers on duty in the restricted hall + one outside by the motor pool
+      enemy(sx + 12, sy + 6, 'police', 'pistol', 'guard', 24);
+      enemy(sx + 19, sy + 6, 'police', 'pistol', 'guard', 24);
+      enemy(sx + 18, sy + 16, 'police', 'pistol', 'guard', 24);
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
-    // two officers on duty in the restricted hall
-    enemy(sx + 12, sy + 6, 'police', 'pistol', 'guard', 24);
-    enemy(sx + 19, sy + 6, 'police', 'pistol', 'guard', 24);
-    enemy(sx + 18, sy + 16, 'police', 'pistol', 'guard', 24);                                  // one on duty outside, by the parking
   }
 
   /* ----- military ----- */
@@ -1788,69 +2035,315 @@ export function generateWorld(seed = 20240) {
   }
 
   function school(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    const w2 = Math.min(30, ix1 - ix0 - 3), h2 = 12, x = ix0 + 2, y = iy0 + 2;
-    const bd = block(x, y, w2, h2, { wall: T.wall, floor: T.tileFloor, crates: 0, loose: 3, roof: 'shingle', kind: 'school', windowChance: 0.85, wide: true, looseIds: ['medkit', 'm_pipe', 'ammo_pistol'] });
-    addPoi('house', 'Lincoln School', x, y, w2, h2);
-    for (let yy = y + h2; yy < y + h2 + 4; yy++) for (let xx = x - 2; xx < x + w2 + 3; xx++) if (inb(xx, yy) && obj[yy][xx] === -1 && isGrass(ground[yy][xx])) ground[yy][xx] = T.concrete;
-    // sports field with a dirt running track
-    const fx0 = ix0 + 3, fx1 = ix1 - 3, fy0 = y + h2 + 7, fy1 = iy1 - 2;
-    for (let yy = fy0; yy <= fy1; yy++) for (let xx = fx0; xx <= fx1; xx++) {
-      if (!inb(xx, yy) || obj[yy][xx] !== -1) continue;
-      const edge = xx === fx0 || xx === fx1 || yy === fy0 || yy === fy1;
-      const ring = xx <= fx0 + 1 || xx >= fx1 - 1 || yy <= fy0 + 1 || yy >= fy1 - 1;
-      ground[yy][xx] = edge || ring ? T.dirt : T.grass2;
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 43) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      for (let yy = b.y0 + 1; yy < b.y1; yy++) for (let xx = b.x0 + 1; xx < b.x1; xx++) {
+        if (obj[yy][xx] === -1) ground[yy][xx] = (xx + yy) % 3 === 0 ? T.grass2 : T.grass1;
+      }
+      // Lincoln School campus: main building on the west-center, athletic track & field + bus driveway on the east
+      const w2 = 20, h2 = 10, x = ix0 + 1, y = iy0 + 1;
+      const bd = block(x, y, w2, h2, { wall: T.wall, floor: T.tileFloor, crates: 0, loose: 3, roof: 'shingle', kind: 'school', windowChance: 0.85, wide: true, looseIds: ['medkit', 'm_pipe', 'ammo_pistol'] });
+      addPoi('house', 'Lincoln School', x, y, w2, h2);
+      // Paved campus courtyard in front of the school
+      for (let yy = y + h2; yy <= b.y1 - 1; yy++) for (let xx = x; xx < x + w2; xx++) {
+        if (inb(xx, yy) && obj[yy][xx] === -1) ground[yy][xx] = T.plaza;
+      }
+      // East athletic running track & sports field
+      const fx0 = x + w2 + 2, fx1 = ix1, fy0 = iy0 + 1, fy1 = iy1 - 1;
+      for (let yy = fy0; yy <= fy1; yy++) for (let xx = fx0; xx <= fx1; xx++) {
+        if (!inb(xx, yy) || obj[yy][xx] !== -1) continue;
+        const edge = xx === fx0 || xx === fx1 || yy === fy0 || yy === fy1;
+        const ring = xx <= fx0 + 1 || xx >= fx1 - 1 || yy <= fy0 + 1 || yy >= fy1 - 1;
+        ground[yy][xx] = edge || ring ? T.dirt : T.grass2;
+      }
+      for (let i = 0; i < 4; i++) {
+        const tx = x + 3 + i * 4, ty = y + h2 + 2;
+        if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); }
+      }
+      [[x + 1, y + h2 + 1], [x + w2 - 2, y + h2 + 1], [fx0 - 1, fy1]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      for (let i = 0; i < 5; i++) civ(ri(x + 2, x + w2 - 3), y + h2 + ri(1, 3), 'stand');
+      if (bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, 'guard', 'pistol', 'guard', 40); }
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
-    for (let i = 0; i < 6; i++) { const tx = fx0 + 3 + i * 3, ty = fy0 - 1; if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.bench; out.benches.push({ x: px(tx), y: px(ty) + 8 }); } }
-    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
-    for (let i = 0; i < 5; i++) civ(ri(x, x + w2 - 1), y + h2 + ri(1, 3), 'stand');
-    if (bd.free.length) { const t = bd.free.pop(); enemy(t.x, t.y, 'guard', 'pistol', 'guard', 40); }
   }
 
   function mall(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    const w2 = Math.min(ix1 - ix0 - 1, 38), h2 = 14, x = ix0 + Math.floor((ix1 - ix0 + 1 - w2) / 2), y = iy0 + 1;
-    shop(x, y, w2, h2, { kind: 'Shopping Center', tier: 'shop', floor: T.tileFloor, shelves: true }, { wall: T.wall2 });
-    const ly0 = y + h2 + 3, ly1 = iy1 - 1;
-    for (let yy = ly0; yy <= ly1; yy++) for (let xx = ix0; xx <= ix1; xx++) if (inb(xx, yy) && obj[yy][xx] === -1 && !occ[yy][xx]) ground[yy][xx] = T.parking;
-    mark(ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1, 0);
-    out.lots.push({ x0: ix0, y0: ly0, x1: ix1, y1: ly1 });
-    addPoi('parking', 'Mall Parking', ix0, ly0, ix1 - ix0 + 1, ly1 - ly0 + 1);
-    enemy(ri(ix0 + 3, ix1 - 3), ly0 + 1, 'guard', 'pistol', 'guard', 80);
-    for (let i = 0; i < 4; i++) civ(ri(ix0 + 4, ix1 - 4), ly0 - 1, 'stand');
-  }
-
-  function apartments(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    [iy0 + 13, iy1 - 2].forEach((bottom) => {
-      let x = ix0;
-      while (x + 14 <= ix1) {
-        const w2 = Math.min(ri(14, 18), ix1 - x + 1);
-        if (w2 < 14) break;
-        let h2 = ri(11, 13);
-        if (bottom > iy0 + 13) h2 = Math.max(9, Math.min(h2, bottom - (iy0 + 13) - 2));       // the second row keeps a two-tile street between it and the first row's front doors
-        const t = house(x, bottom - h2 + 1, w2, h2, { roof: 'metal', wall: T.wall2 });
-        addPoi('house', 'Apartments', t.x, t.y, t.w, t.h);
-        if (rng() < 0.6) civ(t.doorX, t.doorY + 2, 'stand');
-        x += w2 + 3;
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 47) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      for (let yy = b.y0 + 1; yy < b.y1; yy++) for (let xx = b.x0 + 1; xx < b.x1; xx++) {
+        if (obj[yy][xx] === -1) ground[yy][xx] = (xx + yy) % 3 === 0 ? T.grass2 : T.grass1;
       }
-    });
-    for (let i = 0; i < 20; i++) {
-      const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
-      if (!occ[ty][tx] && obj[ty][tx] === -1 && isGrass(ground[ty][tx])) { if (rng() < 0.6) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 }); }
+      // Well-proportioned Shopping Center centered in its dedicated block with landscaped side margins
+      const w2 = 26, h2 = 13, x = ix0 + Math.floor((ix1 - ix0 + 1 - w2) / 2), y = iy0 + 2;
+      shop(x, y, w2, h2, { kind: 'Shopping Center', tier: 'shop', floor: T.tileFloor, shelves: true }, { wall: T.wall2 });
+
+      // Grand entrance promenade (3 tiles deep)
+      const py0 = y + h2, py1 = y + h2 + 2;
+      for (let yy = py0; yy <= py1; yy++) for (let xx = x - 1; xx <= x + w2; xx++) {
+        if (inb(xx, yy) && obj[yy][xx] === -1) ground[yy][xx] = T.plaza;
+      }
+      // Customer Parking Lot split by a central Street Driveway
+      const ly0 = py1 + 1, ly1 = iy1 - 1, midX = x + Math.floor(w2 / 2);
+      for (let yy = ly0; yy <= ly1; yy++) for (let xx = x - 1; xx <= x + w2; xx++) {
+        if (!inb(xx, yy) || obj[yy][xx] !== -1) continue;
+        ground[yy][xx] = Math.abs(xx - midX) <= 1 ? T.road : T.parking;
+      }
+      for (let yy = ly1 + 1; yy <= b.y1; yy++) for (let xx = midX - 1; xx <= midX + 1; xx++) {
+        if (inb(xx, yy) && obj[yy][xx] === -1) ground[yy][xx] = T.road;
+      }
+      out.lots.push({ x0: x - 1, y0: ly0, x1: midX - 2, y1: ly1 });
+      out.lots.push({ x0: midX + 2, y0: ly0, x1: x + w2, y1: ly1 });
+      addPoi('parking', 'Mall Parking', x - 1, ly0, w2 + 2, ly1 - ly0 + 1);
+
+      // Promenade benches, planters, lamps, and side trees
+      [[x + 4, py0 + 1], [x + 9, py0 + 1], [x + w2 - 10, py0 + 1], [x + w2 - 5, py0 + 1]].forEach(([bx, by]) => {
+        if (inb(bx, by) && obj[by][bx] === -1) { obj[by][bx] = T.bench; out.benches.push({ x: px(bx), y: px(by) + 8 }); }
+      });
+      [[x + 2, py0 + 1], [x + w2 - 3, py0 + 1], [midX - 2, ly0 + 1], [midX + 2, ly0 + 1]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      for (let yy = y + 1; yy <= ly1; yy += 5) {
+        if (inb(b.x0 + 2, yy) && obj[yy][b.x0 + 2] === -1) obj[yy][b.x0 + 2] = T.tree;
+        if (inb(b.x1 - 2, yy) && obj[yy][b.x1 - 2] === -1) obj[yy][b.x1 - 2] = T.tree;
+      }
+      enemy(midX, ly0 + 1, 'guard', 'pistol', 'guard', 80);
+      for (let i = 0; i < 4; i++) civ(ri(x + 3, x + w2 - 4), py0 + 1, 'stand');
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
     }
   }
 
+  function apartments(b) {
+    const keepRng = rng;
+    rng = mulberry32(((seed * 53) + b.c * 131 + b.r * 997 + 53) >>> 0);
+    try {
+      const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
+      mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+      for (let yy = b.y0 + 1; yy < b.y1; yy++) for (let xx = b.x0 + 1; xx < b.x1; xx++) {
+        if (obj[yy][xx] === -1) ground[yy][xx] = (xx + yy) % 3 === 0 ? T.grass2 : T.grass1;
+      }
+      // Single well-spaced primary row of two apartment buildings with a central courtyard & resident parking lot in front
+      const bottom = iy0 + 14, h2 = 12, w2 = 14;
+      [ix0 + 1, ix1 - w2].forEach((x) => {
+        const y = bottom - h2 + 1;
+        const t = house(x, y, w2, h2, { roof: 'metal', wall: T.wall2 });
+        addPoi('house', 'Apartments', t.x, t.y, t.w, t.h);
+        // Paved entrance path connecting apartment door to the courtyard promenade
+        for (let py = bottom + 1; py <= bottom + 3; py++) {
+          if (inb(t.doorX, py) && obj[py][t.doorX] === -1) ground[py][t.doorX] = T.plaza;
+          if (inb(t.doorX + 1, py) && obj[py][t.doorX + 1] === -1) ground[py][t.doorX + 1] = T.plaza;
+        }
+        if (rng() < 0.7) civ(t.doorX, t.doorY + 2, 'stand');
+      });
+      // East-west courtyard walkway & central garden path to the south sidewalk
+      const cy0 = bottom + 3, midX = Math.floor((b.x0 + b.x1) / 2);
+      for (let xx = ix0 + 1; xx <= ix1 - 1; xx++) if (obj[cy0][xx] === -1) ground[cy0][xx] = T.plaza;
+      for (let yy = iy0 + 2; yy <= b.y1 - 1; yy++) for (let xx = midX - 1; xx <= midX; xx++) {
+        if (obj[yy][xx] === -1) ground[yy][xx] = T.plaza;
+      }
+      // Resident Parking Lot in the south-east half with street driveway access
+      const lx0 = midX + 3, lx1 = ix1 - 1, ly0 = cy0 + 2, ly1 = iy1 - 1;
+      for (let yy = ly0; yy <= ly1; yy++) for (let xx = lx0; xx <= lx1; xx++) {
+        if (obj[yy][xx] === -1) ground[yy][xx] = xx <= lx0 + 2 ? T.road : T.parking;
+      }
+      for (let yy = ly1 + 1; yy <= b.y1; yy++) for (let xx = lx0; xx <= lx0 + 2; xx++) {
+        if (inb(xx, yy) && obj[yy][xx] === -1) ground[yy][xx] = T.road;
+      }
+      out.lots.push({ x0: lx0 + 3, y0: ly0, x1: lx1, y1: ly1 });
+      // Resident Parkette in the south-west half (benches, lamps, shade trees, flower beds)
+      [[ix0 + 4, cy0 + 2], [ix0 + 9, cy0 + 2]].forEach(([bx, by]) => {
+        if (inb(bx, by) && obj[by][bx] === -1) { obj[by][bx] = T.bench; out.benches.push({ x: px(bx), y: px(by) + 8 }); }
+      });
+      [[ix0 + 2, cy0 + 1], [midX - 2, cy0 + 1], [midX + 1, cy0 + 1], [lx1, cy0 + 1]].forEach(([lx, ly]) => {
+        if (inb(lx, ly) && obj[ly][lx] === -1) { obj[ly][lx] = T.prop; out.props.push({ kind: 'lamp', x: px(lx), y: ly * TILE + 30 }); }
+      });
+      [[ix0 + 3, iy1 - 2], [ix0 + 8, iy1 - 2], [ix0 + 12, iy1 - 2], [b.x0 + 2, iy0 + 5], [b.x1 - 2, iy0 + 5]].forEach(([tx, ty]) => {
+        if (inb(tx, ty) && obj[ty][tx] === -1) obj[ty][tx] = T.tree;
+      });
+      for (let xx = ix0 + 3; xx <= ix0 + 11; xx += 2) {
+        if (obj[cy0 + 4][xx] === -1) out.decor.push({ kind: xx % 4 === 0 ? 'bush' : 'flower_a', x: px(xx), y: (cy0 + 4) * TILE + 26 });
+      }
+    } finally {
+      rng = keepRng;
+      for (let i = 0; i < 48; i++) rng();
+    }
+  }
+
+  /* ---- FIRE DEPARTMENT (both stations). The old station was an empty 26 x 11 box with two trucks standing outside; this one is 29 x 23 tiles, drawn from a back row of rooms to a
+          big apparatus hall facing the street (south). Built with its OWN random stream (see ownBlock), so nothing else in the world changes.
+        lx 0-28 / ly 0-22 (building)   apron + parking at ly 23-28, curb cut on the sidewalk row (ly 29)
+        ly 1-4   training / briefing room (lx 1-12) | office (14-20) | dispatch (22-27)
+        ly 6-7   corridor, open to the apparatus hall through the passage (lx 16-17)
+        ly 9-12  locker room (lx 1-7) | equipment store (9-14) | passage (16-17) | lounge + bunks (19-27)
+        ly 14-21 APPARATUS HALL (lx 1-27): four 5-tile bays (open doorways, so trucks can drive in and out at any time; lx 1-5, 7-11, 17-21, 23-27), the
+                 front-door zone (lx 12-16) and the maintenance bay on the east side. The bays are never blocked: gear and racks stand along the back wall (ly 14), the
+                 only things in the hall's open floor are floor markings. ---- */
   function fireStation(b) {
-    const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    const w2 = Math.min(26, ix1 - ix0 - 3), h2 = 11, x = ix0 + 3, y = iy0 + 6;
-    const bd = block(x, y, w2, h2, { wall: T.wall2, floor: T.concrete, wide: true, noPartition: true, crates: 3, tier: 'storage', loose: 2, roof: 'metal', kind: 'warehouse', windowChance: 0.5, pallets: 0 });
-    addPoi('industrial', 'Fire Station', x, y, w2, h2);
-    for (let yy = y + h2; yy < y + h2 + 7; yy++) for (let xx = x - 2; xx < x + w2 + 3; xx++) if (inb(xx, yy) && obj[yy][xx] === -1) { ground[yy][xx] = T.concrete; occ[yy][xx] = true; }
-    vehicle('truck', 2, px(x + 4), (y + h2 + 3) * TILE, Math.PI / 2, 'parked');
-    vehicle('truck', 2, px(x + 10), (y + h2 + 3) * TILE, Math.PI / 2, 'parked');
-    civ(x + 3, y + h2 + 1, 'stand'); civ(x + 14, y + h2 + 1, 'stand');
-    if (bd.free.length) { const t = bd.free.pop(); civ(t.x, t.y, 'stand'); }
+    const X0 = b.x0 + 4, Y0 = b.y0 + 3, BW = 29, BH = 23;
+    const L = (lx) => X0 + lx, M = (ly) => Y0 + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    const FD = out.fire || (out.fire = { decor: [], lights: [], bays: [] });
+    const put = (lx, ly, t) => { if (inb(L(lx), M(ly)) && obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = t; };
+    const wallAt = (lx, ly) => { obj[M(ly)][L(lx)] = T.wall2; };
+    const floor = (lx0, ly0, lx1, ly1, t) => { for (let y = ly0; y <= ly1; y++) for (let x = lx0; x <= lx1; x++) if (inb(L(x), M(y))) ground[M(y)][L(x)] = t; };
+    const decor = (kind, x, y) => out.decor.push({ kind, x, y });
+    const prop = (lx, ly) => put(lx, ly, T.prop);
+    const rug = (key, x, y) => out.rugs.push({ key, x, y });
+    const skinWall = (lx, ly) => out.policeSkin.walls.push({ tx: L(lx), ty: M(ly), t: T.fireWallIn });
+    const door = (lx, ly, glass) => {                                           // an automatic door: opens by itself for anybody on foot (the police-station mechanism)
+      addDoorTile(L(lx), M(ly), false);
+      out.policeDoors.push({ tx: L(lx), ty: M(ly), lock: false });
+      out.policeSkin.doors.push({ tx: L(lx), ty: M(ly), c: glass ? T.fireGlass : T.fireDoor, o: glass ? T.fireGlassOpen : T.fireDoorOpen });
+    };
+    // wall-face decoration: (lx, ly) = the wall tile, sy = height of the picture's bottom above the ground (screen px)
+    const wallY = (ly) => (M(ly) + 1) * TILE - 2;
+    const face = (key, lx, ly, sy, extra = {}) => FD.decor.push({ key, x: cx(lx), y: wallY(ly), sy, dz: extra.dz ?? 10, ext: !!extra.ext });
+    const lt = (x, y, col, extra = {}) => FD.lights.push({ x, y, col, ...extra });
+
+    // 0. the whole block belongs to the station: nothing generic is dropped on it afterwards
+    mark(b.x0, b.y0, b.x1 - b.x0 + 1, b.y1 - b.y0 + 1, 0);
+
+    // 1. ground: wide apron, curb cut over the sidewalk, two marked parking pockets for the station's own vehicles
+    floor(-3, 23, 31, 28, T.concrete);
+    floor(1, 29, 27, 29, T.concrete);                                           // the driveway crosses the sidewalk row (a wide curb cut: all four bays)
+    floor(-3, 23, -1, 28, T.parking); floor(29, 23, 31, 28, T.parking);
+
+    // 2. the shell and the floors
+    fillBuildingShell(X0, Y0, BW, BH, T.wall2, T.concrete);
+    floor(1, 1, 12, 4, T.carpet); floor(14, 1, 20, 4, T.carpet); floor(22, 1, 27, 4, T.tileFloor);        // training | office | dispatch
+    floor(1, 6, 27, 7, T.tileFloor);                                                                       // corridor
+    floor(1, 9, 7, 12, T.tileFloor); floor(9, 9, 14, 12, T.concrete); floor(16, 8, 17, 13, T.concrete); floor(19, 9, 27, 12, T.wood);   // lockers | equipment | passage | lounge
+    floor(1, 14, 27, 21, T.concrete);                                                                      // the apparatus hall
+
+    // 3. walls: back rows of rooms
+    for (let lx = 1; lx <= 27; lx++) { wallAt(lx, 5); wallAt(lx, 8); wallAt(lx, 13); }
+    for (let ly = 1; ly <= 4; ly++) { wallAt(13, ly); wallAt(21, ly); }
+    for (let ly = 9; ly <= 12; ly++) { wallAt(8, ly); wallAt(15, ly); wallAt(18, ly); }
+    for (const lx of [16, 17]) { obj[M(8)][L(lx)] = -1; obj[M(13)][L(lx)] = -1; }                        // the open passage between corridor and hall
+    // front wall: pillars, the entrance (door + two windows), four 5-tile garage bay doors (closed by default; player opens/closes with E or F)
+    for (let lx = 1; lx <= 27; lx++) obj[M(22)][L(lx)] = -1;
+    [6, 12, 16, 22].forEach((lx) => wallAt(lx, 22));
+    obj[M(22)][L(13)] = T.winFire; obj[M(22)][L(15)] = T.winFire;
+    door(14, 22, true);
+    [[1, 5, 3], [7, 11, 9], [17, 21, 19], [23, 27, 25]].forEach(([x0, x1, mid]) => {
+      const tiles = [];
+      for (let lx = x0; lx <= x1; lx++) { obj[M(22)][L(lx)] = T.doorClosed; tiles.push({ tx: L(lx), ty: M(22) }); }
+      FD.bays.push({ tiles, cx: cx(mid), cy: (M(22) + 0.5) * TILE, gy: (M(22) + 1) * TILE - 1 });
+    });
+    // windows in the back wall (ly 0)
+    [3, 4, 9, 10, 16, 18, 24, 25].forEach((lx) => { obj[M(0)][L(lx)] = T.winFire; });
+    // interior doors (they open by themselves)
+    [[6, 5], [17, 5], [24, 5], [4, 8], [11, 8], [22, 8], [4, 13], [11, 13], [23, 13]].forEach(([lx, ly]) => door(lx, ly, false));
+    // interior paint on every partition (and the inside of the back wall)
+    for (let lx = 0; lx <= 28; lx++) if (obj[M(0)][L(lx)] === T.wall2) skinWall(lx, 0);
+    for (let lx = 1; lx <= 27; lx++) for (const ly of [5, 8, 13]) if (obj[M(ly)][L(lx)] === T.wall2) skinWall(lx, ly);
+    for (let ly = 1; ly <= 4; ly++) { skinWall(13, ly); skinWall(21, ly); }
+    for (let ly = 9; ly <= 12; ly++) { skinWall(8, ly); skinWall(15, ly); skinWall(18, ly); }
+
+    // 4. TRAINING / BRIEFING (lx 1-12, ly 1-4): lectern wall with boards, three rows of tables and chairs facing it
+    put(1, 1, T.cabinet); put(12, 1, T.shelf); put(11, 1, T.shelf);
+    [2, 3, 4, 8, 9, 10].forEach((lx) => { put(lx, 3, T.table); put(lx, 4, T.chair); });
+    decor('fs_board', cx(4), M(1) * TILE + 14); decor('fs_map', cx(7), M(1) * TILE + 12); decor('fs_board', cx(9), M(1) * TILE + 14);
+    // 5. OFFICE / ADMINISTRATION (lx 14-20, ly 1-4)
+    put(14, 1, T.cabinet); put(20, 1, T.cabinet); put(18, 1, T.shelf); put(19, 1, T.shelf);
+    [[15, 2], [16, 2], [19, 2]].forEach(([lx, ly]) => { put(lx, ly, T.desk); put(lx, ly + 1, T.chair); });
+    decor('fs_ext', cx(20), M(4) * TILE + 20);
+    // 6. DISPATCH / COMMUNICATIONS (lx 22-27, ly 1-4): radio racks along the wall, consoles with seats, the aisle at lx 24 stays free
+    [22, 23, 25, 26, 27].forEach((lx) => put(lx, 1, T.radioShelf));
+    [22, 23, 25, 26].forEach((lx) => { put(lx, 2, T.milConsole); put(lx, 3, T.chair); });
+    decor('fs_radio', cx(24), M(1) * TILE + 14);
+    // 7. LOCKER ROOM (lx 1-7, ly 9-12): lockers on the north wall, benches, washbasins
+    [1, 2, 3, 5, 6, 7].forEach((lx) => put(lx, 9, T.locker));
+    [2, 3, 5, 6].forEach((lx) => put(lx, 11, T.bench));
+    [1, 2].forEach((lx) => put(lx, 12, T.sink)); put(7, 12, T.toilet); put(6, 12, T.toilet);
+    // 8. EQUIPMENT STORE (lx 9-14, ly 9-12): racks, crates, shelving; the door column lx 11 stays free
+    [9, 10, 12, 13, 14].forEach((lx) => put(lx, 9, T.indRack));
+    put(9, 10, T.crates); put(14, 10, T.crates); [9, 10, 13, 14].forEach((lx) => put(lx, 12, T.evShelf)); put(14, 11, T.toolWall); put(9, 11, T.firstAid);
+    // 9. LOUNGE (lx 19-27, ly 9-12): kitchenette along the north wall, sofas, a dining table, bunks along the east wall
+    put(19, 9, T.fridge); put(20, 9, T.stove); put(21, 9, T.counter); put(23, 9, T.counter); put(24, 9, T.counter); put(25, 9, T.sink); put(26, 9, T.cabinet); put(27, 9, T.shelf);
+    put(19, 11, T.sofa); put(20, 11, T.sofa); put(24, 11, T.table); put(25, 11, T.table);
+    put(24, 10, T.chair); put(25, 10, T.chair); put(24, 12, T.chair); put(25, 12, T.chair);
+    put(27, 10, T.milBunk); put(27, 11, T.milBunk); put(27, 12, T.milBunk);
+    rug('fs_rug', L(25) * TILE, M(12) * TILE);
+    // 10. APPARATUS HALL: equipment along the back wall (ly 14), floor markings, the maintenance bay in the east bay
+    prop(1, 14); prop(2, 14); decor('fs_gear', L(2) * TILE, M(14) * TILE + 32);
+    prop(6, 14); prop(7, 14); decor('fs_rack', L(7) * TILE, M(14) * TILE + 32);
+    prop(9, 14); decor('fs_hosereel', cx(9), M(14) * TILE + 30); prop(13, 14); decor('fs_ext', cx(13), M(14) * TILE + 24);
+    prop(19, 14); prop(20, 14); decor('fs_gear', L(20) * TILE, M(14) * TILE + 32);
+    prop(21, 14); decor('fs_hosereel', cx(21), M(14) * TILE + 30);
+    put(24, 14, T.toolWall); put(25, 14, T.workbench); put(26, 14, T.workbench); put(27, 14, T.toolWall);
+    decor('fs_ext', cx(5), M(14) * TILE + 24); decor('fs_ext', cx(18), M(14) * TILE + 24); decor('fs_stretcher', cx(12), M(14) * TILE + 26);
+    [3, 9, 19, 25].forEach((lx) => rug('fs_bay', cx(lx), M(17) * TILE));       // a yellow outline for every bay
+    rug('fs_hazard', cx(25), M(17) * TILE);                                     // the inspection pit under the maintenance truck
+    rug('fs_aisle', cx(14), M(18) * TILE);                                      // the centre aisle in front of the entrance door
+    decor('fs_toolcart', cx(23), M(20) * TILE + 22); decor('fs_drum', cx(27), M(20) * TILE + 22); decor('fs_drum', cx(27), M(19) * TILE + 22);
+    decor('fs_cone', cx(23), M(21) * TILE + 22); decor('fs_cone', cx(27), M(21) * TILE + 22);
+    prop(23, 20); prop(27, 20); prop(27, 19);                                  // (the tool cart and drums stand on the bay edges, never in the driving lane)
+
+    // 11. the fire engines: one in every bay, nose to the doors
+    [3, 9, 19, 25].forEach((lx) => vehicle('firetruck', 0, cx(lx), M(17) * TILE, Math.PI / 2, 'parked'));
+
+    // 12. the street side: wide apron markings, entrance mat, signs, hydrants, the station's own vehicles in their parking pockets
+    rug('fs_mat', cx(14), M(23) * TILE + 32);
+    rug('fs_lane', cx(7), M(26) * TILE); rug('fs_lane', cx(21), M(26) * TILE);
+    vehicle('suv', 0, cx(-2), M(24) * TILE + 16, -Math.PI / 2, 'parked'); vehicle('pickup', 1, cx(-2), M(27) * TILE + 16, -Math.PI / 2, 'parked');
+    vehicle('minivan', 2, cx(30), M(24) * TILE + 16, -Math.PI / 2, 'parked'); vehicle('compact', 1, cx(30), M(27) * TILE + 16, -Math.PI / 2, 'parked');
+    decor('fs_warn', cx(0), M(28) * TILE + 26); decor('fs_warn', cx(28), M(28) * TILE + 26); decor('fs_nopark', cx(-1), M(23) * TILE + 28); decor('fs_nopark', cx(29), M(23) * TILE + 28);
+    decor('fs_hydrant', cx(31), M(22) * TILE + 26); decor('fs_hydrant', cx(-3), M(22) * TILE + 26);
+    [[-1, 25], [29, 25], [-1, 22], [29, 22]].forEach(([lx, ly]) => { const tx = L(lx), ty = M(ly); if (inb(tx, ty) && obj[ty][tx] === -1) { obj[ty][tx] = T.prop; out.props.push({ kind: 'lamp', x: px(tx), y: ty * TILE + 30 }); } });
+    // flagpole + flag on the west lawn
+    prop(-2, 18); decor('fs_pole', cx(-2), M(18) * TILE + 30); decor('fs_flag', cx(-2) + 15, M(18) * TILE - 12);
+
+    // 13. landscaping: lawns along both sides and behind the building, hedges, flower beds, trees
+    for (const side of [[-3, -1], [29, 31]]) for (let ly = -1; ly <= 20; ly++) for (let lx = side[0]; lx <= side[1]; lx++) {
+      const tx = L(lx), ty = M(ly); if (!inb(tx, ty) || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
+      const lane = (lx === side[1] && side[0] < 0) || (lx === side[0] && side[0] > 0);
+      if (ly % 4 === 1 && (lx === side[0] + 1 || lx === side[1] - 1) && !lane) obj[ty][tx] = T.tree;
+      else if (ly % 3 === 0 && lane) out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 });
+      else if (ly % 3 === 1 && !lane) out.decor.push({ kind: (lx + ly) % 2 ? 'flower_a' : 'flower_b', x: px(tx), y: ty * TILE + 26 });
+    }
+    for (let lx = -3; lx <= 31; lx += 3) for (const ly of [-2, -1]) {
+      const tx = L(lx), ty = M(ly); if (!inb(tx, ty) || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
+      if (ly === -2) obj[ty][tx] = T.tree; else out.decor.push({ kind: (lx / 3) % 2 ? 'flower_a' : 'bush', x: px(tx), y: ty * TILE + 28 });
+    }
+
+    // 14. exterior details on the front wall: the big sign, shields, emergency light bars, warning lamps (all fade while you are inside; bay doors are animated sprites)
+    FD.decor.push({ key: 'fs_sign', x: cx(14), y: M(22) * TILE + 14, sy: -42, dz: 60, ext: true });
+    [6, 12, 16, 22].forEach((lx) => face('fs_logo', lx, 22, -2, { ext: true }));
+    [6, 12, 16, 22].forEach((lx) => FD.decor.push({ key: 'fs_beacon', x: cx(lx), y: wallY(22), sy: -42, dz: 20, ext: true }));
+    [6, 22].forEach((lx, i) => { lt(cx(lx), wallY(22) + 6, i ? 0x3a7aff : 0xff3a3a); lt(cx(lx + (i ? -10 : 10)), wallY(22) + 6, i ? 0xff3a3a : 0x3a7aff); });
+    [3, 9, 19, 25, 14].forEach((lx) => lt(cx(lx), wallY(22) + 22, 0xfff0c8, { steady: true }));
+    [[-1, 25], [29, 25], [-1, 22], [29, 22]].forEach(([lx, ly]) => lt(cx(lx), cy(ly) + 12, 0xffe0a0, { steady: true }));
+    // interior lights (only seen from inside the building)
+    [[3, 17], [9, 17], [14, 18], [19, 17], [25, 17], [6, 20], [22, 20]].forEach(([lx, ly]) => lt(cx(lx), cy(ly), 0xfff4e0, { steady: true, indoor: true }));
+    [[5, 6.5], [14, 6.5], [22, 6.5], [6, 2], [17, 2], [24, 2], [4, 10], [11, 10], [16, 10], [23, 10]].forEach(([lx, ly]) => lt(cx(lx), cy(ly), 0xf0f4ff, { steady: true, indoor: true }));
+
+    // 15. people: dispatchers, an office clerk, a briefing class, a drill team in the hall, firefighters at the trucks
+    const ffRoles = ['firefighter', 'firefighter2', 'firefighter3', 'firefighter4'];
+    let ffIdx = 0;
+    const cv = (lx, ly, kind, extra = {}) => civ(L(lx), M(ly), kind, { role: ffRoles[ffIdx++ % ffRoles.length], ...extra });
+    const pat = (lx, ly, act, face2, seed, sit = true) => cv(lx, ly, 'patron', { act, face: face2, seed, sit: sit ? true : undefined });
+    const UP = -Math.PI / 2, DOWN = Math.PI / 2;
+    pat(23, 3, 'typing', UP, 1); pat(26, 3, 'typing', UP, 2);
+    pat(16, 3, 'typing', UP, 3);
+    pat(3, 4, 'chat', UP, 4); pat(9, 4, 'chat', UP, 5);
+    pat(24, 12, 'chat', UP, 6); pat(25, 10, 'chat', DOWN, 7);
+    pat(12, 19, 'drill', DOWN, 1, false); pat(16, 19, 'drill', DOWN, 2, false);
+    cv(6, 10, 'stand'); cv(11, 11, 'stand'); cv(15, 16, 'stand'); cv(22, 17, 'stand'); cv(14, 3, 'stand');
+    cv(-1, 27, 'stand'); cv(29, 26, 'stand');
+
+    registerBuilding(X0, Y0, BW, BH, 'metal', { kind: 'warehouse', facade: T.facFire, tint: 0xe0827a });
+    addPoi('industrial', 'Fire Station', X0, Y0, BW, BH);
   }
 
   /* ---- Kenny Aquiles' hidden gang alley: two warehouses with a narrow alley between them, walled in, one gap in the
@@ -1927,33 +2420,46 @@ export function generateWorld(seed = 20240) {
      warehouse, a shop and a parking lot, with trees and bushes in the gaps (all from the block's own random stream). */
   function redevB(b) {
     const { ix0, ix1, iy0, iy1 } = DOUBLE(b);
-    let x = ix0;
-    const aBottom = iy0 + 8;
-    [[11, 9, 'apt'], [11, 9, 'apt'], [9, 9, 'office']].forEach(([w, h, k]) => {
-      if (x + w - 1 > ix1) return;
-      const y = aBottom - h + 1;
-      if (k === 'apt') { const t = house(x, y, w, h, { roof: 'metal', wall: T.wall2 }); addPoi('house', 'Apartments', t.x, t.y, t.w, t.h); if (rng() < 0.6) civ(t.doorX, t.doorY + 2, 'stand'); }
-      else { const t = house(x, y, w, h, { wall: T.wall2, office: true, roof: 'modern', kind: 'office' }); addPoi('tower', 'Offices', t.x, t.y, t.w, t.h); publicDoor(t.doorX, t.doorY, 'office', 'Office'); }
-      x += w + 1;
-    });
-    const bBottom = aBottom + 11;
-    x = ix0;
-    while (x + 8 <= ix1) {
-      const w = Math.min(ri(9, 11), ix1 - x + 1);
-      if (w < 8) break;
-      const h = ri(8, 8), y = bBottom - h + 1;
-      const hs = house(x, y, w, h, { roof: 'shingle' });
-      addPoi('house', 'House', x, y, w, h);
-      if (rng() < 0.45) civ(hs.doorX, hs.doorY + 2, 'stand');
-      x += w + ri(2, 3);
+    // North half: spacious Merrow Heights Office & Residential complex with central courtyard
+    const off = house(ix0 + 1, iy0 + 1, 14, 10, { wall: T.wall2, office: true, roof: 'modern', kind: 'office' });
+    addPoi('tower', 'Offices', off.x, off.y, off.w, off.h);
+    publicDoor(off.doorX, off.doorY, 'office', 'Office');
+
+    const apt = house(ix1 - 14, iy0 + 1, 14, 10, { roof: 'metal', wall: T.wall2 });
+    addPoi('house', 'Apartments', apt.x, apt.y, apt.w, apt.h);
+    if (rng() < 0.6) civ(apt.doorX, apt.doorY + 2, 'stand');
+
+    // Central landscaped walkway & courtyard parkette
+    for (let ty = iy0 + 1; ty <= iy1; ty++) {
+      for (let tx = ix0 + 16; tx <= ix0 + 18; tx++) {
+        if (obj[ty][tx] === -1) ground[ty][tx] = T.plaza;
+      }
     }
-    const cy = iy1 - 6;
-    const wh = block(ix0, cy, 12, 7, { wall: T.wall2, floor: T.concrete, crates: 3, tier: 'storage', wide: true, noPartition: true, layout: 'rows', roof: 'metal', windowChance: 0.2 });
-    addPoi('industrial', 'Warehouse', ix0, cy, 12, 7);
-    const sh = shop(ix0 + 13, cy, 10, 7, pick(SHOP_KINDS), {});
-    for (let ty = cy + 1; ty <= iy1; ty++) for (let tx = ix0 + 24; tx <= ix1; tx++) if (obj[ty][tx] === -1 && isGrass(ground[ty][tx])) { ground[ty][tx] = (tx - ix0 - 24) % 4 === 0 ? T.parking : T.concrete; occ[ty][tx] = true; }
-    [[ix0 + 26, 'sedan'], [ix0 + 30, 'compact']].forEach(([tx, t]) => vehicle(t, ri(0, 3), tx * TILE, (cy + 4) * TILE, Math.PI / 2, 'parked'));
-    for (let i = 0; i < 14; i++) {                                                  // trees and bushes in the gaps
+    for (let tx = ix0 + 1; tx <= ix1 - 1; tx++) {
+      if (obj[iy0 + 12][tx] === -1) ground[iy0 + 12][tx] = T.plaza;
+    }
+
+    // South half: neighborhood supply depot on the west + customer/delivery parking lot on the east
+    const cy = iy1 - 10;
+    block(ix0 + 1, cy, 14, 9, { wall: T.wall2, floor: T.concrete, crates: 3, tier: 'storage', wide: true, noPartition: true, layout: 'rows', roof: 'metal', windowChance: 0.2 });
+    addPoi('industrial', 'Warehouse', ix0 + 1, cy, 14, 9);
+
+    const lotX0 = ix0 + 19, lotX1 = ix1 - 1;
+    for (let ty = cy; ty <= iy1; ty++) {
+      for (let tx = lotX0; tx <= lotX1; tx++) {
+        if (obj[ty][tx] === -1) {
+          ground[ty][tx] = (tx - lotX0) % 4 === 1 && ty <= iy1 - 2 ? T.parking : T.road;
+          occ[ty][tx] = true;
+        }
+      }
+    }
+    for (let tx = lotX0 + 2; tx <= lotX0 + 4; tx++) {
+      ground[b.y1][tx] = T.road;
+      obj[b.y1][tx] = -1;
+    }
+    out.lots.push({ x0: lotX0, y0: cy, x1: lotX1, y1: iy1 - 1 });
+    [[lotX0 + 3, 'sedan'], [lotX0 + 7, 'compact']].forEach(([tx, t]) => vehicle(t, ri(0, 3), tx * TILE, (cy + 4) * TILE, Math.PI / 2, 'parked'));
+    for (let i = 0; i < 12; i++) {
       const tx = ri(ix0, ix1), ty = ri(iy0, iy1);
       if (occ[ty][tx] || obj[ty][tx] !== -1 || !isGrass(ground[ty][tx])) continue;
       if (rng() < 0.5) obj[ty][tx] = T.tree; else out.decor.push({ kind: 'bush', x: px(tx), y: ty * TILE + 28 });
@@ -1981,7 +2487,7 @@ export function generateWorld(seed = 20240) {
       case 'school': school(b); break;
       case 'mall': mall(b); break;
       case 'apartments': apartments(b); break;
-      case 'fire': fireStation(b); break;
+      case 'fire': ownBlock(b, 305 + b.c, b.c === 7 ? 234 : 233, () => fireStation(b)); break;
       case 'hospital': hospitalBlock(b); break;
       case 'police': policeBlock(b); break;
       case 'redevA': ownBlock(b, 301, 99, () => redevA(b)); break;
@@ -2574,20 +3080,62 @@ export function generateWorld(seed = 20240) {
   {
     const BX = 25, BW = 26, BH = 16, BFY = 123, BY = BFY - BH + 1;
     const L = (lx) => BX + lx, M = (ly) => BY + ly, cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
-    // 1. the shops that stood here go (every shop of that row touching the footprint, whole)
-    let wx0 = BX - 1, wx1 = BX + BW;
-    shopRects.filter((s) => s.y + s.h - 1 === BFY && s.x <= wx1 && s.x + s.w - 1 >= wx0).forEach((s) => { wx0 = Math.min(wx0, s.x - 1); wx1 = Math.max(wx1, s.x + s.w); });
-    const wy0 = BY - 1, wy1 = BFY + 3;
+    // 1. Dedicated city block lot (c = 1, r = 3: x = 24..58, y = 96..126) for Port City Trust Bank
+    const wx0 = 24, wx1 = 58, wy0 = 96, wy1 = BFY + 3;
     const inR = (tx, ty) => tx >= wx0 && tx <= wx1 && ty >= wy0 && ty <= wy1;
     const inRpx = (x, y) => inR(Math.floor(x / TILE), Math.floor(y / TILE));
-    for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) { obj[y][x] = -1; ground[y][x] = T.plaza; occ[y][x] = false; }
+    for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) {
+      obj[y][x] = -1;
+      ground[y][x] = (y >= BY - 1 && x <= BX + BW) ? T.plaza : ((x + y) % 3 === 0 ? T.grass2 : T.grass1);
+      occ[y][x] = false;
+    }
     out.buildings = out.buildings.filter((b) => !(b.x <= wx1 && b.x + b.w - 1 >= wx0 && b.y <= wy1 && b.y + b.h - 1 >= wy0));
     out.doors = out.doors.filter((d) => !inR(d.x, d.y)); out.containers = out.containers.filter((c) => !inR(c.tx, c.ty));
     out.pois = out.pois.filter((p) => !(p.tx <= wx1 && p.tx + p.w - 1 >= wx0 && p.ty <= wy1 && p.ty + p.h - 1 >= wy0));
-    ['publicDoors', 'storeFronts', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => { if (Array.isArray(out[k])) out[k] = out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))); });
+    out.lots = out.lots.filter((l) => !(l.x0 <= wx1 && l.x1 >= wx0 && l.y0 <= wy1 && l.y1 >= wy0));
+    ['publicDoors', 'storeFronts', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => { if (Array.isArray(out[k])) out[k] = out.filter ? out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))) : out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0)))); });
     out.trees = out.trees.filter((t) => !inRpx(t.x, t.y - 26));
     for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) if (inb(x, y)) occ[y][x] = false;
     mark(wx0, wy0, wx1 - wx0 + 1, wy1 - wy0 + 1, 0);
+
+    // 1b. Dedicated East Customer & Armored Vehicle Parking Lot (x = 51..58, y = 100..126) + North Landscaped Courtyard (y = 96..107)
+    for (let y = 100; y <= wy1; y++) {
+      ground[y][51] = T.plaza;
+      for (let x = 52; x <= 57; x++) {
+        ground[y][x] = (x >= 55 && y >= 101 && y <= 124 && (y - 101) % 3 !== 2) ? T.parking : T.road;
+        obj[y][x] = -1;
+      }
+    }
+    // 3-tile wide driveway cut through the south sidewalk to the main road
+    for (let x = 52; x <= 54; x++) { ground[127][x] = T.road; obj[127][x] = -1; }
+    out.lots.push({ x0: 55, y0: 101, x1: 57, y1: 124 });
+    vehicle('luxury', 0, 56.5 * TILE, 105 * TILE, 0, 'parked');
+    vehicle('sedan', 1, 56.5 * TILE, 114 * TILE, 0, 'parked');
+    vehicle('suv', 2, 56.5 * TILE, 121 * TILE, 0, 'parked');
+    obj[100][58] = T.lamp; obj[112][58] = T.lamp; obj[124][58] = T.lamp;
+
+    // North Landscaped Bank Courtyard (x = 24..58, y = 96..107)
+    for (let x = 25; x <= 54; x++) {
+      ground[101][x] = T.plaza;
+      ground[107][x] = T.plaza;
+    }
+    for (let y = 96; y <= 107; y++) {
+      ground[y][37] = T.plaza;
+      ground[y][38] = T.plaza;
+    }
+    for (const tx of [26, 31, 35, 41, 45, 50, 55]) {
+      obj[97][tx] = T.tree;
+      out.trees.push({ x: px(tx), y: 97 * TILE + 26, kind: (tx + 97) % 3 });
+    }
+    for (const tx of [28, 33, 43, 48]) {
+      out.decor.push({ kind: 'bush', x: px(tx), y: 104 * TILE + 28 });
+      out.decor.push({ kind: 'flowers', x: px(tx + 1), y: 99 * TILE + 26 });
+    }
+    for (const tx of [30, 46]) {
+      obj[101][tx] = T.bench;
+      out.benches.push({ x: px(tx), y: 101 * TILE + 24 });
+    }
+    obj[101][26] = T.lamp; obj[101][50] = T.lamp;
 
     // 2. the shell
     fillBuildingShell(BX, BY, BW, BH, T.wall2, T.tileFloor);
@@ -2712,6 +3260,799 @@ export function generateWorld(seed = 20240) {
     };
   }
 
+  /* ---------------- TOTOYA: dedicated automotive & Tesla repair shop on the main avenue east of the player's home (block c=3, r=4).
+     Features a customer reception showroom on the left, a spacious drive-in workshop & Tesla service bay on the right, and an outdoor customer parking + parts yard. */
+  {
+    const TX = 105, TW = 24, TH = 12, BFY = 159, TY = BFY - TH + 1; // y = 148..159, x = 105..128; customer lot at x = 129..137
+    const L = (lx) => TX + lx, M = (ly) => TY + ly;
+    const cx = (lx) => px(L(lx)), cy = (ly) => px(M(ly));
+    const wallY = (ty) => (ty + 1) * TILE - 2;
+    const wx0 = 104, wx1 = 138, wy0 = 132, wy1 = BFY + 3;
+    const inR = (tx, ty) => tx >= wx0 && tx <= wx1 && ty >= wy0 && ty <= wy1;
+    const inRpx = (x, y) => inR(Math.floor(x / TILE), Math.floor(y / TILE));
+
+    // Clear entire city block lot (c = 3, r = 4: x = 104..138, y = 132..162) for TOTOYA
+    for (let y = wy0; y <= wy1; y++) for (let x = wx0; x <= wx1; x++) {
+      obj[y][x] = -1;
+      if (y < 136) ground[y][x] = (x + y) % 3 === 0 ? T.grass2 : T.grass1;
+      else if (y <= BFY) ground[y][x] = T.sidewalk;
+      occ[y][x] = false;
+    }
+    out.buildings = out.buildings.filter((b) => !(b.x <= wx1 && b.x + b.w - 1 >= wx0 && b.y <= wy1 && b.y + b.h - 1 >= wy0));
+    out.doors = out.doors.filter((d) => !inR(d.x, d.y));
+    out.containers = out.containers.filter((c) => !inR(c.tx, c.ty));
+    out.pois = out.pois.filter((p) => !(p.tx <= wx1 && p.tx + p.w - 1 >= wx0 && p.ty <= wy1 && p.ty + p.h - 1 >= wy0));
+    out.lots = out.lots.filter((l) => !(l.x0 <= wx1 && l.x1 >= wx0 && l.y0 <= wy1 && l.y1 >= wy0));
+    ['publicDoors', 'storeFronts', 'houseDoors', 'civilians', 'enemies', 'vehicles', 'items', 'crates', 'decor', 'props', 'rugs', 'benches', 'hidden'].forEach((k) => {
+      if (Array.isArray(out[k])) out[k] = out[k].filter((o) => !(typeof o.x === 'number' && inRpx(o.x, o.y - (k === 'publicDoors' ? TILE : 0))));
+    });
+    out.trees = out.trees.filter((t) => !inRpx(t.x, t.y - 26));
+    mark(wx0, wy0, wx1 - wx0 + 1, wy1 - wy0 + 1, 0);
+
+    // North Landscaped Greenbelt & Automotive Service / Customer Parking Courtyard (y = 132..146)
+    for (const tx of [106, 111, 116, 121, 126, 131, 136]) {
+      obj[133][tx] = T.tree;
+      out.trees.push({ x: px(tx), y: 133 * TILE + 26, kind: (tx + 133) % 3 });
+    }
+    for (const tx of [108, 114, 119, 124, 129, 134]) {
+      out.decor.push({ kind: 'bush', x: px(tx), y: 135 * TILE + 28 });
+    }
+    for (let y = 136; y <= 146; y++) {
+      for (let x = 105; x <= 137; x++) {
+        ground[y][x] = (y === 136 || y === 146 || x === 105) ? T.sidewalk : T.road;
+        obj[y][x] = -1;
+      }
+    }
+    for (const py of [137, 138, 142, 143]) {
+      for (const px0 of [108, 112, 116, 120, 124]) ground[py][px0] = T.parking;
+    }
+    out.lots.push({ x0: 107, y0: 137, x1: 126, y1: 144 });
+    obj[136][110] = T.lamp; obj[136][122] = T.lamp; obj[136][134] = T.lamp;
+
+    // Main 24x12 TOTOYA building shell
+    fillBuildingShell(TX, TY, TW, TH, T.wall2, T.concrete);
+    const prop = (lx, ly) => { if (obj[M(ly)][L(lx)] === -1) obj[M(ly)][L(lx)] = T.prop; };
+    const dec = (kind, x, y) => out.decor.push({ kind, x, y });
+    const rug = (key, x, y) => out.rugs.push({ key, x, y });
+
+    // Left wing (lx = 1..8, ly = 1..10): Customer Reception & Parts Showroom
+    for (let ly = 1; ly <= 10; ly++) for (let lx = 1; lx <= 7; lx++) ground[M(ly)][L(lx)] = T.tileFloor;
+    // Partition wall between reception and workshop at lx = 8, with wide open passage at ly = 5..8
+    for (let ly = 1; ly <= 10; ly++) {
+      if (ly >= 5 && ly <= 8) { ground[M(ly)][L(8)] = T.tileFloor; obj[M(ly)][L(8)] = -1; }
+      else obj[M(ly)][L(8)] = T.wall2;
+    }
+
+    // Front facade (ly = 11 / BFY): modern dark-framed showroom windows + double glass customer doors on left, 6-tile roller shutter garage door on right
+    for (const lx of [1, 2, 3, 6, 7, 10, 11, 20, 21]) obj[BFY][L(lx)] = T.winFire;
+    for (const lx of [2, 3, 6, 12, 16, 19]) obj[M(0)][L(lx)] = T.winFire;
+    for (const lx of [4, 5]) {
+      ground[BFY][L(lx)] = T.tileFloor;
+      addDoorTile(L(lx), BFY, false);
+      out.policeDoors.push({ tx: L(lx), ty: BFY, lock: false });
+      out.policeSkin.doors.push({ tx: L(lx), ty: BFY, c: T.fireGlass, o: T.fireGlassOpen });
+    }
+    for (let lx = 0; lx < TW; lx++) if (obj[M(0)][L(lx)] === T.wall2) out.policeSkin.walls.push({ tx: L(lx), ty: M(0), t: T.fireWallIn });
+    for (let ly = 1; ly <= 10; ly++) if (obj[M(ly)][L(8)] === T.wall2) out.policeSkin.walls.push({ tx: L(8), ty: M(ly), t: T.fireWallIn });
+    // 6-tile (192px) wide roller shutter garage entrance at lx = 13..18 (closed by default; player opens/closes with E)
+    const bayTiles = [];
+    for (let lx = 13; lx <= 18; lx++) {
+      obj[BFY][L(lx)] = T.doorClosed;
+      ground[BFY][L(lx)] = T.concrete;
+      bayTiles.push({ tx: L(lx), ty: BFY });
+    }
+    const bayDoor = {
+      tiles: bayTiles,
+      cx: (TX + 16) * TILE,
+      cy: (BFY + 0.5) * TILE,
+      gy: (BFY + 1) * TILE - 1,
+      texPrefix: 'totoya_gdoor_',
+      promptLabel: 'Garage',
+      halfW: 96
+    };
+    // Wide concrete driveway apron connecting the street (y = 163) to the garage bay entrance
+    for (let y = BFY + 1; y <= BFY + 2; y++) {
+      for (let lx = 12; lx <= 19; lx++) {
+        ground[y][L(lx)] = T.concrete;
+        obj[y][L(lx)] = -1;
+      }
+    }
+
+    // Customer parking lot & outdoor automotive parts yard on the east side (x = 129..137, y = 148..159)
+    for (let y = TY; y <= BFY; y++) for (let x = TX + TW; x <= TX + TW + 8; x++) {
+      ground[y][x] = y === TY ? T.sidewalk : T.road;
+      obj[y][x] = -1;
+    }
+    for (const py of [TY + 2, TY + 3, TY + 7, TY + 8]) {
+      for (const px0 of [TX + TW + 2, TX + TW + 5, TX + TW + 7]) ground[py][px0] = T.parking;
+    }
+    for (let x = TX + TW + 2; x <= TX + TW + 6; x++) {
+      ground[BFY + 1][x] = T.road;
+      obj[BFY + 1][x] = -1;
+    }
+    vehicle('sports', 1, (TX + TW + 3.5) * TILE, (TY + 2.8) * TILE, Math.PI / 2, 'parked');
+    vehicle('luxury', 0, (TX + TW + 6.5) * TILE, (TY + 7.8) * TILE, -Math.PI / 2, 'parked');
+
+    // Reception interior props & collision
+    prop(1, 1); dec('bank_plant', cx(1), M(1) * TILE + 34);
+    prop(7, 1); dec('bank_plant', cx(7), M(1) * TILE + 34);
+    // Customer reception counter at lx = 2..5, ly = 3
+    for (let lx = 2; lx <= 5; lx++) prop(lx, 3);
+    obj[M(8)][L(1)] = T.sofa; obj[M(8)][L(2)] = T.sofa;
+    prop(1, 5);
+
+    // Workshop interior equipment & collision around the perimeter (leaving lx = 12..19, ly = 3..10 completely clear for vehicle maneuvering)
+    // Back wall tool cabinets & workbenches (ly = 1)
+    prop(10, 1); prop(11, 1);
+    prop(13, 1); prop(14, 1);
+    prop(17, 1); prop(18, 1);
+    prop(20, 1); prop(21, 1);
+    // Left workshop bay: oil drums, diagnostic terminal, 2-post lift posts, tire balancer
+    prop(9, 2);
+    prop(12, 2);
+    prop(9, 4); prop(11, 4);
+    prop(9, 8);
+    // Right workshop wall: engine stand, spare parts racks, tire stack
+    prop(21, 4);
+    prop(21, 6); prop(22, 6);
+    prop(21, 8); prop(22, 8);
+    prop(22, 10);
+
+    // Flat floor decor (rugs: drawn on ground layer, zero collision)
+    rug('totoya_mat', cx(4) + 16, cy(10));
+    rug('totoya_bay_floor', (TX + 16) * TILE, (TY + 6) * TILE);
+    rug('totoya_apron_mark', (TX + 16) * TILE, (BFY + 1) * TILE + 6);
+
+    // Depth-sorted interior & exterior 3D props
+    dec('totoya_counter', cx(3) + 16, M(3) * TILE + 38);
+    dec('totoya_wheels', cx(1) + 8, M(5) * TILE + 34);
+    dec('totoya_post_lift', cx(10), M(4) * TILE + 38);
+    dec('totoya_toolcab', cx(10) + 16, M(1) * TILE + 36);
+    dec('totoya_bench', cx(13) + 16, M(1) * TILE + 36);
+    dec('totoya_bench', cx(17) + 16, M(1) * TILE + 36);
+    dec('totoya_toolcab', cx(20) + 16, M(1) * TILE + 36);
+    dec('totoya_oil_drums', cx(9), M(2) * TILE + 34);
+    dec('totoya_diag', cx(12), M(2) * TILE + 36);
+    dec('totoya_tire_balancer', cx(9), M(8) * TILE + 36);
+    dec('totoya_engine', cx(21), M(4) * TILE + 36);
+    dec('totoya_parts_rack', cx(21) + 16, M(6) * TILE + 36);
+    dec('totoya_parts_rack', cx(21) + 16, M(8) * TILE + 36);
+    dec('totoya_ext_tires', cx(22), M(10) * TILE + 34);
+
+    // Exterior automotive props (tires, alloy wheels, engine parts crate, A-frame sign, pylon sign)
+    obj[BFY + 2][TX + 11] = T.prop;
+    dec('totoya_pylon', (TX + 11.5) * TILE, (BFY + 2) * TILE + 28);
+    dec('totoya_sign_board', cx(8) + 8, (BFY + 1) * TILE + 24);
+    dec('totoya_ext_tires', cx(9) + 18, (BFY + 1) * TILE + 18);
+    dec('totoya_wheels', cx(20) + 10, (BFY + 1) * TILE + 18);
+    obj[TY + 4][TX + TW + 1] = T.prop;
+    dec('totoya_carparts', (TX + TW + 1.5) * TILE, (TY + 4) * TILE + 34);
+    obj[TY + 8][TX + TW + 1] = T.prop;
+    dec('totoya_ext_tires', (TX + TW + 1.5) * TILE, (TY + 8) * TILE + 34);
+    dec('totoya_wheels', (TX + TW + 1.5) * TILE, (TY + 9.5) * TILE + 28);
+
+    // Assistant technician inside the workshop
+    out.civilians.push({ x: cx(11), y: cy(2) + 8, role: 'totoya_tech', mode: 'idle', radius: 18, shopkeeper: false, fixedFace: Math.PI / 2 });
+
+    registerBuilding(TX, TY, TW, TH, 'totoya', { kind: 'totoya', colorIdx: 1, look: 'totoya', facade: T.facFire });
+    addPoi('totoya', 'TOTOYA Auto Repair', TX, TY, TW, TH);
+    publicDoor(L(4), BFY, 'totoya', 'TOTOYA Auto Repair');
+    const door = { x: cx(4) + 16, y: (BFY + 1) * TILE };
+
+    const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    const li = (x, y, col) => ({ x, y, steady: true, col, inside: true, rad: 150 });
+
+    out.totoya = {
+      X: TX, Y: TY, W: TW, H: TH,
+      door,
+      bayDoor,
+      // Mark Sterling stands right beside the open reception/bay archway so he is easily reachable on foot or from a vehicle in the bay
+      mark: { x: cx(7), y: cy(6) },
+      // Designated Tesla spawn & service bay inside TOTOYA (facing south toward the wide open garage entrance)
+      bay: { x: (TX + 16) * TILE, y: (TY + 6.5) * TILE, heading: Math.PI / 2 },
+      garageRect: { x0: L(9) * TILE, y0: M(1) * TILE, x1: L(23) * TILE, y1: (BFY + 3) * TILE },
+      sign: { key: 'totoya_sign', x: (TX + 12) * TILE, y: (BFY + 1) * TILE - 2 },
+      neons: [
+        ...[2, 7, 12, 19, 22].map((lx) => ({ key: 'totoya_lamp', x: cx(lx), y: (BFY + 1) * TILE - 2, sy: -26, dz: 12, ext: true })),
+        { key: 'totoya_wall_banner', x: cx(15) + 16, y: wallY(M(0)), sy: -14, dz: 10 },
+        { key: 'totoya_toolboard', x: cx(13) + 16, y: wallY(M(0)), sy: -8, dz: 10 },
+        { key: 'totoya_toolboard', x: cx(17) + 16, y: wallY(M(0)), sy: -8, dz: 10 },
+        { key: 'totoya_ev_poster', x: cx(4), y: wallY(M(0)), sy: -10, dz: 10 }
+      ],
+      lights: [
+        li(cx(4), cy(5), 0xebf6ff), li(cx(4), cy(9), 0xebf6ff),
+        li(cx(11), cy(4), 0xe8f4ff), li(cx(16), cy(4), 0xd8f0ff), li(cx(16), cy(8), 0xd8f0ff), li(cx(20), cy(5), 0xe8f4ff),
+        lt((TX + 16) * TILE, (BFY + 1) * TILE + 14, 0x52e0ff, { neon: true }),
+        lt((TX + 11.5) * TILE, (BFY + 2) * TILE, 0xff4a56, { neon: true }),
+        lt(door.x, (BFY + 1) * TILE + 10, 0xfff0d0),
+        lt((TX + TW + 4) * TILE, (TY + 5) * TILE, 0xffe8c0)
+      ]
+    };
+  }
+
+  /* ---------------- REYES HOLDINGS TOWER: Prestigious 4-story corporate headquarters owned by Councilman Aurelio Reyes
+     occupying its own dedicated Downtown city block (c = 2, r = 2: x = 64..98, y = 60..90).
+     CRITICAL ARCHITECTURE: All 4 floors (1F Main Lobby, 2F Corporate Offices, 3F Executive Department, 4F Councilman Reyes' Penthouse)
+     are inside ONE unified multi-story building footprint (RX = 66, RY = 69, RW = 22, RH = 15) sharing the same North-Center
+     Elevator & Staircase Core (lx = 8..13, ly = 0..2). */
+  {
+    const rb = blocks.find((b) => b.c === 2 && b.r === 2);
+    const RX = 66, RY = 69, RW = 22, RH = 15, BFY = RY + RH - 1; // x = 66..87, y = 69..83
+    const L = (lx) => RX + lx;
+    const M = (ly) => RY + ly;
+    const cx = (lx) => (RX + lx) * TILE + 16;
+    const cy = (ly) => (RY + ly) * TILE + 16;
+    const wallY = (ty) => (ty + 1) * TILE;
+
+    // 1. Clear block (x = 64..98, y = 60..90) of any procedural items
+    const bx0 = rb.x0 * TILE, by0 = rb.y0 * TILE, bx1 = (rb.x1 + 1) * TILE, by1 = (rb.y1 + 1) * TILE;
+    const inBlockPx = (x, y) => x >= bx0 && x < bx1 && y >= by0 && y < by1;
+    out.props = out.props.filter((p) => !inBlockPx(p.x, p.y));
+    out.decor = out.decor.filter((p) => !inBlockPx(p.x, p.y));
+    out.rugs = out.rugs.filter((p) => !inBlockPx(p.x, p.y));
+    out.benches = out.benches.filter((p) => !inBlockPx(p.x, p.y));
+    out.containers = out.containers.filter((c) => !(c.tx >= rb.x0 && c.tx <= rb.x1 && c.ty >= rb.y0 && c.ty <= rb.y1));
+    out.crates = out.crates.filter((c) => !inBlockPx(c.x, c.y));
+    out.items = out.items.filter((i) => !inBlockPx(i.x, i.y));
+    out.civilians = out.civilians.filter((c) => !inBlockPx(c.x, c.y));
+    out.enemies = out.enemies.filter((e) => !inBlockPx(e.x, e.y));
+    out.vehicles = out.vehicles.filter((v) => !(v.mode === 'parked' && inBlockPx(v.x, v.y)));
+
+    // 2. Landscaped Corporate Grounds, Granite Entrance Plaza, VIP Drop-off Lane & Executive Parking Lot
+    for (let y = rb.y0; y <= rb.y1; y++) {
+      for (let x = rb.x0; x <= rb.x1; x++) {
+        obj[y][x] = -1;
+        // North & West landscaped lawn buffer
+        if (y < RY - 1 || x < RX - 1) ground[y][x] = (x + y) % 2 ? T.grass1 : T.grass2;
+        else ground[y][x] = T.plaza;
+      }
+    }
+    // Paved perimeter walk around the tower base
+    for (let y = RY - 1; y <= rb.y1; y++) {
+      for (let x = RX - 1; x <= RX + RW; x++) {
+        if (inb(x, y)) ground[y][x] = T.plaza;
+      }
+    }
+    // South Corporate Plaza ornamental lawn beds (flanking the central granite approach)
+    for (let y = BFY + 2; y <= rb.y1 - 1; y++) {
+      for (let x = RX; x <= RX + 5; x++) ground[y][x] = T.grass1;
+      for (let x = RX + RW - 6; x <= RX + RW - 1; x++) ground[y][x] = T.grass1;
+    }
+    // East Executive Drop-Off Driveway (x = 89..91) & Visitor/Executive Parking Lot (x = 92..97, y = 66..89)
+    for (let y = 66; y <= rb.y1 + 1; y++) {
+      for (let x = 89; x <= 91; x++) if (inb(x, y)) { ground[y][x] = y === 76 || y === 84 ? T.roadDashV : T.road; obj[y][x] = -1; }
+    }
+    for (let y = 66; y <= 88; y++) {
+      for (let x = 92; x <= 97; x++) if (inb(x, y)) { ground[y][x] = T.parking; obj[y][x] = -1; }
+    }
+    out.lots.push({ x0: 92, y0: 66, x1: 97, y1: 88, corporate: true });
+    addPoi('parking', 'Reyes Holdings Executive Parking', 89, 66, 9, 23);
+    // Parked executive luxury vehicles in the dedicated lot
+    out.vehicles.push({ type: 'luxury', variant: 0, x: 94.5 * TILE, y: 69.5 * TILE, heading: 0, mode: 'parked' });
+    out.vehicles.push({ type: 'sports', variant: 1, x: 94.5 * TILE, y: 74.5 * TILE, heading: 0, mode: 'parked' });
+    out.vehicles.push({ type: 'luxury', variant: 2, x: 94.5 * TILE, y: 79.5 * TILE, heading: 0, mode: 'parked' });
+    out.vehicles.push({ type: 'suv', variant: 0, x: 94.5 * TILE, y: 84.5 * TILE, heading: 0, mode: 'parked' });
+
+    // Landscaped North & West Corporate Gardens (trees, hedges, flowerbeds, benches, lamps)
+    for (const tx of [65, 69, 73, 80, 84, 88, 93, 97]) {
+      if (obj[62][tx] === -1) obj[62][tx] = T.tree;
+    }
+    for (const ty of [66, 72, 78, 84, 88]) {
+      if (obj[ty][64] === -1) obj[ty][64] = T.tree;
+    }
+    // Ornamental hedges & flower planters on the South Corporate Plaza
+    for (const hx of [RX + 1, RX + 2, RX + 4, RX + RW - 5, RX + RW - 3, RX + RW - 2]) {
+      out.decor.push({ kind: 'bush', x: hx * TILE + 16, y: (BFY + 2) * TILE + 20 });
+    }
+    out.decor.push({ kind: 'planter', x: (RX + 3) * TILE, y: (BFY + 4) * TILE + 16 });
+    out.decor.push({ kind: 'planter', x: (RX + RW - 3) * TILE, y: (BFY + 4) * TILE + 16 });
+    // Plaza benches flanking the grand approach walk
+    for (const [bx, by] of [[RX + 6, BFY + 3], [RX + 6, BFY + 5], [RX + RW - 7, BFY + 3], [RX + RW - 7, BFY + 5]]) {
+      obj[by][bx] = T.bench;
+      out.benches.push({ x: bx * TILE + 16, y: by * TILE + 24 });
+    }
+    // Exterior plaza lamps
+    for (const [lx, ly] of [[RX + 7, BFY + 2], [RX + 14, BFY + 2], [RX + 7, BFY + 6], [RX + 14, BFY + 6], [88, 72], [88, 82]]) {
+      if (inb(lx, ly) && obj[ly][lx] === -1) {
+        obj[ly][lx] = T.prop;
+        out.props.push({ kind: 'lamp', x: lx * TILE + 16, y: ly * TILE + 30 });
+      }
+    }
+    // Exterior grand approach runner & doorway columns
+    out.rugs.push({ key: 'reyes_walk', x: (RX + 11) * TILE, y: (BFY + 3.5) * TILE + 8 });
+    out.decor.push({ kind: 'reyes_column', x: cx(9) - 2, y: (BFY + 1) * TILE + 2 });
+    out.decor.push({ kind: 'reyes_column', x: cx(12) + 2, y: (BFY + 1) * TILE + 2 });
+    out.decor.push({ kind: 'bank_plant', x: cx(8) - 4, y: (BFY + 1) * TILE + 6 });
+    out.decor.push({ kind: 'bank_plant', x: cx(13) + 4, y: (BFY + 1) * TILE + 6 });
+
+    // Exterior Corporate Security Guards stationed outside the main entrance
+    out.civilians.push({ x: cx(8), y: (BFY + 2) * TILE + 8, role: 'reyes_guard', mode: 'idle', radius: 14, shopkeeper: true, fixedFace: Math.PI / 2 });
+    out.civilians.push({ x: cx(13), y: (BFY + 2) * TILE + 8, role: 'reyes_guard', mode: 'idle', radius: 14, shopkeeper: true, fixedFace: Math.PI / 2 });
+
+    // 3. Helper to build each floor's 22x15 grid & scenery inside the exact same (RX, RY, RW, RH) footprint
+    const makeFloorSpec = (floorNum, name, subtitle, buildFn) => {
+      const fGround = Array.from({ length: RH }, () => new Array(RW).fill(T.tileFloor));
+      const fObj = Array.from({ length: RH }, () => new Array(RW).fill(-1));
+      const fSkins = []; // { lx, ly, face, doorSkin, noFace }
+      const fRugs = [];
+      const fDecor = [];
+      const fNeons = [];
+      const fLights = [];
+      const fCivs = [];
+      const fEnemies = [];
+
+      const skin = (lx, ly, face, doorSkin = null, noFace = false) => fSkins.push({ lx, ly, face, doorSkin, noFace });
+      const setWall = (lx, ly, tile = T.wall2, face = T.polWallPaint) => {
+        fObj[ly][lx] = tile;
+        skin(lx, ly, face);
+      };
+      const setDoor = (lx, ly, openTile = T.polDoorGlassOpen, closedTile = T.polDoorGlass, face = T.polWallPaint) => {
+        fObj[ly][lx] = T.doorOpen;
+        skin(lx, ly, face, [closedTile, openTile]);
+      };
+      const prop = (lx, ly, t = T.prop) => { fObj[ly][lx] = t; };
+      const rug = (key, x, y) => fRugs.push({ key, x, y, reyesFloor: floorNum });
+      const dec = (kind, x, y, extra = {}) => fDecor.push({ kind, x, y, reyesFloor: floorNum, ...extra });
+      const neon = (key, x, y, sy = -10, dz = 10) => fNeons.push({ key, x, y, sy, dz, reyesFloor: floorNum });
+      const light = (x, y, col, rad = 155) => fLights.push({ x, y, steady: true, col, inside: true, rad, reyesFloor: floorNum });
+      const civ = (lx, ly, role, extra = {}) => fCivs.push({
+        x: cx(lx), y: cy(ly), role, mode: 'idle', radius: 16, shopkeeper: true, reyesFloor: floorNum, ...extra
+      });
+      const guard = (lx, ly, face = Math.PI / 2) => fCivs.push({
+        x: cx(lx), y: cy(ly), role: 'reyes_guard', mode: 'idle', radius: 16, shopkeeper: true, fixedFace: face, reyesFloor: floorNum
+      });
+
+      // Outer structural shell (shared across all 4 floors)
+      for (let ly = 0; ly < RH; ly++) {
+        for (let lx = 0; lx < RW; lx++) {
+          const onEdge = lx === 0 || lx === RW - 1 || ly === 0 || ly === RH - 1;
+          if (onEdge) {
+            const isFront = ly === RH - 1;
+            fObj[ly][lx] = T.wall2;
+            skin(lx, ly, isFront ? T.facPolice : T.polWallPaint);
+          }
+        }
+      }
+      // Front curtain-wall windows along ly = RH - 1
+      for (const wx of [2, 4, 6, 8, 13, 15, 17, 19]) {
+        fObj[RH - 1][wx] = T.winPolice;
+        skin(wx, RH - 1, T.winPolice);
+      }
+      if (floorNum === 1) {
+        // 1F Grand Double Glass Entrance Doors at lx = 10, 11
+        fObj[RH - 1][10] = T.doorOpen;
+        fObj[RH - 1][11] = T.doorOpen;
+        skin(10, RH - 1, T.facPolice, null, true);
+        skin(11, RH - 1, T.facPolice, null, true);
+      } else {
+        // Upper floors have panoramic center windows above the main entrance
+        fObj[RH - 1][10] = T.winPolice;
+        fObj[RH - 1][11] = T.winPolice;
+        skin(10, RH - 1, T.winPolice);
+        skin(11, RH - 1, T.winPolice);
+      }
+
+      // Shared North-Center Elevator & Staircase Core (lx = 7..14, ly = 0..2)
+      setWall(7, 1); setWall(7, 2);
+      setWall(14, 1); setWall(14, 2);
+      for (let lx = 8; lx <= 13; lx++) {
+        fGround[1][lx] = T.concrete;
+        fGround[2][lx] = T.concrete;
+      }
+      // Elevator Doors centered at lx = 10..11 on the north wall
+      neon('reyes_elevator', (RX + 11) * TILE, wallY(M(0)), -6, 12);
+      // Left shaft bay (lx = 8..9): Stairs Down on 2F-4F, Directory on 1F
+      if (floorNum > 1) {
+        neon('reyes_stairs_down', (RX + 8.8) * TILE, wallY(M(0)), -6, 12);
+      } else {
+        neon('reyes_directory', (RX + 8.8) * TILE, wallY(M(0)), -8, 12);
+      }
+      // Right shaft bay (lx = 12..13): Stairs Up on 1F-3F, Directory on 4F
+      if (floorNum < 4) {
+        neon('reyes_stairs_up', (RX + 13.2) * TILE, wallY(M(0)), -6, 12);
+      } else {
+        neon('reyes_directory', (RX + 13.2) * TILE, wallY(M(0)), -8, 12);
+      }
+      light((RX + 11) * TILE, cy(2), 0xfff0d0, 140);
+
+      buildFn({ fGround, fObj, setWall, setDoor, prop, rug, dec, neon, light, civ, guard });
+
+      return { floor: floorNum, name, subtitle, ground: fGround, obj: fObj, skins: fSkins, rugs: fRugs, decor: fDecor, neons: fNeons, lights: fLights, civilians: fCivs, enemies: fEnemies };
+    };
+
+    // ---------------- FLOOR 1: MAIN CORPORATE LOBBY ----------------
+    const floor1 = makeFloorSpec(1, '1F — MAIN CORPORATE LOBBY', 'Reception  •  Security Checkpoint  •  Visitor Lounge', ({
+      fGround, setWall, prop, rug, dec, neon, light, civ, guard
+    }) => {
+      // Security checkpoint divider walls flanking the central lobby concourse (ly = 4)
+      for (const lx of [1, 2, 3, 4, 5, 8, 13, 16, 17, 18, 19, 20]) setWall(lx, 4);
+      // Security scanner gates at the two concourse passages (lx = 6.5 and lx = 14.5)
+      dec('reyes_sec_gate', cx(6) + 16, M(4) * TILE + 34);
+      dec('reyes_sec_gate', cx(14) + 16, M(4) * TILE + 34);
+
+      // Grand navy & gold lobby runner rug from the entrance doors to the reception desk
+      rug('reyes_lobby_rug', (RX + 11) * TILE, (RY + 9.5) * TILE);
+
+      // Central Reception Counter & Illuminated REYES HOLDINGS Wall Emblem
+      setWall(9, 5); setWall(10, 5); setWall(11, 5); setWall(12, 5);
+      neon('reyes_wall_logo', (RX + 11) * TILE, wallY(M(5)), -10, 12);
+      prop(9, 7, T.counter); prop(10, 7, T.counter); prop(11, 7, T.counter); prop(12, 7, T.counter);
+      dec('reyes_reception_desk', (RX + 11) * TILE, M(7) * TILE + 36);
+      // Receptionist standing behind the reception desk
+      civ(10.5, 6.1, 'reyes_receptionist', { fixedFace: Math.PI / 2, isReceptionist: true });
+
+      // West Visitor Waiting Lounge (lx = 1..5, ly = 6..12)
+      for (let ly = 6; ly <= 12; ly++) for (let lx = 1; lx <= 5; lx++) fGround[ly][lx] = T.carpet;
+      prop(2, 7, T.sofa); prop(3, 7, T.sofa);
+      dec('reyes_sofa', (RX + 3) * TILE, M(7) * TILE + 34);
+      prop(2, 11, T.sofa); prop(3, 11, T.sofa);
+      dec('reyes_sofa', (RX + 3) * TILE, M(11) * TILE + 34);
+      prop(1, 6); dec('bank_plant', cx(1), M(6) * TILE + 34);
+      prop(1, 12); dec('bank_plant', cx(1), M(12) * TILE + 34);
+      prop(5, 6, T.cooler);
+      neon('bank_clock', cx(3), wallY(M(4)), -14, 10);
+
+      // East Executive Information & Waiting Lounge (lx = 16..20, ly = 6..12)
+      for (let ly = 6; ly <= 12; ly++) for (let lx = 16; lx <= 20; lx++) fGround[ly][lx] = T.carpet;
+      prop(18, 7, T.sofa); prop(19, 7, T.sofa);
+      dec('reyes_sofa', (RX + 19) * TILE, M(7) * TILE + 34);
+      prop(18, 11, T.sofa); prop(19, 11, T.sofa);
+      dec('reyes_sofa', (RX + 19) * TILE, M(11) * TILE + 34);
+      prop(20, 6); dec('bank_kiosk', cx(20), M(6) * TILE + 36);
+      prop(20, 9); dec('bank_kiosk', cx(20), M(9) * TILE + 36);
+      prop(20, 12); dec('bank_plant', cx(20), M(12) * TILE + 34);
+      neon('bank_board', cx(18), wallY(M(4)), -10, 10);
+
+      // Potted palms flanking the main lobby entrance & elevator hall
+      prop(8, 12); dec('bank_plant', cx(8), M(12) * TILE + 34);
+      prop(13, 12); dec('bank_plant', cx(13), M(12) * TILE + 34);
+      prop(6, 2); dec('bank_plant', cx(6), M(2) * TILE + 34);
+      prop(15, 2); dec('bank_plant', cx(15), M(2) * TILE + 34);
+
+      // 1F Security Guards & Corporate Visitors
+      guard(7, 5, Math.PI / 2);
+      guard(14, 5, Math.PI / 2);
+      civ(4, 9, 'reyes_worker', { fixedFace: 0 });
+      civ(17, 9, 'reyes_exec', { fixedFace: Math.PI });
+
+      // Warm lobby chandelier lighting
+      light(cx(4), cy(9), 0xfff0d2, 165);
+      light((RX + 11) * TILE, cy(9), 0xfff4dc, 185);
+      light(cx(18), cy(9), 0xfff0d2, 165);
+    });
+
+    // ---------------- FLOOR 2: CORPORATE OFFICES ----------------
+    const floor2 = makeFloorSpec(2, '2F — CORPORATE OFFICES', 'Open Workspaces  •  Operations  •  Meeting Rooms', ({
+      fGround, setWall, setDoor, prop, dec, neon, light, civ, guard
+    }) => {
+      // Main floor styling: polished tile corridors, slate open office bullpen, hardwood meeting room
+      for (let ly = 4; ly <= 13; ly++) {
+        for (let lx = 1; lx <= 8; lx++) fGround[ly][lx] = T.concrete;
+        for (let lx = 14; lx <= 20; lx++) fGround[ly][lx] = ly <= 8 ? T.wood : T.tileFloor;
+      }
+
+      // West Open-Plan Operations Bullpen (6 employee workstations with computers + chairs + filing cabinets)
+      for (const [dx, dy] of [[2, 5], [6, 5], [2, 8], [6, 8], [2, 11], [6, 11]]) {
+        prop(dx, dy, T.desk); prop(dx + 1, dy, T.desk);
+        dec('bank_desk', (RX + dx + 1) * TILE, M(dy) * TILE + 36);
+        dec('bank_chair', cx(dx) + 16, M(dy - 1) * TILE + 32);
+      }
+      // North wall filing cabinets & archive shelves
+      for (const cx0 of [1, 2, 4, 5]) {
+        prop(cx0, 1, T.cabinet);
+        dec('bank_cabinet', cx(cx0), M(1) * TILE + 36);
+      }
+      prop(1, 3); dec('reyes_printer', cx(1) + 4, M(3) * TILE + 36);
+      prop(1, 13); dec('bank_plant', cx(1), M(13) * TILE + 34);
+      neon('bank_board', cx(3), wallY(M(0)), -10, 10);
+      neon('bank_clock', cx(6), wallY(M(0)), -14, 10);
+
+      // Glass-Partitioned East Conference & Strategy Room (lx = 14..20, ly = 4..8)
+      for (let lx = 14; lx <= 20; lx++) setWall(lx, 4);
+      for (let ly = 4; ly <= 8; ly++) setWall(14, ly);
+      setDoor(14, 6);
+      for (let lx = 15; lx <= 20; lx++) setWall(lx, 8);
+      // Glass partition visual overlays
+      dec('reyes_glass_wall', (RX + 16.5) * TILE, M(4) * TILE + 34);
+      dec('reyes_glass_wall', (RX + 19) * TILE, M(4) * TILE + 34);
+      dec('reyes_glass_wall', (RX + 17.5) * TILE, M(8) * TILE + 34);
+      // Meeting room table & chairs
+      prop(17, 6, T.table); prop(18, 6, T.table);
+      dec('bank_desk', (RX + 18) * TILE, M(6) * TILE + 36);
+      dec('bank_chair', cx(17), M(5) * TILE + 32);
+      dec('bank_chair', cx(18), M(5) * TILE + 32);
+      dec('bank_chair', cx(17), M(7) * TILE + 28);
+      dec('bank_chair', cx(18), M(7) * TILE + 28);
+      neon('bank_board', cx(18), wallY(M(4)), -10, 10);
+
+      // North-East Archive & Print Alcove (lx = 16..20, ly = 1..3)
+      prop(16, 1, T.shelf); dec('bank_shelf', cx(16), M(1) * TILE + 36);
+      prop(17, 1, T.shelf); dec('bank_shelf', cx(17), M(1) * TILE + 36);
+      prop(19, 1); dec('reyes_printer', cx(19), M(1) * TILE + 36);
+      prop(20, 1, T.cabinet); dec('bank_cabinet', cx(20), M(1) * TILE + 36);
+
+      // South-East Employee Copy & Break Lounge (lx = 15..20, ly = 10..13)
+      prop(19, 10); dec('reyes_printer', cx(19), M(10) * TILE + 36);
+      prop(20, 10, T.coffeeM);
+      prop(20, 11, T.cooler);
+      prop(16, 12, T.sofa); prop(17, 12, T.sofa);
+      dec('reyes_sofa', (RX + 17) * TILE, M(12) * TILE + 34);
+      prop(20, 13); dec('bank_plant', cx(20), M(13) * TILE + 34);
+
+      // 2F Working Employees & Security
+      civ(3.5, 4.3, 'reyes_worker', { fixedFace: Math.PI / 2 });
+      civ(7.5, 7.3, 'bank_clerk', { fixedFace: Math.PI / 2 });
+      civ(3.5, 10.3, 'reyes_worker', { fixedFace: Math.PI / 2 });
+      civ(16, 6, 'reyes_exec', { fixedFace: 0 });
+      civ(11, 9, 'reyes_worker', { mode: 'walk', fixedFace: undefined });
+      guard(10, 3, Math.PI / 2);
+
+      light(cx(4), cy(6), 0xe8f4ff, 170);
+      light(cx(4), cy(11), 0xe8f4ff, 170);
+      light(cx(11), cy(8), 0xfff2d8, 165);
+      light(cx(17), cy(6), 0xe8f4ff, 165);
+      light(cx(17), cy(11), 0xfff0d2, 165);
+    });
+
+    // ---------------- FLOOR 3: EXECUTIVE DEPARTMENT ----------------
+    const floor3 = makeFloorSpec(3, '3F — EXECUTIVE DEPARTMENT', 'Grand Boardroom  •  Executive Suites  •  Restricted Records', ({
+      fGround, setWall, setDoor, prop, dec, neon, light, civ, guard
+    }) => {
+      // Hardwood executive halls, plush crimson carpet in the Boardroom, slate floor in Restricted Server Vault
+      for (let ly = 3; ly <= 13; ly++) {
+        for (let lx = 1; lx <= 20; lx++) {
+          if (lx <= 9 && ly >= 4) fGround[ly][lx] = T.carpet;
+          else if (lx >= 15 && ly >= 4) fGround[ly][lx] = T.concrete;
+          else fGround[ly][lx] = T.wood;
+        }
+      }
+
+      // 1. West Grand Executive Boardroom (lx = 1..9, ly = 4..13)
+      for (let lx = 1; lx <= 9; lx++) setWall(lx, 4);
+      for (let ly = 4; ly <= 13; ly++) setWall(9, ly);
+      setDoor(9, 7);
+      setDoor(9, 10);
+      // Long Mahogany Boardroom Table (lx = 3..7, ly = 8..9)
+      for (let lx = 3; lx <= 7; lx++) prop(lx, 8, T.table);
+      dec('reyes_conf_table', (RX + 5.5) * TILE, M(8) * TILE + 38);
+      for (const cx0 of [3, 4, 5, 6, 7]) {
+        dec('bank_chair', cx(cx0), M(7) * TILE + 26);
+        dec('bank_chair', cx(cx0), M(9) * TILE + 32);
+      }
+      // Boardroom bookshelves, presentation screen & plants
+      prop(1, 5, T.shelf); dec('bank_shelf', cx(1), M(5) * TILE + 36);
+      prop(1, 6, T.shelf); dec('bank_shelf', cx(1), M(6) * TILE + 36);
+      prop(1, 11, T.cabinet); dec('bank_cabinet', cx(1), M(11) * TILE + 36);
+      prop(1, 12); dec('bank_plant', cx(1), M(12) * TILE + 34);
+      prop(8, 12); dec('bank_plant', cx(8), M(12) * TILE + 34);
+      neon('bank_board', cx(5), wallY(M(4)), -10, 10);
+      neon('reyes_wall_logo', cx(5), wallY(M(4)), -28, 10);
+
+      // 2. Center-South Senior Vice President Office (lx = 10..14, ly = 9..13)
+      for (let lx = 10; lx <= 14; lx++) setWall(lx, 9);
+      setDoor(12, 9);
+      prop(11, 11, T.desk); prop(12, 11, T.desk);
+      dec('bank_desk', (RX + 12) * TILE, M(11) * TILE + 36);
+      dec('bank_chair', cx(11) + 16, M(12) * TILE + 26);
+      prop(10, 10, T.shelf); dec('bank_shelf', cx(10), M(10) * TILE + 36);
+      prop(13, 10, T.cabinet); dec('bank_cabinet', cx(13), M(10) * TILE + 36);
+
+      // 3. East Restricted Records & Encrypted Server Vault (lx = 15..20, ly = 4..13)
+      for (let lx = 15; lx <= 20; lx++) setWall(lx, 4, T.wall2, T.polWallSecure);
+      for (let ly = 4; ly <= 13; ly++) setWall(15, ly, T.wall2, T.polWallSecure);
+      setDoor(15, 6, T.polDoorSteelOpen, T.polDoorSteel, T.polWallSecure);
+      // CCTV wall monitors, encrypted server racks, security panel & archive safes
+      prop(17, 5); prop(18, 5); prop(19, 5);
+      dec('bank_monitors', cx(18), M(5) * TILE + 36);
+      prop(20, 5);
+      dec('bank_panel', cx(20), M(5) * TILE + 36);
+      for (const sx of [17, 19]) {
+        prop(sx, 8, T.cabinet);
+        dec('reyes_server_rack', cx(sx), M(8) * TILE + 36);
+        prop(sx, 11, T.cabinet);
+        dec('reyes_server_rack', cx(sx), M(11) * TILE + 36);
+      }
+      prop(16, 12, T.cabinet); dec('bank_cabinet', cx(16), M(12) * TILE + 36);
+      prop(20, 12, T.cabinet); dec('bank_cabinet', cx(20), M(12) * TILE + 36);
+
+      // North Executive Gallery (lx = 1..6, 15..20, ly = 1..2)
+      prop(2, 1, T.shelf); dec('bank_shelf', cx(2), M(1) * TILE + 36);
+      prop(4, 1, T.shelf); dec('bank_shelf', cx(4), M(1) * TILE + 36);
+      prop(17, 1, T.cabinet); dec('bank_cabinet', cx(17), M(1) * TILE + 36);
+      prop(19, 1, T.cabinet); dec('bank_cabinet', cx(19), M(1) * TILE + 36);
+
+      // 3F Executives & Security Detail
+      civ(5, 6.2, 'reyes_exec', { fixedFace: Math.PI / 2 });
+      civ(4, 10.2, 'bank_manager', { fixedFace: -Math.PI / 2 });
+      civ(11.5, 12.2, 'reyes_exec', { fixedFace: -Math.PI / 2 });
+      guard(14, 6, Math.PI);
+      guard(16, 7, Math.PI / 2);
+
+      light(cx(5), cy(8), 0xffe8b8, 175);
+      light(cx(12), cy(6), 0xfff0d2, 160);
+      light(cx(12), cy(11), 0xffe8b8, 150);
+      light(cx(18), cy(8), 0xd8ecff, 165);
+    });
+
+    // ---------------- FLOOR 4: COUNCILMAN REYES' PRIVATE PENTHOUSE OFFICE ----------------
+    const floor4 = makeFloorSpec(4, "4F — COUNCILMAN REYES' PENTHOUSE", 'Presidential Office  •  Diplomatic Lounge  •  Private Archives', ({
+      fGround, setWall, prop, rug, dec, neon, light, guard
+    }) => {
+      // Luxurious herringbone walnut hardwood throughout, with white marble elevator foyer
+      for (let ly = 1; ly <= 13; ly++) {
+        for (let lx = 1; lx <= 20; lx++) {
+          fGround[ly][lx] = ly <= 3 && lx >= 7 && lx <= 14 ? T.tileFloor : T.wood;
+        }
+      }
+      // Panoramic windows along West and East penthouse walls too
+      for (const wy of [4, 7, 10]) {
+        fGround[wy][1] = T.wood;
+      }
+
+      // Foyer architectural columns flanking the penthouse entrance from the elevator bank
+      setWall(6, 3);
+      setWall(15, 3);
+      dec('reyes_column', cx(6), M(3) * TILE + 36);
+      dec('reyes_column', cx(15), M(3) * TILE + 36);
+
+      // Royal Burgundy & Gold Penthouse Carpet in the centerpiece suite
+      rug('reyes_penthouse_rug', (RX + 11) * TILE, (RY + 8.2) * TILE);
+
+      // Centerpiece: Councilman Reyes' Grand Presidential Desk (lx = 9..12, ly = 6)
+      prop(9, 6, T.desk); prop(10, 6, T.desk); prop(11, 6, T.desk); prop(12, 6, T.desk);
+      dec('reyes_exec_desk', (RX + 11) * TILE, M(6) * TILE + 38);
+      dec('bank_chair', (RX + 11) * TILE, M(5) * TILE + 30);
+
+      // West Diplomatic & Visitor Lounge (lx = 1..6, ly = 5..12)
+      prop(2, 6, T.sofa); prop(3, 6, T.sofa);
+      dec('reyes_sofa', (RX + 3) * TILE, M(6) * TILE + 34);
+      prop(2, 10, T.sofa); prop(3, 10, T.sofa);
+      dec('reyes_sofa', (RX + 3) * TILE, M(10) * TILE + 34);
+      prop(2, 8, T.table); prop(3, 8, T.table);
+      // Trophy & architectural model display cabinets along the west wall
+      prop(1, 4, T.shelf); dec('reyes_trophy_cab', cx(1) + 4, M(4) * TILE + 36);
+      prop(1, 8, T.shelf); dec('reyes_trophy_cab', cx(1) + 4, M(8) * TILE + 36);
+      prop(1, 12); dec('bank_plant', cx(1), M(12) * TILE + 34);
+      prop(6, 12); dec('bank_plant', cx(6), M(12) * TILE + 34);
+      // North-West Library & Bookcase Wall
+      for (const bx of [2, 3, 4, 5]) {
+        prop(bx, 1, T.shelf);
+        dec('bank_shelf', cx(bx), M(1) * TILE + 36);
+      }
+
+      // East Strategy Table & Private Document Vault (lx = 15..20, ly = 5..12)
+      prop(16, 7, T.table); prop(17, 7, T.table); prop(18, 7, T.table);
+      dec('reyes_conf_table', (RX + 17.5) * TILE, M(7) * TILE + 36);
+      dec('bank_chair', cx(16), M(6) * TILE + 26);
+      dec('bank_chair', cx(18), M(6) * TILE + 26);
+      dec('bank_chair', cx(16), M(8) * TILE + 32);
+      dec('bank_chair', cx(18), M(8) * TILE + 32);
+      // Private safes, encrypted terminals & bookshelves along the North-East and East walls
+      for (const bx of [16, 17, 18]) {
+        prop(bx, 1, T.shelf);
+        dec('bank_shelf', cx(bx), M(1) * TILE + 36);
+      }
+      prop(20, 1, T.cabinet); dec('bank_panel', cx(20), M(1) * TILE + 36);
+      prop(20, 4, T.cabinet); dec('reyes_trophy_cab', cx(20) - 4, M(4) * TILE + 36);
+      prop(20, 9, T.cabinet); dec('bank_cabinet', cx(20), M(9) * TILE + 36);
+      prop(20, 11, T.cabinet); dec('bank_cabinet', cx(20), M(11) * TILE + 36);
+      prop(20, 12); dec('bank_plant', cx(20), M(12) * TILE + 34);
+      prop(15, 12); dec('bank_plant', cx(15), M(12) * TILE + 34);
+      neon('bank_board', cx(18), wallY(M(0)), -10, 10);
+      neon('bank_clock', cx(3), wallY(M(0)), -14, 10);
+
+      // Elite Penthouse Bodyguards
+      guard(7, 4, Math.PI / 2);
+      guard(14, 4, Math.PI / 2);
+
+      // Warm golden penthouse chandeliers
+      light(cx(4), cy(8), 0xffe8b0, 185);
+      light((RX + 11) * TILE, cy(8), 0xfff2c8, 210);
+      light(cx(17), cy(8), 0xffe8b0, 185);
+    });
+
+    const floors = { 1: floor1, 2: floor2, 3: floor3, 4: floor4 };
+
+    // 4. Write Floor 1 (Main Lobby) into the base world ground[][] and obj[][] arrays
+    //    so street entry, navigation, and flood-fill reachability work naturally.
+    for (let ly = 0; ly < RH; ly++) {
+      for (let lx = 0; lx < RW; lx++) {
+        ground[M(ly)][L(lx)] = floor1.ground[ly][lx];
+        obj[M(ly)][L(lx)] = floor1.obj[ly][lx];
+      }
+    }
+    floor1.skins.forEach((s) => {
+      if (s.doorSkin) out.policeSkin.doors.push({ tx: L(s.lx), ty: M(s.ly), c: s.doorSkin[0], o: s.doorSkin[1] });
+      else if (s.face !== undefined) out.policeSkin.walls.push({ tx: L(s.lx), ty: M(s.ly), t: s.face });
+    });
+
+    // Push all 4 floors' rugs, decor, civilians, and enemies (tagged with reyesFloor: 1..4)
+    Object.values(floors).forEach((fl) => {
+      fl.rugs.forEach((r) => out.rugs.push(r));
+      fl.decor.forEach((d) => out.decor.push(d));
+      fl.civilians.forEach((c) => out.civilians.push(c));
+      fl.enemies.forEach((e) => out.enemies.push(e));
+    });
+
+    // Register the unified 4-story Reyes Holdings Tower building
+    registerBuilding(RX, RY, RW, RH, 'tower', {
+      kind: 'tower',
+      lift: 96,
+      tall: true,
+      colorIdx: 1,
+      look: 'reyes',
+      facade: T.facPolice
+    });
+    addPoi('tower', 'Reyes Holdings Tower', RX, RY, RW, RH);
+    publicDoor(RX + 10, BFY, 'office', 'Reyes Holdings Tower');
+
+    const lt = (x, y, col, extra = {}) => ({ x, y, steady: true, col, ...extra });
+    const allNeons = [
+      // Exterior wall sconces, security cameras & window displays
+      ...[1, 5, 9, 12, 16, 20].map((lx) => ({ key: 'bank_lamp', x: cx(lx), y: (BFY + 1) * TILE - 2, sy: -26, dz: 12, ext: true })),
+      { key: 'bank_cam', x: cx(0) + 10, y: (BFY + 1) * TILE - 2, sy: -38, dz: 14, ext: true },
+      { key: 'bank_cam', x: cx(21) - 10, y: (BFY + 1) * TILE - 2, sy: -38, dz: 14, ext: true },
+      { key: 'reyes_crest', x: cx(9) - 2, y: (BFY + 1) * TILE - 2, sy: -36, dz: 14, ext: true },
+      { key: 'reyes_crest', x: cx(12) + 2, y: (BFY + 1) * TILE - 2, sy: -36, dz: 14, ext: true },
+      ...[2, 4, 6, 8, 13, 15, 17, 19].map((lx, i) => ({
+        key: `reyes_win_${i % 4}`,
+        x: cx(lx),
+        y: (BFY + 1) * TILE - 2,
+        sy: -24,
+        dz: 11,
+        ext: true
+      })),
+      ...floor1.neons,
+      ...floor2.neons,
+      ...floor3.neons,
+      ...floor4.neons
+    ];
+
+    const allLights = [
+      lt((RX + 11) * TILE, (BFY + 1) * TILE + 12, 0xffe8a8, { neon: true }),
+      lt(cx(5), (BFY + 1) * TILE + 8, 0xffe49c),
+      lt(cx(16), (BFY + 1) * TILE + 8, 0xffe49c),
+      ...floor1.lights,
+      ...floor2.lights,
+      ...floor3.lights,
+      ...floor4.lights
+    ];
+
+    out.reyes = {
+      X: RX,
+      Y: RY,
+      W: RW,
+      H: RH,
+      BFY,
+      door: { x: (RX + 11) * TILE, y: (BFY + 1) * TILE },
+      frontDoor: {
+        x: (RX + 11) * TILE,
+        y: (BFY + 1) * TILE,
+        tiles: [[RX + 10, BFY], [RX + 11, BFY]]
+      },
+      // Interactive Elevator & Staircase positions (identical across all 4 connected floors)
+      elevator: { x: (RX + 11) * TILE, y: (RY + 1.4) * TILE, arriveY: (RY + 2.2) * TILE },
+      stairsDown: { x: (RX + 8.8) * TILE, y: (RY + 1.4) * TILE, arriveY: (RY + 2.2) * TILE },
+      stairsUp: { x: (RX + 13.2) * TILE, y: (RY + 1.4) * TILE, arriveY: (RY + 2.2) * TILE },
+      receptionistSpot: { x: cx(10.5), y: cy(8.2) },
+      // Councilman Reyes stands in front of his presidential desk on Floor 4
+      reyesSpot: { x: (RX + 11) * TILE, y: (RY + 7.8) * TILE, floor: 4 },
+      // Walkable spots clear on all floors for mission items (e.g. m13 documents)
+      questSpots: [
+        { x: cx(5), y: cy(3), floor: 1 },
+        { x: cx(16), y: cy(3), floor: 1 },
+        { x: cx(11), y: cy(10), floor: 1 },
+        { x: cx(8), y: cy(9), floor: 1 },
+        { x: cx(14), y: cy(9), floor: 1 }
+      ],
+      sign: { key: 'reyes_sign', x: (RX + 11) * TILE, y: (BFY + 1) * TILE - 2 },
+      canopy: { key: 'reyes_canopy', x: (RX + 11) * TILE, y: (BFY + 1) * TILE + 6 },
+      neons: allNeons,
+      lights: allLights,
+      floors
+    };
+  }
+
   /* ---------------- TRAFFIC VARIETY: the parked cars and the road traffic get their vehicle type from the AREA they are in (residential: ordinary cars,
      commercial: taxis / delivery vans / mixed, downtown: taxis + luxury + sports, industrial: pickups + trucks + vans). It runs last with its OWN random
      stream, so nothing else in the world changes. No two neighbours (within ~11 tiles) look the same, footprints never overlap, and bigger vehicles
@@ -2809,7 +4150,7 @@ export function generateWorld(seed = 20240) {
     // move NPC / enemy spawns off furniture, trees and walls onto the nearest walkable reachable tile
     const free = (tx, ty) => inb(tx, ty) && seen[ty * W + tx] === 1 && !SOLID.has(obj[ty][tx]);
     const snap = (e) => {
-      if (e.kind === 'shopkeeper') return true;                          // a clerk stands in the sealed pocket behind the counter
+      if (e.kind === 'shopkeeper' || e.reyesFloor) return true;            // a clerk or multi-floor tower NPC stands at their exact floor position
       const tx = Math.floor(e.x / TILE), ty = Math.floor(e.y / TILE);
       if (free(tx, ty)) return true;
       for (let r = 1; r <= 6; r++) {

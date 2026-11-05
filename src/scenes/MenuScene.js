@@ -42,9 +42,10 @@ export default class MenuScene extends Phaser.Scene {
     this.menu.items.forEach((b, i) => { b.c.setAlpha(0); this.tweens.add({ targets: b.c, alpha: 1, duration: 360, delay: 250 + i * 60 }); });
 
     // smaller extras along the bottom
-    const extras = [['STORY MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'COMPLETED', from: 'Menu' }); }], ['SIDE MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'JOBS', from: 'Menu' }); }], ['CONTROLS', () => controlsPanel(this)], ['FULLSCREEN', () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); }]];
+    const extras = [['STORY MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'COMPLETED', from: 'Menu' }); }], ['CONTROLS', () => controlsPanel(this)], ['FULLSCREEN', () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); }]];
     extras.forEach(([t, fn], i) => {
-      const x = 66 + 100 + i * 208, bg = this.add.rectangle(x, 678, 196, 30, TH.panel, 0.84).setStrokeStyle(1, TH.line).setDepth(30).setInteractive({ useHandCursor: true });
+      // the 3 extras share the exact width of the menu column above (410px, centred on x=266), so both blocks line up
+      const bw = (410 - 2 * 10) / 3, x = 61 + bw / 2 + i * (bw + 10), bg = this.add.rectangle(x, 678, bw, 30, TH.panel, 0.84).setStrokeStyle(1, TH.line).setDepth(30).setInteractive({ useHandCursor: true });
       const tx = this.add.text(x, 678, t, { fontFamily: FONT, fontSize: fs(11) + 'px', color: TH.dim, fontStyle: 'bold' }).setOrigin(0.5).setDepth(31);
       bg.on('pointerover', () => { bg.setStrokeStyle(1, TH.accent).setFillStyle(TH.panelHi, 0.95); tx.setColor('#ffffff'); });
       bg.on('pointerout', () => { bg.setStrokeStyle(1, TH.line).setFillStyle(TH.panel, 0.84); tx.setColor(TH.dim); });

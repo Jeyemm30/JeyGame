@@ -30,7 +30,7 @@ export function buildPlaces(gs) {
   set('pond', pond.x, pond.y, 'Park pond');
   set('clinic', wd.hospitalDoor.x, wd.hospitalDoor.y + 10, 'St. Mary Hospital');
   set('station', wd.policeStation.x, wd.policeStation.y + 10, 'Police Station');
-  const tower = doors.find((d) => d.kind === 'office');
+  const tower = doors.find((d) => d.name === 'Reyes Holdings Tower') || doors.find((d) => d.kind === 'office');
   set('tower', tower.x, tower.y + 14, 'Reyes Holdings Tower');
   const ind = wd.pois.filter((p) => p.type === 'industrial');
   const y1 = ind[0], y2 = ind[Math.min(3, ind.length - 1)] || ind[0];
@@ -53,6 +53,8 @@ export function buildPlaces(gs) {
   set('dealer', ((lot.x0 + lot.x1) / 2) * TILE, ((lot.y0 + lot.y1) / 2 + 1) * TILE, 'Gordy’s Used Cars');
   if (wd.hideout) { P.kenny = { x: wd.hideout.kenny.x, y: wd.hideout.kenny.y, name: "Kenny's hideout" }; }
   if (wd.wise) { P.wise = { x: wd.wise.owner.x, y: wd.wise.owner.y, name: 'WISE SOLE' }; }
+  if (wd.totoya) { P.totoya = { x: wd.totoya.mark.x, y: wd.totoya.mark.y, name: 'TOTOYA Auto Repair' }; }
+  if (wd.reyes) { P.reyes_office = { x: wd.reyes.reyesSpot.x, y: wd.reyes.reyesSpot.y, name: "Councilman Reyes' Penthouse Office" }; }
   if (wd.casino) { P.sean = { x: wd.casino.sean.x, y: wd.casino.sean.y, name: 'Casino reception' }; P.jiro = { x: wd.casino.jiro.x, y: wd.casino.jiro.y, name: 'Casino card room' }; P.casino = { x: wd.casino.door.x, y: wd.casino.door.y, name: 'Casino' }; }
   {                                                              // Yosen Blackthorn: the quiet back alley of the west residential block on Market Street's row (a fixed spot)
     const yb = wd.blocks.find((b) => b.c === 0 && b.r === 3) || wd.blocks.find((b) => b.alley !== undefined);
