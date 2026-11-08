@@ -119,7 +119,7 @@ export function cityBackdrop(scene) {
   const depthOf = { sky: 0, star: 1, far: 3, mid: 4, fac: 6, gnd: 7, car: 8, ped: 8.5, lamp: 9, glow: 10, fog: 11 };
   // sky
   const sky = scene.add.graphics().setDepth(depthOf.sky);
-  sky.fillGradientStyle(0x05060b, 0x05060b, 0x3a1710, 0x3a1710, 1).fillRect(0, 0, 1280, 560);
+  sky.fillGradientStyle(0x0e1728, 0x0e1728, 0x482015, 0x482015, 1).fillRect(0, 0, 1280, 560);
   const stars = Array.from({ length: 70 }, () => scene.add.rectangle(rng() * 1280, rng() * 260, 2, 2, 0xfff0d0, 0.2 + rng() * 0.6).setDepth(depthOf.star));
   stars.forEach((s) => scene.tweens.add({ targets: s, alpha: 0.1, duration: 800 + rng() * 2200, yoyo: true, repeat: -1, delay: rng() * 2000 }));
   scene.add.circle(1040, 120, 52, 0xffc890, 0.07).setDepth(depthOf.star); scene.add.circle(1040, 120, 30, 0xf6e6cc, 0.95).setDepth(depthOf.star); scene.add.circle(1030, 112, 30, 0xe0c8a8, 0.35).setDepth(depthOf.star);
@@ -138,8 +138,8 @@ export function cityBackdrop(scene) {
     tex.refresh();
     return key;
   };
-  skyline('menu_far', 1536, 300, 90, 250, [44, 90], '#0f121c', '#1d2234', [0.1, ['#2a3556', '#3a3a58']]);
-  skyline('menu_mid', 1536, 340, 110, 300, [60, 120], '#0a0c14', '#171b2a', [0.38, ['#ffcf6a', '#ff9a4a', '#8fe8ff', '#ffe8b0']]);
+  skyline('menu_far', 1536, 300, 90, 250, [44, 90], '#182030', '#2d3752', [0.15, ['#3b4970', '#50507a']]);
+  skyline('menu_mid', 1536, 340, 110, 300, [60, 120], '#121624', '#262f44', [0.45, ['#ffcf6a', '#ff9a4a', '#8fe8ff', '#ffe8b0']]);
   const far = scene.add.tileSprite(0, GY - 300, 1280, 300, 'menu_far').setOrigin(0, 0).setDepth(depthOf.far);
   const mid = scene.add.tileSprite(0, GY - 340 + 30, 1280, 340, 'menu_mid').setOrigin(0, 0).setDepth(depthOf.mid);
   // street-level buildings made from the game's real wall / window / door tiles, tinted for night
@@ -150,7 +150,7 @@ export function cityBackdrop(scene) {
       let idx = T.wall;
       if (r === rows - 1) idx = c === doorCol ? T.doorClosed : (c % 2 === 1 ? T.window : T.wall);
       else if (c % 2 === 1 && r % 2 === 0) idx = T.window;
-      scene.add.image(x0 + c * S, top + r * S, 'tiles', frame(idx)).setOrigin(0, 0).setScale(2).setTint(0x4d5a82).setDepth(depthOf.fac);
+      scene.add.image(x0 + c * S, top + r * S, 'tiles', frame(idx)).setOrigin(0, 0).setScale(2).setTint(0x7584a6).setDepth(depthOf.fac);
       if (idx === T.window) { const g = scene.add.rectangle(x0 + c * S + 8, top + r * S + 8, 48, 36, rng() < 0.5 ? 0xffc86a : (rng() < 0.5 ? 0xff7ab0 : 0x8fe8ff), 0.5).setOrigin(0, 0).setDepth(depthOf.fac + 0.1); lit.push(g); }
     }
     scene.add.rectangle(x0 - 6, top - 12, w * S + 12, 14, 0x1b1e2a).setOrigin(0, 0).setDepth(depthOf.fac + 0.2);
@@ -162,9 +162,9 @@ export function cityBackdrop(scene) {
   lit.forEach((g) => { if (rng() < 0.4) scene.tweens.add({ targets: g, alpha: 0.12 + rng() * 0.2, duration: 600 + rng() * 2400, yoyo: true, repeat: -1, delay: rng() * 3000 }); });
   // sidewalk + road, also real tiles
   for (let x = 0; x < 1280; x += S) {
-    scene.add.image(x, GY, 'tiles', frame(T.sidewalk)).setOrigin(0, 0).setScale(2).setTint(0x7a8098).setDepth(depthOf.gnd);
-    scene.add.image(x, GY + S, 'tiles', frame(T.road)).setOrigin(0, 0).setScale(2).setTint(0x6a7088).setDepth(depthOf.gnd);
-    scene.add.image(x, GY + 2 * S, 'tiles', frame(T.road)).setOrigin(0, 0).setScale(2).setTint(0x6a7088).setDepth(depthOf.gnd);
+    scene.add.image(x, GY, 'tiles', frame(T.sidewalk)).setOrigin(0, 0).setScale(2).setTint(0x8e98b0).setDepth(depthOf.gnd);
+    scene.add.image(x, GY + S, 'tiles', frame(T.road)).setOrigin(0, 0).setScale(2).setTint(0x7c849c).setDepth(depthOf.gnd);
+    scene.add.image(x, GY + 2 * S, 'tiles', frame(T.road)).setOrigin(0, 0).setScale(2).setTint(0x7c849c).setDepth(depthOf.gnd);
   }
   for (let x = 20; x < 1280; x += 96) scene.add.rectangle(x, GY + 2 * S, 52, 5, 0xe8c860, 0.85).setOrigin(0, 0.5).setDepth(depthOf.gnd + 0.1);
   scene.add.rectangle(0, GY + S - 3, 1280, 6, 0x23262e).setOrigin(0, 0).setDepth(depthOf.gnd + 0.1);

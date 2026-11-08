@@ -14,14 +14,13 @@ export default class MenuScene extends Phaser.Scene {
   create() {
     music.set('menu');
     this.input.setDefaultCursor('default');
-    this.cameras.main.setBackgroundColor('#05060a');
+    this.cameras.main.setBackgroundColor('#080b12');
     cityBackdrop(this);
-    this.cameras.main.fadeIn(600, 0, 0, 0);
+    this.cameras.main.fadeIn(250, 0, 0, 0);
     this.input.once('pointerup', () => goImmersive(this.game));
 
     // title
-    const logo = this.add.image(54, 34, buildLogo(this)).setOrigin(0, 0).setScale(0.64).setDepth(40).setAlpha(0);
-    this.tweens.add({ targets: logo, alpha: 1, x: 62, duration: 700, ease: 'Quad.Out' });
+    const logo = this.add.image(62, 34, buildLogo(this)).setOrigin(0, 0).setScale(0.64).setDepth(40).setAlpha(1);
     this.add.rectangle(66, 190, 150, 3, TH.accent).setOrigin(0, 0).setDepth(40); this.add.rectangle(220, 190, 80, 3, TH.cyan).setOrigin(0, 0).setDepth(40);
     const tag = this.add.text(66, 200, 'OPEN-WORLD  CITY  SANDBOX', { fontFamily: FONT, fontSize: fs(13) + 'px', color: '#8fd8e0', fontStyle: 'bold' }).setDepth(40);
     if (tag.setLetterSpacing) tag.setLetterSpacing(4);
@@ -60,7 +59,7 @@ export default class MenuScene extends Phaser.Scene {
       { text: 'EXIT GAME', fn: () => confirmBox(this, { title: 'EXIT GAME?', text: 'Close City of Chaos? Progress you saved stays in your save slots.', yes: 'EXIT', no: 'STAY', onYes: () => this.exitGame(), list: this.menu, danger: true }), accent: 0x8a8d96 }
     ];
     this.menu = menuList(this, items, 66 + 200, 262, { w: 410, h: 46, gap: 8, size: 20 });
-    this.menu.items.forEach((b, i) => { b.c.setAlpha(0); this.tweens.add({ targets: b.c, alpha: 1, duration: 360, delay: 250 + i * 60 }); });
+    this.menu.items.forEach((b, i) => { b.c.setAlpha(1); });
 
     // smaller extras along the bottom
     const extras = [['STORY MISSIONS', () => { this.scene.pause(); this.scene.launch('Missions', { mode: 'menu', tab: 'COMPLETED', from: 'Menu' }); }], ['CONTROLS', () => controlsPanel(this)], ['FULLSCREEN', () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); }]];
