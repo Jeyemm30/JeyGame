@@ -32,12 +32,10 @@ export default class UIScene extends Phaser.Scene {
     this.p = this.game_.player;
     this.invOpen = false;
     this.hitUntil = 0;
-    // On touch devices the bottom corners belong to the controls, so the HUD moves to the top.
+    // On touch devices the bottom corners belong to the controls, so HP/ST stats move to the top-left.
     this.touchMode = touchEnabled();
     const bo = this.touchMode ? -470 : 0;
-    const wx = this.touchMode ? 1085 : 1260;
-    const wy = this.touchMode ? -470 : 0; // weapon block sits under the top button row on touch
-    this.bo = bo; this.wx = wx; this.wy = wy;
+    this.bo = bo;
     resetTouch();
 
     this.add.image(640, 360, 'vignette').setDisplaySize(1280, 720).setDepth(0.5);
@@ -53,32 +51,55 @@ export default class UIScene extends Phaser.Scene {
     label(this, 20, 618 + bo, 'HP', 16, '#ff7a7a', 0, 0.5).setDepth(3);
     label(this, 20, 646 + bo, 'ST', 14, '#e8d56a', 0, 0.5).setDepth(3);
 
-    // weapon block (bottom-right on desktop)
-    this.wName = label(this, wx, 560 + wy, '', 22, '#f2e08a', 1, 0.5).setDepth(3);
-    this.wAmmo = label(this, wx, 604 + wy, '', 46, '#ffffff', 1, 0.5).setDepth(3);
-    this.wSub = label(this, wx, 646 + wy, '', 16, '#bcd0b0', 1, 0.5).setDepth(3);
-    // 4-slot customizable equipment inventory bar (Keys 1-4)
+    // 4-slot customizable equipment inventory bar (Keys 1-4) centered at screen bottom
     this.hudSlots = [];
     const slotLabels = ['PRI', 'BACK', 'FOOD', 'MED'];
-    const totalW = 4 * 70 + 3 * 6; // 298px
-    const startX = wx - totalW;
+    const slotW = 74, slotH = 46, gap = 8;
+    const totalW = 4 * slotW + 3 * gap; // 320px
+    const startX = 640 - totalW / 2;    // 480px, perfectly centered at bottom
+    const slotY = 688;
+
     for (let i = 0; i < 4; i++) {
-      const sx = startX + i * 76;
-      const bg = this.add.rectangle(sx + 35, 692 + wy, 70, 42, 0x141f12, 0.85).setStrokeStyle(2, 0x44603c).setDepth(3).setInteractive({ useHandCursor: true });
-      const keyT = label(this, sx + 4, 674 + wy, String(i + 1), 11, '#ffffff', 0, 0).setDepth(4);
-      const tagT = label(this, sx + 66, 674 + wy, slotLabels[i], 9, '#7aff9a', 1, 0).setDepth(4);
-      const icon = this.add.image(sx + 35, 691 + wy, 'm_stick').setDepth(4);
-      const badge = label(this, sx + 35, 703 + wy, '', 10, '#ffffff', 0.5, 0).setDepth(4);
+      const sx = startX + i * (slotW + gap);
+      const cx = sx + slotW / 2;
+
+      const bg = this.add.rectangle(cx, slotY, slotW, slotH, 0x0f131f, 0.88)
+        .setStrokeStyle(2, 0x242d42)
+        .setDepth(44)
+        .setInteractive({ useHandCursor: true });
+
+      const keyT = label(this, sx + 5, slotY - 14, String(i + 1), 11, '#ffffff', 0, 0).setDepth(45);
+      const tagT = label(this, sx + slotW - 5, slotY - 14, slotLabels[i], 9, '#7aff9a', 1, 0).setDepth(45);
+      const icon = this.add.image(cx, slotY - 1, 'm_stick').setDepth(45);
+      const badge = label(this, cx, slotY + 13, '', 10, '#ffffff', 0.5, 0).setDepth(45);
+
+      bg.on('pointerdown', () => { bg.setScale(0.94); });
+      const resetSlotScale = () => { bg.setScale(1); };
+      bg.on('pointerout', resetSlotScale);
+      bg.on('pointercancel', resetSlotScale);
 
       bg.on('pointerup', () => {
+        resetSlotScale();
         const p = this.p;
         if (!p || p.dead) return;
         if (i === 0) {
-          if (p.slots[1] && p.weapons[p.slots[1]]) p.equip(p.slots[1]);
+          if (p.slots[1] && p.weapons[p.slots[1]]) {
+            if (p.current === p.slots[1]) {
+              p.equip('fists');
+              this.toast('Holstered weapon (Bare hands)');
+            } else {
+              p.equip(p.slots[1]);
+            }
+          } else {
+            p.equip('fists');
+          }
         } else if (i === 1) {
           if (p.slots[2] && p.weapons[p.slots[2]]) {
-            if (p.current === p.slots[2] && p.slots[1] && p.weapons[p.slots[1]]) p.equip(p.slots[1]);
-            else p.equip(p.slots[2]);
+            if (p.current === p.slots[2]) {
+              p.equip(p.slots[1] && p.weapons[p.slots[1]] ? p.slots[1] : 'fists');
+            } else {
+              p.equip(p.slots[2]);
+            }
           } else {
             this.toast('No secondary weapon (assign in Tab)');
           }
@@ -94,14 +115,16 @@ export default class UIScene extends Phaser.Scene {
         } else if (i === 3) {
           const mId = p.slots[4] || 'medkit';
           if (mId === 'medkit') {
-            p.startMedkit();
+            if (p.medkits > 0) p.startMedkit();
+            else this.toast('No medkits remaining');
           } else if (SUPPLIES[mId]) {
-            p.startSupply(mId);
+            if ((p.supplies[mId] || 0) > 0) p.startSupply(mId);
+            else this.toast(`No ${SUPPLIES[mId].label} remaining`);
           }
         }
       });
 
-      this.hudSlots.push({ bg, keyT, tagT, icon, badge });
+      this.hudSlots.push({ bg, keyT, tagT, icon, badge, cx, cy: slotY });
     }
 
     // top-left
@@ -800,19 +823,6 @@ export default class UIScene extends Phaser.Scene {
     });
     this.touchFootGroup.push(this.tBtnSwap);
 
-    // 7. Quick Slots (Food / Med)
-    this.tBtnFood = mk(1095, 665, 'FOOD', 26, {
-      col: 0xf59e0b, activeCol: 0xfbbf24, activeBg: 0x451a03,
-      onDown: act('slot3')
-    });
-    this.touchFootGroup.push(this.tBtnFood);
-
-    this.tBtnMed = mk(995, 665, 'MED', 26, {
-      col: 0x22c55e, activeCol: 0x4ade80, activeBg: 0x14532d,
-      onDown: act('slot4')
-    });
-    this.touchFootGroup.push(this.tBtnMed);
-
     // --- Vehicle Driving Layout ---
     // 1. Gas Pedal (Accelerate)
     this.tBtnGas = mk(1195, 560, 'GAS', 44, {
@@ -913,8 +923,13 @@ export default class UIScene extends Phaser.Scene {
 
   updateTouch() {
     const R = 65;
-    if (this.invOpen || this.modalActive() || this.p.dead) {
+    const hideTouch = this.invOpen || this.modalActive() || this.p.dead;
+    if (hideTouch) {
       Object.values(this.sticks).forEach((s) => { s.id = -1; });
+      this.touchFootGroup.forEach((b) => b.setVisible(false));
+      this.touchCarGroup.forEach((b) => b.setVisible(false));
+      this.tg.clear();
+      return;
     }
     const inCar = !!this.p.vehicle;
     if (inCar && this.sticks.aim.id !== -1) this.sticks.aim.id = -1;
@@ -1044,82 +1059,116 @@ export default class UIScene extends Phaser.Scene {
     bar(60, 608 + this.bo, 260, 20, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
     bar(60, 642 + this.bo, 260, 12, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
     this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
-    // 4-slot equipment inventory bar HUD update (Keys 1-4)
+    // 4-slot equipment inventory bar HUD update (Keys 1-4) centered at screen bottom
     if (this.hudSlots) {
-      // Slot 1: Primary Weapon (in hand)
-      const s1 = this.hudSlots[0];
-      const w1 = p.slots[1];
-      if (w1 && p.weapons[w1]) {
-        const isM = !!MELEE[w1];
-        const tex = isM ? MELEE[w1].tex : WEAPONS[w1].gun;
-        s1.icon.setTexture(tex).setVisible(true).setAlpha(1);
-        s1.icon.setScale(Math.min(1.2, 40 / Math.max(s1.icon.width, 16)));
-        const act = (p.current === w1);
-        s1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
-        s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
-        const st = isM ? `DMG ${MELEE[w1].dmg}` : `${p.weapons[w1].mag}/${p.ammo[WEAPONS[w1].ammo]}`;
-        s1.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+      const inCar = !!p.vehicle;
+      const hideHotbar = inCar || this.modalActive() || this.invOpen || p.dead;
+      if (hideHotbar) {
+        this.hudSlots.forEach((s) => {
+          s.bg.setVisible(false);
+          s.keyT.setVisible(false);
+          s.tagT.setVisible(false);
+          s.icon.setVisible(false);
+          s.badge.setVisible(false);
+        });
       } else {
-        s1.icon.setVisible(false);
-        const act = (p.current === 'fists');
-        s1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x2c3a28);
-        s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
-        s1.badge.setText('Fists').setColor(act ? '#f2e08a' : '#777777');
-      }
+        this.hudSlots.forEach((s) => {
+          s.bg.setVisible(true);
+          s.keyT.setVisible(true);
+          s.tagT.setVisible(true);
+          s.badge.setVisible(true);
+        });
 
-      // Slot 2: Secondary Weapon (on back)
-      const s2 = this.hudSlots[1];
-      const w2 = p.slots[2];
-      if (w2 && p.weapons[w2]) {
-        const isM = !!MELEE[w2];
-        const tex = isM ? MELEE[w2].tex : WEAPONS[w2].gun;
-        s2.icon.setTexture(tex).setVisible(true).setAlpha(1);
-        s2.icon.setScale(Math.min(1.2, 40 / Math.max(s2.icon.width, 16)));
-        const act = (p.current === w2);
-        s2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
-        s2.keyT.setColor(act ? '#f2e08a' : '#ffffff');
-        const st = isM ? `DMG ${MELEE[w2].dmg}` : `${p.weapons[w2].mag}/${p.ammo[WEAPONS[w2].ammo]}`;
-        s2.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
-      } else {
-        s2.icon.setVisible(false);
-        s2.bg.setStrokeStyle(1.5, 0x2c3a28);
-        s2.badge.setText('Empty').setColor('#777777');
-      }
+        // Slot 1: Primary Weapon (in hand)
+        const s1 = this.hudSlots[0];
+        const w1 = p.slots[1];
+        if (w1 && p.weapons[w1]) {
+          const isM = !!MELEE[w1];
+          const tex = isM ? MELEE[w1].tex : WEAPONS[w1].gun;
+          s1.icon.setTexture(tex).setVisible(true).setAlpha(1);
+          s1.icon.setScale(Math.min(1.2, 40 / Math.max(s1.icon.width, 16)));
+          const act = (p.current === w1);
+          s1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+          s1.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.92);
+          s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+          const st = isM ? `DMG ${MELEE[w1].dmg}` : `${p.weapons[w1].mag}/${p.ammo[WEAPONS[w1].ammo]}`;
+          s1.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+        } else {
+          s1.icon.setVisible(false);
+          const act = (p.current === 'fists');
+          s1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x242d42);
+          s1.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.88);
+          s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+          s1.badge.setText('Fists').setColor(act ? '#f2e08a' : '#777777');
+        }
 
-      // Slot 3: Food / Consumables
-      const s3 = this.hudSlots[2];
-      const fId = p.slots[3];
-      if (fId && SUPPLIES[fId]) {
-        const count = p.supplies[fId] || 0;
-        s3.icon.setTexture('sp_' + fId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
-        s3.icon.setScale(Math.min(1.2, 32 / Math.max(s3.icon.width, 16)));
-        s3.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
-        s3.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#777777');
-      } else {
-        s3.icon.setVisible(false);
-        s3.bg.setStrokeStyle(1.5, 0x2c3a28);
-        s3.badge.setText('Empty').setColor('#777777');
-      }
+        // Slot 2: Secondary Weapon (on back)
+        const s2 = this.hudSlots[1];
+        const w2 = p.slots[2];
+        if (w2 && p.weapons[w2]) {
+          const isM = !!MELEE[w2];
+          const tex = isM ? MELEE[w2].tex : WEAPONS[w2].gun;
+          s2.icon.setTexture(tex).setVisible(true).setAlpha(1);
+          s2.icon.setScale(Math.min(1.2, 40 / Math.max(s2.icon.width, 16)));
+          const act = (p.current === w2);
+          s2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+          s2.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.92);
+          s2.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+          const st = isM ? `DMG ${MELEE[w2].dmg}` : `${p.weapons[w2].mag}/${p.ammo[WEAPONS[w2].ammo]}`;
+          s2.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+        } else {
+          s2.icon.setVisible(false);
+          s2.bg.setStrokeStyle(1.5, 0x242d42);
+          s2.bg.setFillStyle(0x0a0c14, 0.82);
+          s2.keyT.setColor('#64748b');
+          s2.badge.setText('Empty').setColor('#64748b');
+        }
 
-      // Slot 4: Medkit / Medical Items
-      const s4 = this.hudSlots[3];
-      const mId = p.slots[4] || 'medkit';
-      if (mId === 'medkit') {
-        const count = p.medkits;
-        s4.icon.setTexture('it_medkit').setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
-        s4.icon.setScale(Math.min(1.2, 32 / Math.max(s4.icon.width, 16)));
-        s4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x2c3a28);
-        s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ff7a7a' : '#777777');
-      } else if (SUPPLIES[mId]) {
-        const count = p.supplies[mId] || 0;
-        s4.icon.setTexture('sp_' + mId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
-        s4.icon.setScale(Math.min(1.2, 32 / Math.max(s4.icon.width, 16)));
-        s4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
-        s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#777777');
-      } else {
-        s4.icon.setVisible(false);
-        s4.bg.setStrokeStyle(1.5, 0x2c3a28);
-        s4.badge.setText('Empty').setColor('#777777');
+        // Slot 3: Food / Consumables
+        const s3 = this.hudSlots[2];
+        const fId = p.slots[3];
+        if (fId && SUPPLIES[fId]) {
+          const count = p.supplies[fId] || 0;
+          s3.icon.setTexture('sp_' + fId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+          s3.icon.setScale(Math.min(1.2, 30 / Math.max(s3.icon.width, 16)));
+          s3.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x242d42);
+          s3.bg.setFillStyle(count > 0 ? 0x142018 : 0x0a0c14, 0.9);
+          s3.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
+          s3.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#64748b');
+        } else {
+          s3.icon.setVisible(false);
+          s3.bg.setStrokeStyle(1.5, 0x242d42);
+          s3.bg.setFillStyle(0x0a0c14, 0.82);
+          s3.keyT.setColor('#64748b');
+          s3.badge.setText('Empty').setColor('#64748b');
+        }
+
+        // Slot 4: Medkit / Medical Items
+        const s4 = this.hudSlots[3];
+        const mId = p.slots[4] || 'medkit';
+        if (mId === 'medkit') {
+          const count = p.medkits;
+          s4.icon.setTexture('it_medkit').setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+          s4.icon.setScale(Math.min(1.2, 30 / Math.max(s4.icon.width, 16)));
+          s4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x242d42);
+          s4.bg.setFillStyle(count > 0 ? 0x241215 : 0x0a0c14, 0.9);
+          s4.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
+          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ff7a7a' : '#64748b');
+        } else if (SUPPLIES[mId]) {
+          const count = p.supplies[mId] || 0;
+          s4.icon.setTexture('sp_' + mId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+          s4.icon.setScale(Math.min(1.2, 30 / Math.max(s4.icon.width, 16)));
+          s4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x242d42);
+          s4.bg.setFillStyle(count > 0 ? 0x142018 : 0x0a0c14, 0.9);
+          s4.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
+          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#64748b');
+        } else {
+          s4.icon.setVisible(false);
+          s4.bg.setStrokeStyle(1.5, 0x242d42);
+          s4.bg.setFillStyle(0x0a0c14, 0.82);
+          s4.keyT.setColor('#64748b');
+          s4.badge.setText('Empty').setColor('#64748b');
+        }
       }
     }
 
