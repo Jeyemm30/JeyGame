@@ -61,7 +61,6 @@ export default class UIScene extends Phaser.Scene {
 
     // 4-slot customizable equipment inventory bar (Keys 1-4) centered at screen bottom
     this.hudSlots = [];
-    const slotLabels = ['PRI', 'BACK', 'FOOD', 'MED'];
     const slotW = 74, slotH = 46, gap = 8;
     const totalW = 4 * slotW + 3 * gap; // 320px
     const startX = 640 - totalW / 2;    // 480px, perfectly centered at bottom
@@ -77,7 +76,7 @@ export default class UIScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
 
       const keyT = label(this, sx + 5, slotY - 14, String(i + 1), 11, '#ffffff', 0, 0).setDepth(45);
-      const tagT = label(this, sx + slotW - 5, slotY - 14, slotLabels[i], 9, '#7aff9a', 1, 0).setDepth(45);
+      const tagT = label(this, sx + slotW - 5, slotY - 14, '', 9, '#7aff9a', 1, 0).setDepth(45).setVisible(false);
       const icon = this.add.image(cx, slotY - 1, 'm_stick').setDepth(45);
       const badge = label(this, cx, slotY + 13, '', 10, '#ffffff', 0.5, 0).setDepth(45);
 

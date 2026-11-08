@@ -22,7 +22,7 @@ function toColorInt(hex, fallback = 0xff6a2a) {
 export default class DialogueScene extends Phaser.Scene {
   constructor() { super('Dialogue'); }
 
-  init(data) { this.dlgId = data.id; this.dlgData = data.dialogue || null; }
+  init(data) { this.dlgId = data.id; this.dlgData = data.dialogue || null; this.speaker = data.speaker || null; }
 
   create() {
     this.gs = this.scene.get('Game');
@@ -45,14 +45,12 @@ export default class DialogueScene extends Phaser.Scene {
     this.portraitGlow = this.add.circle(160, 520, 58, 0xff6a2a, 0.12);
     this.portrait = this.add.image(160, 438, 'char_player', 'd0').setOrigin(0.5, 0).setScale(4.4);
 
-    // 4. Speaker identity: Name & Occupation badge
+    // 4. Speaker identity: Name
     this.nameText = label(this, 260, 428, '', 22, '#f8fafc');
-    this.roleBadge = this.add.rectangle(260, 458, 120, 22, 0x181e2b).setOrigin(0, 0.5).setStrokeStyle(1, 0x2d374a);
-    this.roleText = this.add.text(268, 458, '', { fontFamily: FONT, fontSize: fs(11) + 'px', color: '#94a3b8', fontStyle: 'bold' }).setOrigin(0, 0.5);
-    this.headerDiv = this.add.rectangle(260, 474, 880, 1, 0x1c2232).setOrigin(0, 0.5);
+    this.headerDiv = this.add.rectangle(260, 460, 880, 1, 0x1c2232).setOrigin(0, 0.5);
 
     // 5. High-readability dialogue text body
-    this.body = this.add.text(260, 492, '', { fontFamily: FONT, fontSize: (touchEnabled() ? '17px' : '19px'), color: '#f8fafc', wordWrap: { width: 920 }, lineSpacing: 6 });
+    this.body = this.add.text(260, 474, '', { fontFamily: FONT, fontSize: (touchEnabled() ? '17px' : '19px'), color: '#f8fafc', wordWrap: { width: 920 }, lineSpacing: 6 });
 
     // 6. Action / continue pill prompt
     this.hintBg = this.add.rectangle(this.cx + PW / 2 - 20, 700, 190, 26, 0x161b28, 0.9).setOrigin(1, 0.5).setStrokeStyle(1, 0x2a334a).setInteractive({ useHandCursor: true });
@@ -117,8 +115,26 @@ export default class DialogueScene extends Phaser.Scene {
     const who = node.who || 'player';
     const isPlayer = who === 'player';
     const npc = STORY_NPCS[who];
-    const tex = isPlayer ? 'char_player' : 'story_' + who;
-    this.portrait.setTexture(this.textures.exists(tex) ? tex : 'civ0', 'd0').setCrop(0, 0, 32, who === 'yosen' ? 46 : 27);
+
+    // Portrait texture matching: use node.tex / node.texture / speaker texture / story_ / npc_ / civ
+    let tex = 'civ0';
+    if (isPlayer) {
+      tex = 'char_player';
+    } else if (node.tex && this.textures.exists(node.tex)) {
+      tex = node.tex;
+    } else if (node.texture && this.textures.exists(node.texture)) {
+      tex = node.texture;
+    } else if (this.speaker && this.speaker.texture && this.textures.exists(this.speaker.texture.key)) {
+      tex = this.speaker.texture.key;
+    } else if (this.textures.exists('story_' + who)) {
+      tex = 'story_' + who;
+    } else if (this.textures.exists('npc_' + who)) {
+      tex = 'npc_' + who;
+    } else if (this.textures.exists(who)) {
+      tex = who;
+    }
+
+    this.portrait.setTexture(tex, 'd0').setCrop(0, 0, 32, who === 'yosen' ? 46 : 27);
     this.fullBody = who === 'yosen';
 
     // Thematic dynamic accent colors per character
@@ -131,13 +147,8 @@ export default class DialogueScene extends Phaser.Scene {
     this.pFrame.setStrokeStyle(1.5, accentCol, 0.65);
     this.portraitGlow.setFillStyle(accentCol, 0.12);
 
-    const displayName = isPlayer ? 'YOU' : (npc ? npc.name.toUpperCase() : who.toUpperCase());
+    const displayName = isPlayer ? 'YOU' : (node.name ? node.name.toUpperCase() : (npc ? npc.name.toUpperCase() : (who === 'civilian' ? 'CIVILIAN' : who.toUpperCase())));
     this.nameText.setText(displayName).setColor(accentHex);
-
-    const roleStr = isPlayer ? 'CITIZEN' : (npc?.title ? npc.title.toUpperCase() : 'PORT CITY RESIDENT');
-    this.roleText.setText(roleStr);
-    const roleWidth = this.roleText.width + 18;
-    this.roleBadge.setSize(Math.max(70, roleWidth), 22).setVisible(true);
 
     this.full = typeof node.text === 'function' ? node.text(state) : node.text;
     this.typed = 0;
@@ -174,11 +185,11 @@ export default class DialogueScene extends Phaser.Scene {
     const choices = this.node && this.node.choices ? this.currentChoices() : [];
     const btnH = Math.round(44 * (touchEnabled() ? Math.max(1, uiK() * 0.95) : 1)), gap = 8;
     const listH = choices.length ? choices.length * (btnH + gap) - gap : 0;
-    const headH = 74;
+    const headH = 50;
     const chrome = 24 + headH + bodyH + (choices.length ? 16 : 30);
     const maxPanel = H - 2 * MARGIN;
     const wantH = chrome + listH + 8;
-    const panelH = Math.min(maxPanel, Math.max(210, wantH));
+    const panelH = Math.min(maxPanel, Math.max(200, wantH));
     const top = H - MARGIN - panelH, bottom = H - MARGIN;
 
     this.panel.setPosition(this.cx, top + panelH / 2).setSize(pw, panelH);
@@ -191,11 +202,9 @@ export default class DialogueScene extends Phaser.Scene {
     this.portrait.setPosition(left + 120, top + (this.fullBody ? 24 : 30)).setScale(this.fullBody ? Math.min(3.6, (pfH - 8) / 46) : Math.min(4.4, (panelH - 70) / 36));
 
     const tx = left + 240;
-    this.nameText.setPosition(tx, top + 20);
-    this.roleBadge.setPosition(tx, top + 48);
-    this.roleText.setPosition(tx + 8, top + 48);
-    this.headerDiv.setPosition(tx, top + 66).setSize(Math.max(200, pw - 270), 1);
-    this.body.setPosition(tx, top + 76);
+    this.nameText.setPosition(tx, top + 22);
+    this.headerDiv.setPosition(tx, top + 52).setSize(Math.max(200, pw - 270), 1);
+    this.body.setPosition(tx, top + 64);
 
     const hintW = Math.max(170, this.hint.width + 28);
     this.hintBg.setPosition(left + pw - 18, bottom - 10).setSize(hintW, 26);

@@ -2823,7 +2823,7 @@ export default class GameScene extends Phaser.Scene {
     this.dialogueCbs.push(opts.onEnd || null);
     this.dialogueActive = true;
     this.scene.pause('Game');
-    this.scene.launch('Dialogue', { id, dialogue: opts.dialogue || null });
+    this.scene.launch('Dialogue', { id, dialogue: opts.dialogue || null, speaker: opts.speaker || null });
   }
 
   finishDialogue() {
@@ -5883,7 +5883,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       const kind = SHOP_KIND[t.ref.shopName] || 'grocery';
       this.openShop(kind, t.ref.shopName || 'Shop');
     } else if (t.kind === 'talk') {
-      this.startDialogue(null, { dialogue: this.civilianChat(t.ref) });
+      this.startDialogue(null, { dialogue: this.civilianChat(t.ref), speaker: t.ref });
     } else if (t.kind === 'mission') {
       this.missions.doInteract();
     } else if (t.kind === 'bed') {
@@ -5972,7 +5972,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
           : ['Nice day, huh?', 'Careful on the roads - people drive like maniacs.', 'The hospital is up north, the police station is downtown.', 'Got any spare change?', "Don't go near the military zone!"];
     const text = L[Math.floor(Math.random() * L.length)];
     c.faceGoal = Math.atan2(this.player.y - c.y, this.player.x - c.x);
-    return { start: 'a', nodes: { a: { who: 'civilian', text, end: true } } };
+    const tex = c.texture && c.texture.key ? c.texture.key : 'civ0';
+    const name = c.name || (c.role ? c.role.toUpperCase() : (c.kind === 'worker' ? 'CONSTRUCTION WORKER' : c.kind === 'medic' ? 'PARAMEDIC' : c.kind === 'shopkeeper' ? 'SHOPKEEPER' : 'CIVILIAN'));
+    return { start: 'a', nodes: { a: { who: 'civilian', name, tex, text, end: true } } };
   }
 
   /* ----------------------------------------------------------- bullet events */
