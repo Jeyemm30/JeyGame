@@ -9,7 +9,7 @@ import { ITEMS, rollTier, rollNpcDrop, giveItem } from '../systems/Loot.js';
 import { sfx, engine, introAudio, ambience, setMusicDuck } from '../systems/Audio.js';
 import { music } from '../systems/Music.js';
 import { gq, settings } from '../systems/Settings.js';
-import { useBestSupply } from '../systems/Supplies.js';
+import { useSupply, SUPPLIES } from '../systems/Supplies.js';
 import { STORES, SHOP_KIND } from '../systems/Stores.js';
 import { STORE_STYLES, styleHasAwning } from '../assets/storeArt.js';
 import Wanted, { CRIME } from '../systems/Wanted.js';
@@ -34,6 +34,7 @@ import BankHeist from '../systems/BankHeist.js';
 import { ystate, yosenActive, currentQuest, questCount, YOSEN_NAME } from '../story/yosen.js';
 import { buildPlaces } from '../story/places.js';
 import { OUTFITS } from './ShopScene.js';
+import { lockpickDifficulty } from './LockpickScene.js';
 
 const CHUNK = 512;
 // Lower, angled camera: the ground plane is tilted away from the viewer. TILT is the vertical foreshortening of the
@@ -44,7 +45,7 @@ const TILT = 0.62;
 const UPY = 1 / TILT;
 const WALL_PX = 40;        // on-screen height of a wall face (the 32px wall art is stretched up to this)
 const TALL_PX = 30;        // extra brick course stacked on the exterior walls of tall buildings (gang warehouses): the roof rides TALL_PX higher too
-const WALL_TOPS = new Set([T.wallCap, T.wall2Cap, T.tentCap, T.glassCap]);
+const WALL_TOPS = new Set([T.wallCap, T.wall2Cap, T.tentCap, T.glassCap, T.reyesWallCap, T.hospWallCap, T.schoolWallCap, T.schoolBrickCap]);
 // Depth = position along the SCREEN's vertical axis, squeezed into 100..4800 (fixed overlay layers live above that)
 const DEPTH_D0 = (W + H) * TILE;
 const DEPTH_K = 4700 / (2 * DEPTH_D0);
@@ -59,8 +60,8 @@ export default class GameScene extends Phaser.Scene {
   create() {
     sfx.unlock();
     const load = this.startData.load || null;
-    this.gt = load ? (load.profile.stats.time || 0) : 0;
-    this.kills = load ? (load.profile.stats.kills || 0) : 0;
+    this.gt = load ? (load.profile?.stats?.time || 0) : 0;
+    this.kills = load ? (load.profile?.stats?.kills || 0) : 0;
     this.over = false;
     this.items = [];
     this.corpses = [];
@@ -170,8 +171,8 @@ export default class GameScene extends Phaser.Scene {
     this.civilians = this.physics.add.group();
     this.vehicles = this.physics.add.group();
     this.wd.vehicles.forEach((v) => {
-      const civ = v.mode === 'parked' && ['sedan', 'van', 'moto'].includes(v.type);
-      const veh = this.spawnVehicle({ ...v, locked: civ && Math.random() < 0.35 });
+      const lockProb = v.mode === 'parked' ? lockpickDifficulty(v.type).spawnLockChance : 0;
+      const veh = this.spawnVehicle({ ...v, locked: v.locked !== undefined ? v.locked : (lockProb > 0 && Math.random() < lockProb) });
       // the collision body sits ~12px below the sprite: put the BODY on the lane row, not the picture (parked cars used to poke into the driving lane)
       if (veh.mode === 'parked') { const dy = veh.body.center.y - veh.y, dx = veh.body.center.x - veh.x; veh.body.reset(veh.x - dx, veh.y - dy); }
       if (veh.mode === 'patrol' || veh.mode === 'traffic') this.placeOnRoad(veh);
@@ -207,9 +208,29 @@ export default class GameScene extends Phaser.Scene {
       const e = this.spawnEnemy(spec);
       e.spawnIdx = i;
       if (spec.bank) e.bank = true;
+      if (spec.casinoFloor) {
+        e.casinoFloor = spec.casinoFloor;
+        if (spec.casinoFloor !== 1) {
+          e.setVisible(false);
+          if (e.shadow) e.shadow.setVisible(false);
+          if (e.body) e.body.enable = false;
+        }
+      }
     });
     this.policeStaff = []; this.psZero = null; this.stationAlert = -1e9;
-    this.wd.civilians.forEach((spec) => { const c = this.spawnCivilian(spec); if (spec.bank) c.bankSpec = spec; if (spec.staff) this.policeStaff.push({ spec, civ: c, enemy: null, seen: 0, off: false }); });
+    this.wd.civilians.forEach((spec) => {
+      const c = this.spawnCivilian(spec);
+      if (spec.bank) c.bankSpec = spec;
+      if (spec.staff) this.policeStaff.push({ spec, civ: c, enemy: null, seen: 0, off: false });
+      if (spec.casinoFloor) {
+        c.casinoFloor = spec.casinoFloor;
+        if (spec.casinoFloor !== 1) {
+          c.setVisible(false);
+          if (c.shadow) c.shadow.setVisible(false);
+          if (c.body) c.body.enable = false;
+        }
+      }
+    });
     this.bankHeist = new BankHeist(this);                                  // Port City Trust: doors, vault, loot and the robbery state match profile.bank (also the cooldown after a reload)
     {                                                       // Yosen Blackthorn's map marker: "?" until the player has seen him, then his own badge
       const ys = this.npcSpot('yosen'), y0 = ystate();
@@ -229,11 +250,11 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.objLayer);
     this.physics.add.collider(this.enemies, this.objLayer);
     this.physics.add.collider(this.civilians, this.objLayer);
-    this.physics.add.collider(this.vehicles, this.objLayer);
+    this.physics.add.collider(this.vehicles, this.objLayer, (v, tile) => v.onCollideObstacle && v.onCollideObstacle(tile, 'wall'));
     this.physics.add.collider(this.player, this.crates);
     this.physics.add.collider(this.enemies, this.crates);
     this.physics.add.collider(this.civilians, this.crates);
-    this.physics.add.collider(this.vehicles, this.crates);
+    this.physics.add.collider(this.vehicles, this.crates, (v, crate) => v.onCollideObstacle && v.onCollideObstacle(crate, 'crate'));
     if (this.wd.wise && this.wd.wise.signpost) {                    // the WISE SOLE sign post: a 10 px round body on the pole itself
       const sp = this.wd.wise.signpost, z = this.add.zone(sp.x, sp.y, 10, 10);
       this.physics.add.existing(z, true); z.body.setCircle(5);        // a 10 px round body: circle against circle separates reliably from every side
@@ -257,7 +278,50 @@ export default class GameScene extends Phaser.Scene {
       z.removeFromDisplayList();           // a zone draws nothing: keep it out of the render list (525 fewer objects to sort and walk every frame)
       p.pole = z;
     });
-    [this.player, this.civilians, this.enemies, this.vehicles].forEach((g) => this.physics.add.collider(g, this.lampPoles));
+    this.schoolObstacles = [];
+    if (this.wd.school && this.wd.school.obstacles) {
+      this.wd.school.obstacles.forEach((obs) => {
+        const cy = obs.y - 4;
+        let z;
+        if (obs.w && obs.h) {
+          z = this.add.zone(obs.x, cy, obs.w, obs.h);
+          this.physics.add.existing(z, true);
+          z.body.setSize(obs.w, obs.h);
+          this.schoolObstacles.push({ ...obs, cy, zone: z, halfW: obs.w / 2 + 10, halfH: obs.h / 2 + 10 });
+        } else {
+          z = this.add.zone(obs.x, cy, obs.r * 2, obs.r * 2);
+          this.physics.add.existing(z, true);
+          z.body.setCircle(obs.r);
+          this.schoolObstacles.push({ ...obs, cy, zone: z, navR2: (obs.r + 14) * (obs.r + 14) });
+        }
+        this.lampPoles.add(z);
+        z.removeFromDisplayList();
+      });
+    }
+    this.cityHallObstacles = [];
+    if (this.wd.cityhall && this.wd.cityhall.obstacles) {
+      this.wd.cityhall.obstacles.forEach((obs) => {
+        const cy = obs.y - 4;
+        const z = this.add.zone(obs.x, cy, obs.r * 2, obs.r * 2);
+        this.physics.add.existing(z, true);
+        z.body.setCircle(obs.r);
+        z.body.enable = !obs.cityHallFloor || obs.cityHallFloor === 1;
+        this.lampPoles.add(z);
+        z.removeFromDisplayList();
+        this.cityHallObstacles.push({
+          x: obs.x,
+          y: obs.y,
+          cy,
+          r: obs.r,
+          navR2: (obs.r + 6) * (obs.r + 6),
+          cityHallFloor: obs.cityHallFloor || 0,
+          kind: obs.kind,
+          zone: z
+        });
+      });
+    }
+    [this.player, this.civilians, this.enemies].forEach((g) => this.physics.add.collider(g, this.lampPoles));
+    this.physics.add.collider(this.vehicles, this.lampPoles, (v, pole) => v.onCollideObstacle && v.onCollideObstacle(pole, 'pole'));
     this.physics.add.collider(this.player, this.enemies);
     this.physics.add.collider(this.player, this.civilians, null, (p, c) => !c.soft);              // shoppers in the narrow WISE SOLE aisles are soft: you walk past them
     this.physics.add.collider(this.civilians, this.civilians, null, (a, b) => !(a.soft && b.soft));
@@ -361,6 +425,9 @@ export default class GameScene extends Phaser.Scene {
 
     // ---- story: spawn the cast, then resume or begin the first mission (after the opening cutscene, when there is one)
     this.syncStoryNpcs();
+    if (this.wd.casino) {
+      this.setCasinoFloor(1);
+    }
     if (load && profile.missions.active) this.missions.restore(profile.missions.active);
     if (this.cine) {
       // endCine() begins the first mission
@@ -544,15 +611,22 @@ export default class GameScene extends Phaser.Scene {
      2,000 sprites for the few hundred that are on screen. Four times a second, hide the ones that are far outside the view. */
   cullFar() {
     const Q = gq(), v = this.viewRect(Q.cull), vv = this.viewRect(Q.cull + 160);
-    const wantFps = this.touchOn || settings.quality === 'low' ? 60 : 90;            // Low quality steps the physics at 60 Hz (phones always do)
+    const wantFps = this.touchOn || settings.quality === 'low' || settings.quality === 'medium' ? 60 : 90;            // 60 Hz physics for low & medium saves significant CPU
     if (this.physics.world.fps !== wantFps) this.physics.world.setFPS(wantFps);
     // soft shadows: only the characters near the player get one (distance from the Graphics Quality / Shadows setting); the player always has hers
     const sd = Q.shadowDist, p = this.player;
     const shade = (c) => { if (!c || !c.active) return; c.noShadow = sd <= 0 || (Math.abs(c.x - p.x) > sd || Math.abs(c.y - p.y) > sd * 0.75); };
     this.civilians.children.iterate(shade); this.enemies.children.iterate(shade);
     for (const pi of this.porchImgs || []) { const on = v.contains(pi.x, pi.y); if (pi.visible !== on) pi.setVisible(on); }
-    for (const f of this.facade) { const on = v.contains(f.gx, f.gy) && (!f.reyesFloor || f.reyesFloor === (this.reyesFloor || 1)); if (f.img.visible !== on) f.img.setVisible(on); }
-    for (const it of this.items) { const on = v.contains(it.x, it.y); if (it.visible !== on) { it.setVisible(on); if (it.glow) it.glow.setVisible(on); } }
+    for (const f of this.facade) { const on = v.contains(f.gx, f.gy) && (!f.schoolExt || !this.inSchool(this.player)) && (!f.reyesFloor || f.reyesFloor === (this.reyesFloor || 1)) && (!f.hospitalFloor || f.hospitalFloor === (this.hospitalFloor || 1)) && (!f.cityHallFloor || f.cityHallFloor === (this.cityHallFloor || 1)) && (!f.casinoFloor || f.casinoFloor === (this.casinoFloor || 1)); if (f.img.visible !== on) f.img.setVisible(on); }
+    for (const it of this.items) {
+      const on = v.contains(it.x, it.y);
+      if (it.visible !== on) {
+        it.setVisible(on);
+        if (it.glow) it.glow.setVisible(on);
+        if (it.tw) { if (on) it.tw.resume(); else it.tw.pause(); }
+      }
+    }
     this.crates.getChildren().forEach((c) => { const on = v.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
     this.vehicles.children.iterate((c) => { if (!c) return; const on = vv.contains(c.x, c.y); if (c.visible !== on) c.setVisible(on); });
   }
@@ -656,6 +730,225 @@ export default class GameScene extends Phaser.Scene {
         continue;
       }
 
+      if (b.look === 'hospital') {
+        // Modern 2-story medical curtain-wall facade for St. Mary Hospital
+        const baseWall = Phaser.Display.Color.GetColor(Math.round(218 * k + 22), Math.round(230 * k + 16), Math.round(242 * k + 10));
+        const medBlue = Phaser.Display.Color.GetColor(Math.round(36 * k + 10), Math.round(112 * k + 20), Math.round(176 * k + 25));
+        const glassMed = Phaser.Display.Color.GetColor(Math.round(92 * k + 28), Math.round(162 * k + 38), Math.round(212 * k + 35));
+        const glassRefl = Phaser.Display.Color.GetColor(Math.round(180 * k + 40), Math.round(225 * k + 30), Math.round(250 * k + 5));
+
+        g.fillStyle(baseWall, 1).fillPoints([bot0, bot1, top1, top0], true);
+
+        const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+        const nBays = Math.max(4, Math.round(len / 44));
+        const nFloors = 2;
+
+        for (let fl = 0; fl < nFloors; fl++) {
+          const v0 = fl / nFloors + 0.08;
+          const v1 = (fl + 1) / nFloors - 0.08;
+          for (let bay = 0; bay < nBays; bay++) {
+            const u0 = (bay + 0.12) / nBays;
+            const u1 = (bay + 0.88) / nBays;
+            const p00 = bilerp(bot0, bot1, top0, top1, u0, v0);
+            const p10 = bilerp(bot0, bot1, top0, top1, u1, v0);
+            const p11 = bilerp(bot0, bot1, top0, top1, u1, v1);
+            const p01 = bilerp(bot0, bot1, top0, top1, u0, v1);
+            g.fillStyle(glassMed, 0.94).fillPoints([p00, p10, p11, p01], true);
+
+            const r00 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.08);
+            const r10 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.08);
+            const r11 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.02);
+            const r01 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.02);
+            g.fillStyle(glassRefl, 0.42).fillPoints([r00, r10, r11, r01], true);
+          }
+        }
+
+        // Horizontal medical blue spandrel beam separating 1F and 2F
+        const t = 0.5;
+        const a = lerpPt(bot0, top0, t), bPt = lerpPt(bot1, top1, t);
+        g.lineStyle(4, medBlue, 0.95).lineBetween(a.x, a.y, bPt.x, bPt.y);
+
+        // Vertical architectural piers
+        for (let bay = 0; bay <= nBays; bay++) {
+          const tb = bay / nBays;
+          const ap = lerpPt(bot0, bot1, tb), bp = lerpPt(top0, top1, tb);
+          g.lineStyle(2, medBlue, 0.85).lineBetween(ap.x, ap.y, bp.x, bp.y);
+        }
+        g.lineStyle(3, medBlue, 0.95).lineBetween(top0.x, top0.y, top1.x, top1.y);
+        g.lineStyle(3, 0x102030, 0.45).lineBetween(bot0.x, bot0.y, bot1.x, bot1.y);
+        continue;
+      }
+
+      if (b.look === 'school') {
+        // Classic collegiate brick & limestone facade for Lincoln High School
+        // Warm red brick courses, carved limestone quoins/pilasters, arched entrance portal, and multipane white classroom windows
+        const baseBrick = Phaser.Display.Color.GetColor(Math.round(145 * k + 22), Math.round(52 * k + 10), Math.round(40 * k + 8));
+        const limeStone = Phaser.Display.Color.GetColor(Math.round(218 * k + 24), Math.round(210 * k + 22), Math.round(195 * k + 18));
+        const darkTrim = Phaser.Display.Color.GetColor(Math.round(85 * k + 14), Math.round(28 * k + 6), Math.round(22 * k + 5));
+        const glassSchool = Phaser.Display.Color.GetColor(Math.round(55 * k + 25), Math.round(120 * k + 35), Math.round(175 * k + 40));
+        const glassRefl = Phaser.Display.Color.GetColor(Math.round(190 * k + 40), Math.round(230 * k + 25), Math.round(250 * k + 5));
+
+        g.fillStyle(baseBrick, 1).fillPoints([bot0, bot1, top1, top0], true);
+
+        const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+        const nBays = Math.max(4, Math.round(len / 42));
+
+        // Multipane school classroom windows
+        for (let bay = 0; bay < nBays; bay++) {
+          const isCenter = Math.abs(bay - (nBays - 1) / 2) < 0.8;
+          // Don't draw regular window over entrance portal if on front wall
+          if (isCenter && s.ny > 0) continue;
+
+          const u0 = (bay + 0.16) / nBays;
+          const u1 = (bay + 0.84) / nBays;
+          const v0 = 0.22;
+          const v1 = 0.78;
+
+          const p00 = bilerp(bot0, bot1, top0, top1, u0, v0);
+          const p10 = bilerp(bot0, bot1, top0, top1, u1, v0);
+          const p11 = bilerp(bot0, bot1, top0, top1, u1, v1);
+          const p01 = bilerp(bot0, bot1, top0, top1, u0, v1);
+          g.fillStyle(glassSchool, 0.94).fillPoints([p00, p10, p11, p01], true);
+
+          // White window frame & muntins
+          g.lineStyle(2, limeStone, 0.95).strokePoints([p00, p10, p11, p01], true);
+          // Cross panes
+          const midX = bilerp(bot0, bot1, top0, top1, (u0 + u1) / 2, v0);
+          const midXTop = bilerp(bot0, bot1, top0, top1, (u0 + u1) / 2, v1);
+          g.lineStyle(1, limeStone, 0.85).lineBetween(midX.x, midX.y, midXTop.x, midXTop.y);
+          const midY0 = bilerp(bot0, bot1, top0, top1, u0, (v0 + v1) / 2);
+          const midY1 = bilerp(bot0, bot1, top0, top1, u1, (v0 + v1) / 2);
+          g.lineStyle(1, limeStone, 0.85).lineBetween(midY0.x, midY0.y, midY1.x, midY1.y);
+
+          // Glass reflection diagonal band
+          const r00 = bilerp(bot0, bot1, top0, top1, u0 + 0.05 / nBays, v1 - 0.12);
+          const r10 = bilerp(bot0, bot1, top0, top1, u1 - 0.05 / nBays, v1 - 0.12);
+          const r11 = bilerp(bot0, bot1, top0, top1, u1 - 0.05 / nBays, v1 - 0.04);
+          const r01 = bilerp(bot0, bot1, top0, top1, u0 + 0.05 / nBays, v1 - 0.04);
+          g.fillStyle(glassRefl, 0.38).fillPoints([r00, r10, r11, r01], true);
+        }
+
+        // Limestone stringcourse band above windows and base water table
+        const tMid = 0.86;
+        const aM = lerpPt(bot0, top0, tMid), bM = lerpPt(bot1, top1, tMid);
+        g.lineStyle(3, limeStone, 0.98).lineBetween(aM.x, aM.y, bM.x, bM.y);
+
+        const tBase = 0.12;
+        const aB = lerpPt(bot0, top0, tBase), bB = lerpPt(bot1, top1, tBase);
+        g.lineStyle(3, limeStone, 0.95).lineBetween(aB.x, aB.y, bB.x, bB.y);
+
+        // Corner limestone quoins
+        for (let q = 0; q < 7; q++) {
+          const tq0 = q / 7, tq1 = (q + 0.7) / 7;
+          const isWider = q % 2 === 0;
+          const qw = isWider ? 0.035 : 0.02;
+          const qL0 = bilerp(bot0, bot1, top0, top1, 0, tq0);
+          const qL1 = bilerp(bot0, bot1, top0, top1, qw, tq0);
+          const qL2 = bilerp(bot0, bot1, top0, top1, qw, tq1);
+          const qL3 = bilerp(bot0, bot1, top0, top1, 0, tq1);
+          g.fillStyle(limeStone, 0.9).fillPoints([qL0, qL1, qL2, qL3], true);
+
+          const qR0 = bilerp(bot0, bot1, top0, top1, 1 - qw, tq0);
+          const qR1 = bilerp(bot0, bot1, top0, top1, 1, tq0);
+          const qR2 = bilerp(bot0, bot1, top0, top1, 1, tq1);
+          const qR3 = bilerp(bot0, bot1, top0, top1, 1 - qw, tq1);
+          g.fillStyle(limeStone, 0.9).fillPoints([qR0, qR1, qR2, qR3], true);
+        }
+
+        g.lineStyle(3, darkTrim, 0.6).lineBetween(top0.x, top0.y, top1.x, top1.y);
+        continue;
+      }
+
+      if (b.look === 'cityhall') {
+        // Prestigious 3-story municipal administration curtain wall for City Hall Annex
+        // Pearl limestone piers, fluted corner pylons, deep civic navy spandrels, brushed gold entablature & reflective executive windows
+        const baseWall = Phaser.Display.Color.GetColor(Math.round(14 * k + 6), Math.round(26 * k + 10), Math.round(46 * k + 16));
+        const stonePier = Phaser.Display.Color.GetColor(Math.round(195 * k + 35), Math.round(205 * k + 35), Math.round(218 * k + 32));
+        const goldTrim = Phaser.Display.Color.GetColor(Math.round(197 * k + 28), Math.round(155 * k + 20), Math.round(39 * k + 10));
+        const goldHi = Phaser.Display.Color.GetColor(Math.round(250 * k + 5), Math.round(219 * k + 15), Math.round(106 * k + 20));
+        const glassBlue = Phaser.Display.Color.GetColor(Math.round(35 * k + 15), Math.round(85 * k + 25), Math.round(160 * k + 35));
+        const glassWarm = Phaser.Display.Color.GetColor(Math.round(220 * k + 35), Math.round(200 * k + 35), Math.round(125 * k + 25));
+        const glassRefl = Phaser.Display.Color.GetColor(Math.round(170 * k + 40), Math.round(215 * k + 35), Math.round(250 * k + 5));
+
+        g.fillStyle(baseWall, 1).fillPoints([bot0, bot1, top1, top0], true);
+
+        const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+        const nBays = Math.max(4, Math.round(len / 48));
+        const nFloors = 2; // 2 upper curtain-wall tiers (Floor 2: Planning & Records, Floor 3: Mayoral Suite & Council Chambers)
+
+        // Draw multi-story reflective curtain-wall window bays
+        for (let fl = 0; fl < nFloors; fl++) {
+          const v0 = fl / nFloors + 0.08;
+          const v1 = (fl + 1) / nFloors - 0.08;
+          const isMayorSuite = fl === nFloors - 1;
+          for (let bay = 0; bay < nBays; bay++) {
+            const u0 = (bay + 0.14) / nBays;
+            const u1 = (bay + 0.86) / nBays;
+            const p00 = bilerp(bot0, bot1, top0, top1, u0, v0);
+            const p10 = bilerp(bot0, bot1, top0, top1, u1, v0);
+            const p11 = bilerp(bot0, bot1, top0, top1, u1, v1);
+            const p01 = bilerp(bot0, bot1, top0, top1, u0, v1);
+
+            // Recessed window frame reveal
+            g.fillStyle(baseWall, 1).fillPoints([
+              bilerp(bot0, bot1, top0, top1, u0 - 0.02 / nBays, v0 - 0.02),
+              bilerp(bot0, bot1, top0, top1, u1 + 0.02 / nBays, v0 - 0.02),
+              bilerp(bot0, bot1, top0, top1, u1 + 0.02 / nBays, v1 + 0.02),
+              bilerp(bot0, bot1, top0, top1, u0 - 0.02 / nBays, v1 + 0.02)
+            ], true);
+
+            // Window pane glass (Mayoral Suite on 3F has warm prestigious illumination)
+            g.fillStyle(isMayorSuite ? glassWarm : glassBlue, 0.94).fillPoints([p00, p10, p11, p01], true);
+
+            // Upper glass reflection band inside each window pane
+            const r00 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.08);
+            const r10 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.08);
+            const r11 = bilerp(bot0, bot1, top0, top1, u1 - 0.04 / nBays, v1 - 0.02);
+            const r01 = bilerp(bot0, bot1, top0, top1, u0 + 0.04 / nBays, v1 - 0.02);
+            g.fillStyle(glassRefl, 0.42).fillPoints([r00, r10, r11, r01], true);
+
+            // Central vertical bronze mullion inside window pane
+            const mBot = bilerp(bot0, bot1, top0, top1, (u0 + u1) / 2, v0);
+            const mTop = bilerp(bot0, bot1, top0, top1, (u0 + u1) / 2, v1);
+            g.lineStyle(1, goldTrim, 0.7).lineBetween(mBot.x, mBot.y, mTop.x, mTop.y);
+          }
+        }
+
+        // Horizontal spandrel floor beams & brushed gold cornice bands
+        for (let fl = 1; fl < nFloors; fl++) {
+          const t = fl / nFloors;
+          const a = lerpPt(bot0, top0, t), bPt = lerpPt(bot1, top1, t);
+          g.lineStyle(4, baseWall, 0.98).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          g.lineStyle(2, goldTrim, 0.95).lineBetween(a.x, a.y, bPt.x, bPt.y);
+        }
+
+        // Vertical pearl limestone structural piers & fluted corner pylons
+        for (let bay = 0; bay <= nBays; bay++) {
+          const t = bay / nBays;
+          const a = lerpPt(bot0, bot1, t), bPt = lerpPt(top0, top1, t);
+          const isCorner = bay === 0 || bay === nBays;
+          const isCenter = bay === Math.floor(nBays / 2);
+          if (isCorner) {
+            // Monumental corner pylon with vertical gold reveal
+            g.lineStyle(5, stonePier, 0.98).lineBetween(a.x, a.y, bPt.x, bPt.y);
+            g.lineStyle(1, goldTrim, 0.85).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          } else if (isCenter) {
+            // Grand central civic pier aligned with main entrance canopy
+            g.lineStyle(4, stonePier, 0.95).lineBetween(a.x, a.y, bPt.x, bPt.y);
+            g.lineStyle(1, goldHi, 0.85).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          } else {
+            // Fluted intermediate limestone pier
+            g.lineStyle(2, stonePier, 0.92).lineBetween(a.x, a.y, bPt.x, bPt.y);
+          }
+        }
+
+        // Crown gold entablature band meeting the roof cornice & base shadow
+        g.lineStyle(3, goldTrim, 0.98).lineBetween(top0.x, top0.y, top1.x, top1.y);
+        g.lineStyle(1, goldHi, 0.9).lineBetween(top0.x, top0.y - 1, top1.x, top1.y - 1);
+        g.lineStyle(3, 0x060e18, 0.6).lineBetween(bot0.x, bot0.y, bot1.x, bot1.y);
+        continue;
+      }
+
       const cas = b.look === 'casino';
       const col = cas ? Phaser.Display.Color.GetColor(Math.round(52 * k + 14), Math.round(26 * k + 8), Math.round(84 * k + 20)) : Phaser.Display.Color.GetColor(Math.round(70 * k + 20), Math.round(120 * k + 25), Math.round(170 * k + 30));
       g.fillStyle(col, 1).fillPoints([bot0, bot1, top1, top0], true);
@@ -665,7 +958,18 @@ export default class GameScene extends Phaser.Scene {
       for (let i = 1; i < rows; i++) { const t = i / rows; g.lineBetween(bot0.x + (top0.x - bot0.x) * t, bot0.y + (top0.y - bot0.y) * t, bot1.x + (top1.x - bot1.x) * t, bot1.y + (top1.y - bot1.y) * t); }
       const len = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]), cols = Math.max(1, Math.round(len / 24));
       for (let i = 0; i <= cols; i++) { const t = i / cols; g.lineBetween(bot0.x + (bot1.x - bot0.x) * t, bot0.y + (bot1.y - bot0.y) * t, top0.x + (top1.x - top0.x) * t, top0.y + (top1.y - top0.y) * t); }
-      g.lineStyle(2, 0xffffff, 0.18 * facing).lineBetween(top0.x, top0.y, top1.x, top1.y);
+      if (cas) {
+        // Mezzanine architectural entablature dividing Floor 1 (Casino) and Floor 2 (VIP Tower)
+        const mid0 = { x: bot0.x + (top0.x - bot0.x) * 0.48, y: bot0.y + (top0.y - bot0.y) * 0.48 };
+        const mid1 = { x: bot1.x + (top1.x - bot1.x) * 0.48, y: bot1.y + (top1.y - bot1.y) * 0.48 };
+        g.lineStyle(4, 0x0c0614, 0.95).lineBetween(mid0.x, mid0.y, mid1.x, mid1.y);
+        g.lineStyle(2, 0xffd24a, 0.98).lineBetween(mid0.x, mid0.y, mid1.x, mid1.y);
+        g.lineStyle(1, 0xff3a8a, 0.9).lineBetween(mid0.x, mid0.y - 1, mid1.x, mid1.y - 1);
+        // Crown gold coping trim
+        g.lineStyle(3, 0xffd24a, 0.95).lineBetween(top0.x, top0.y, top1.x, top1.y);
+      } else {
+        g.lineStyle(2, 0xffffff, 0.18 * facing).lineBetween(top0.x, top0.y, top1.x, top1.y);
+      }
       g.lineStyle(3, 0x000000, 0.25).lineBetween(bot0.x, bot0.y, bot1.x, bot1.y);
     }
   }
@@ -708,7 +1012,7 @@ export default class GameScene extends Phaser.Scene {
     wd.buildings.forEach((b) => { if (!b.dark) return; for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) if (xx === b.x || xx === b.x + b.w - 1 || yy === b.y || yy === b.y + b.h - 1) this.darkCell[yy * W + xx] = 1; });
     wd.buildings.forEach((b) => { if (!b.tall) return; for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) if (xx === b.x || xx === b.x + b.w - 1 || yy === b.y || yy === b.y + b.h - 1) this.tallCell[yy * W + xx] = 1; });
     const tiles = this.textures.get('tiles');
-    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
+    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass], [T.reyesWallCap, T.reyesWall], [T.hospWallCap, T.hospWall], [T.schoolWallCap, T.schoolWall], [T.schoolBrickCap, T.schoolBrick]]);
     WALL_FAMILY.forEach((idx) => { if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE); });
     for (let idx = 0; idx < NTILES; idx++) if (!tiles.has('t' + idx)) tiles.add('t' + idx, 0, idx * TILE, 0, TILE, TILE);
     const FLAT_OBJ = new Set([T.water, T.tree, T.prop, T.propHigh]);     // left flat in the tilemap (water) or blank (tree / prop: drawn as sprites)
@@ -874,8 +1178,8 @@ export default class GameScene extends Phaser.Scene {
     };
     this.initWalls(addScenery);
     wd.trees.forEach((t) => addScenery(t.x, t.y, 'tree' + t.kind, 0.875));
-    wd.decor.forEach((d) => { d.it = addScenery(d.x, d.y, d.kind, 1); if (d.reyesFloor) { d.it.reyesFloor = d.reyesFloor; d.it.hidden = d.reyesFloor !== 1; } });
-    (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; if (r.reyesFloor) { it.reyesFloor = r.reyesFloor; it.hidden = r.reyesFloor !== 1; } });      // rugs lie flat on the floor
+    wd.decor.forEach((d) => { d.it = addScenery(d.x, d.y, d.kind, 1); if (d.reyesFloor) { d.it.reyesFloor = d.reyesFloor; d.it.hidden = d.reyesFloor !== 1; } if (d.hospitalFloor) { d.it.hospitalFloor = d.hospitalFloor; d.it.hidden = d.hospitalFloor !== 1; } if (d.cityHallFloor) { d.it.cityHallFloor = d.cityHallFloor; d.it.hidden = d.cityHallFloor !== 1; } if (d.casinoFloor) { d.it.casinoFloor = d.casinoFloor; d.it.hidden = d.casinoFloor !== 1; } });
+    (wd.rugs || []).forEach((r) => { const it = addScenery(r.x, r.y, r.key, 0.5); it.flat = true; if (r.reyesFloor) { it.reyesFloor = r.reyesFloor; it.hidden = r.reyesFloor !== 1; } if (r.hospitalFloor) { it.hospitalFloor = r.hospitalFloor; it.hidden = r.hospitalFloor !== 1; } if (r.cityHallFloor) { it.cityHallFloor = r.cityHallFloor; it.hidden = r.cityHallFloor !== 1; } if (r.casinoFloor) { it.casinoFloor = r.casinoFloor; it.hidden = r.casinoFloor !== 1; } });      // rugs lie flat on the floor
     wd.props.forEach((p) => {
       const key = p.kind === 'container' ? 'container' + p.variant : PROP_TEX[p.kind];
       if (key) p.it = addScenery(p.x, p.y, key, 1);
@@ -888,19 +1192,51 @@ export default class GameScene extends Phaser.Scene {
       const cs = wd.casino;
       this.casinoSign = dec('casino_sign', cs.sign.x, cs.sign.y, 0, -62, 0.5, 1, 60);
       this.casinoDecs = []; this.casinoExt = [];
-      cs.neons.forEach((n) => (n.ext ? this.casinoExt : this.casinoDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
-      cs.chandeliers.forEach((ch) => this.casinoDecs.push(dec('chandelier', ch.x, ch.y, 0, -86, 0.5, 0.5, 60)));
+      cs.neons.forEach((n) => {
+        const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (fEntry) fEntry.casinoFloor = n.casinoFloor || 1;
+        im.casinoFloor = n.casinoFloor || 1;
+        if (im.casinoFloor !== 1) im.setVisible(false);
+        (n.ext ? this.casinoExt : this.casinoDecs).push(im);
+      });
+      cs.chandeliers.forEach((ch) => {
+        const im = dec('chandelier', ch.x, ch.y, 0, -86, 0.5, 0.5, 60);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (fEntry) fEntry.casinoFloor = ch.casinoFloor || 1;
+        im.casinoFloor = ch.casinoFloor || 1;
+        if (im.casinoFloor !== 1) im.setVisible(false);
+        this.casinoDecs.push(im);
+      });
       const dts = cs.doorTiles;                                // the grand entrance: two glass panels that slide apart (the two door tiles carry the collision)
       dts.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
       this.casinoDoor = { t0: dts[0], t1: dts[1], state: 'closed', evs: [], nearAt: 0, img: dec('casino_door_0', cs.doorSprite.x, cs.doorSprite.y, 0, 0, 0.5, 1, 6) };
     }
-    if (wd.bank) {                                                // PORT CITY TRUST: sign, awning, window glimpses, lamps, cameras; the vault door is a sprite over its two door tiles
+    if (wd.bank) {                                                // PORT CITY TRUST: sign, awning, columns, window glimpses, lamps, cameras; reinforced glass double entrance doors, interior doors & vault door
       const bk = wd.bank;
       this.bankSign = dec('bank_sign', bk.sign.x, bk.sign.y, 0, -78, 0.5, 1, 60);
       this.bankDecs = []; this.bankExt = [];
       bk.neons.forEach((n) => (n.ext ? this.bankExt : this.bankDecs).push(dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40)));
       bk.doors.vault.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
       this.bankVaultImg = dec('vault_door_0', bk.vaultDoor.x, bk.vaultDoor.y, 0, 0, 0.5, 1, 6);
+      if (bk.frontDoor && bk.frontDoor.tiles) {
+        const [t0, t1] = bk.frontDoor.tiles;
+        this.noFace[t0.ty * W + t0.tx] = 1;
+        this.noFace[t1.ty * W + t1.tx] = 1;
+        const doorImg = dec('bank_door_0', bk.frontDoor.x, bk.frontDoor.y, 0, 0, 0.5, 1, 6);
+        this.bankExt.push(doorImg);
+        this.bankDoor = { t0, t1, state: 'closed', evs: [], nearAt: 0, img: doorImg };
+      }
+      this.bankInteriorDoors = [];
+      this.bankInteriorDoorByTile = new Map();
+      (bk.interiorDoors || []).forEach((spec) => {
+        spec.tiles.forEach((t) => { this.noFace[t.ty * W + t.tx] = 1; });
+        const dImg = dec(spec.prefix + '0', spec.x, spec.y, 0, 0, 0.5, 1, 6);
+        this.bankDecs.push(dImg);
+        const dObj = { ...spec, state: 'closed', evs: [], img: dImg };
+        this.bankInteriorDoors.push(dObj);
+        spec.tiles.forEach((t) => { this.bankInteriorDoorByTile.set(t.ty * W + t.tx, dObj); });
+      });
     }
     (wd.policeDecor || []).forEach((n) => dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40));      // the police station: badge, cameras, lamps outside; wall boards, map, cameras inside
     if (wd.fire && wd.fire.decor) { this.fireExt = []; wd.fire.decor.forEach((n) => { const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40); if (n.ext) this.fireExt.push(im); }); }
@@ -936,8 +1272,7 @@ export default class GameScene extends Phaser.Scene {
     if (wd.reyes) {
       const ry = wd.reyes;
       this.reyesSign = dec(ry.sign.key, ry.sign.x, ry.sign.y, 0, -56, 0.5, 1, 60);
-      this.reyesCanopy = dec(ry.canopy.key, ry.canopy.x, ry.canopy.y, 0, -10, 0.5, 0, 14);
-      this.reyesDecs = []; this.reyesExt = [this.reyesCanopy];
+      this.reyesDecs = []; this.reyesExt = [];
       (ry.neons || []).forEach((n) => {
         const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
         const fEntry = this.facade[this.facade.length - 1];
@@ -949,6 +1284,11 @@ export default class GameScene extends Phaser.Scene {
           if (n.reyesFloor !== 1) im.setVisible(false);
         }
       });
+      if (ry.floors && ry.floors[1] && ry.floors[1].skins) {
+        ry.floors[1].skins.forEach((s) => {
+          if (s.noFace) this.noFace[(ry.Y + s.ly) * W + (ry.X + s.lx)] = 1;
+        });
+      }
       if (ry.frontDoor && ry.frontDoor.tiles) {
         ry.frontDoor.tiles.forEach(([tx, ty]) => { this.noFace[ty * W + tx] = 1; });
         const [[tx0, ty0], [tx1, ty1]] = ry.frontDoor.tiles;
@@ -959,6 +1299,143 @@ export default class GameScene extends Phaser.Scene {
           t0: { tx: tx0, ty: ty0 },
           t1: { tx: tx1, ty: ty1 },
           state: 'closed',
+          evs: [],
+          nearAt: 0,
+          img: doorImg
+        };
+      }
+    }
+    this.hospitalFloor = 1;
+    this.hospitalFloorDecs = [];
+    if (wd.hospital) {
+      const hp = wd.hospital;
+      this.hospitalSign = dec(hp.sign.key, hp.sign.x, hp.sign.y, 0, -56, 0.5, 1, 60);
+      this.hospitalDecs = []; this.hospitalExt = [];
+      (hp.neons || []).forEach((n) => {
+        const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (n.ext) this.hospitalExt.push(im);
+        else this.hospitalDecs.push(im);
+        if (n.hospitalFloor) {
+          fEntry.hospitalFloor = n.hospitalFloor;
+          this.hospitalFloorDecs.push({ img: im, hospitalFloor: n.hospitalFloor });
+          if (n.hospitalFloor !== 1) im.setVisible(false);
+        }
+      });
+      if (hp.floors && hp.floors[1] && hp.floors[1].skins) {
+        hp.floors[1].skins.forEach((s) => {
+          if (s.noFace) this.noFace[(hp.Y + s.ly) * W + (hp.X + s.lx)] = 1;
+        });
+      }
+      if (hp.frontDoor && hp.frontDoor.tiles) {
+        hp.frontDoor.tiles.forEach(([tx, ty]) => { this.noFace[ty * W + tx] = 1; });
+        const [[tx0, ty0], [tx1, ty1]] = hp.frontDoor.tiles;
+        const doorImg = dec('hosp_door_0', hp.frontDoor.x, hp.frontDoor.y - 1, 0, 0, 0.5, 1, 6);
+        const doorEntry = this.facade[this.facade.length - 1];
+        doorEntry.hospitalFloor = 1;
+        this.hospDoor = {
+          t0: { tx: tx0, ty: ty0 },
+          t1: { tx: tx1, ty: ty1 },
+          state: 'closed',
+          evs: [],
+          nearAt: 0,
+          img: doorImg
+        };
+      }
+      if (hp.erDoor && hp.erDoor.tiles) {
+        hp.erDoor.tiles.forEach(([tx, ty]) => { this.noFace[ty * W + tx] = 1; });
+        const [[etx0, ety0], [etx1, ety1]] = hp.erDoor.tiles;
+        const erDoorImg = dec('hosp_er_door_0', hp.erDoor.x, hp.erDoor.y - 1, 0, 0, 0.5, 1, 6);
+        const erEntry = this.facade[this.facade.length - 1];
+        erEntry.hospitalFloor = 1;
+        this.hospErDoor = {
+          t0: { tx: etx0, ty: ety0 },
+          t1: { tx: etx1, ty: ety1 },
+          state: 'closed',
+          evs: [],
+          nearAt: 0,
+          img: erDoorImg
+        };
+      }
+    }
+    this.cityHallFloor = 1;
+    this.cityHallFloorDecs = [];
+    if (wd.school) {
+      const sc = wd.school;
+      this.schoolDecs = [];
+      this.schoolExt = [];
+      this.schoolSign = null;
+      (sc.neons || []).forEach((n) => {
+        const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (n.key === 'school_sign') this.schoolSign = im;
+        if (n.ext) {
+          fEntry.schoolExt = true;
+          this.schoolExt.push(im);
+        } else this.schoolDecs.push(im);
+      });
+      if (!this.schoolSign && sc.sign) {
+        this.schoolSign = dec('school_sign', sc.sign.x, sc.sign.y, 0, -44, 0.5, 1, 60);
+        const fEntry = this.facade[this.facade.length - 1];
+        fEntry.schoolExt = true;
+        this.schoolExt.push(this.schoolSign);
+      }
+
+      // Front double entrance door
+      if (sc.frontDoor && sc.frontDoor.tiles) {
+        const [t0, t1] = sc.frontDoor.tiles;
+        this.noFace[t0.ty * W + t0.tx] = 1;
+        this.noFace[t1.ty * W + t1.tx] = 1;
+        const doorImg = dec('school_door_ext_0', sc.frontDoor.x, sc.frontDoor.y, 0, 0, 0.5, 1, 6);
+        const fEntry = this.facade[this.facade.length - 1];
+        fEntry.schoolExt = true;
+        this.schoolExt.push(doorImg);
+        this.schoolFrontDoor = { ...sc.frontDoor, state: 'closed', evs: [], img: doorImg };
+      }
+
+      // Interior doors
+      this.schoolInteriorDoors = [];
+      this.schoolInteriorDoorByTile = new Map();
+      (sc.interiorDoors || []).forEach((spec) => {
+        spec.tiles.forEach((t) => { this.noFace[t.ty * W + t.tx] = 1; });
+        const dImg = dec(spec.prefix + '0', spec.x, spec.y, 0, 0, 0.5, 1, 6);
+        this.schoolDecs.push(dImg);
+        const dObj = { ...spec, state: 'closed', evs: [], img: dImg };
+        this.schoolInteriorDoors.push(dObj);
+        spec.tiles.forEach((t) => { this.schoolInteriorDoorByTile.set(t.ty * W + t.tx, dObj); });
+      });
+    }
+    if (wd.cityhall) {
+      const ch = wd.cityhall;
+      this.cityHallSign = dec(ch.sign.key, ch.sign.x, ch.sign.y, 0, -56, 0.5, 1, 60);
+      this.cityHallDecs = []; this.cityHallExt = [];
+      (ch.neons || []).forEach((n) => {
+        const im = dec(n.key, n.x, n.y, 0, n.sy, 0.5, 1, n.dz ?? 40);
+        const fEntry = this.facade[this.facade.length - 1];
+        if (n.ext) this.cityHallExt.push(im);
+        else this.cityHallDecs.push(im);
+        if (n.cityHallFloor) {
+          fEntry.cityHallFloor = n.cityHallFloor;
+          this.cityHallFloorDecs.push({ img: im, cityHallFloor: n.cityHallFloor });
+          if (n.cityHallFloor !== 1) im.setVisible(false);
+        }
+      });
+      if (ch.floors && ch.floors[0] && ch.floors[0].skins) {
+        ch.floors[0].skins.forEach((s) => {
+          if (s.noFace) this.noFace[s.gy * W + s.gx] = 1;
+        });
+      }
+      if (ch.frontDoor && ch.frontDoor.tiles) {
+        ch.frontDoor.tiles.forEach(([tx, ty]) => { this.noFace[ty * W + tx] = 1; });
+        const [[tx0, ty0], [tx1, ty1]] = ch.frontDoor.tiles;
+        const doorImg = dec('cityhall_door_0', ch.frontDoor.x, ch.frontDoor.y - 1, 0, 0, 0.5, 1, 6);
+        const doorEntry = this.facade[this.facade.length - 1];
+        doorEntry.cityHallFloor = 1;
+        this.cityHallDoor = {
+          t0: { tx: tx0, ty: ty0 },
+          t1: { tx: tx1, ty: ty1 },
+          state: 'closed',
+          frame: 0,
           evs: [],
           nearAt: 0,
           img: doorImg
@@ -991,7 +1468,7 @@ export default class GameScene extends Phaser.Scene {
       (this.porchImgs = this.porchImgs || []).push(this.add.image(d.x, d.y - 16, 'porch').setOrigin(0.5, 0).setDepth(3.2));
       if (!d.abandoned) dec('awning' + (i % 5), d.x, d.y - 32, 0, -6, 0.5, 0, 12, 0.8);   // anchored on the door tile
     });
-    wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name] || d.kind === 'totoya' || d.name === 'Reyes Holdings Tower') return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
+    wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name] || d.kind === 'bank' || d.name === 'Port City Trust' || d.kind === 'totoya' || d.name === 'Reyes Holdings Tower' || d.kind === 'cityhall' || d.name === 'City Hall Annex' || d.kind === 'hospital' || (d.name && d.name.includes('Hospital')) || (d.name && d.name.includes('Emergency')) || d.kind === 'school' || (d.name && d.name.includes('School'))) return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
     // window flower boxes + shutters on house fronts, balconies on apartment blocks
     wd.buildings.forEach((b) => {
       if (b.kind !== 'house' || b.broken) return;
@@ -1027,9 +1504,94 @@ export default class GameScene extends Phaser.Scene {
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
       if (b.tint) parts[0].setTint(b.tint);                          // store roofs take their business colour
-      if (b.look === 'casino') {                                    // the casino roof: dark plum with illuminated edges
-        parts[0].setTint(0x6a5a8a);
-        parts.push(this.add.rectangle(x, y + h - 8, w, 3, 0xffd24a, 0.95).setOrigin(0, 0), this.add.rectangle(x, y + h - 12, w, 2, 0xff3a8a, 0.8).setOrigin(0, 0), this.add.rectangle(x, y, 3, h, 0xb06aff, 0.85).setOrigin(0, 0), this.add.rectangle(x + w - 3, y, 3, h, 0x3ad8ff, 0.85).setOrigin(0, 0), this.add.rectangle(x, y, w, 3, 0xff3a5a, 0.7).setOrigin(0, 0));
+      if (b.look === 'casino') {
+        // CASINO & VIP TOWER: Integrated luxury casino resort & 2nd floor VIP Tower
+        // Dark plum base roof with vibrant neon trims, stepped 2nd floor VIP Tower penthouse tier,
+        // VIP observation glass bays, golden parapets, helipad star motif, HVAC equipment, and front VIP marquee sign.
+        parts[0].setTint(0x3e2b4c);
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+
+        // 1. First floor base roof perimeter coping & neon illumination
+        R2(x, y, w, 6, 0x1d1226, 0.98);
+        R2(x, y, 6, h, 0x1d1226, 0.98);
+        R2(x + w - 6, y, 6, h, 0x1d1226, 0.98);
+        R2(x, y + h - 14, w, 14, 0x1d1226, 0.98);
+        // Base roof neon borders
+        R2(x, y + h - 12, w, 2, 0xff3a8a, 0.9); // magenta
+        R2(x, y + h - 7, w, 3, 0xffd24a, 0.98); // gold
+        R2(x, y + 2, w, 2, 0xff3a5a, 0.8);
+        R2(x + 2, y, 2, h - 8, 0xb06aff, 0.85); // violet
+        R2(x + w - 4, y, 2, h - 8, 0x3ad8ff, 0.85); // cyan
+
+        // 2. Stepped 2nd-Floor VIP Tower Penthouse Tier (rising from the center/north of the main casino roof)
+        const tx = x + 48, ty = y + 24, tw = w - 96, th = h - 160;
+        // Tower drop shadow on casino roof
+        R2(tx + 8, ty + 8, tw, th, 0x000000, 0.45);
+        // VIP Tower exterior deck / raised podium
+        R2(tx, ty, tw, th, 0x181422, 1);
+        R2(tx + 3, ty + 3, tw - 6, th - 6, 0x2d223c, 0.95);
+        // VIP Tower gold perimeter cornice & coping
+        R2(tx, ty, tw, 6, 0xd4a82a, 0.95);
+        R2(tx, ty, 6, th, 0xd4a82a, 0.95);
+        R2(tx + tw - 6, ty, 6, th, 0xd4a82a, 0.95);
+        R2(tx, ty + th - 10, tw, 10, 0x221830, 0.98);
+        R2(tx, ty + th - 8, tw, 3, 0xffd24a, 0.98);
+        R2(tx, ty + th - 3, tw, 2, 0xff3a8a, 0.9);
+
+        // 3. VIP Observation Glass Skylight Atrium / Penthouse Curtain Wall
+        const gw = tw - 80, gh = 84, gx = tx + 40, gy = ty + 24;
+        R2(gx + 4, gy + 4, gw, gh, 0x000000, 0.35);
+        R2(gx, gy, gw, gh, 0x140e22, 1);
+        R2(gx + 2, gy + 2, gw - 4, gh - 4, 0xd4a82a, 0.95);
+        R2(gx + 5, gy + 5, gw - 10, gh - 10, 0x1a263e, 0.98); // deep reflective luxury glass
+        // Warm golden interior salon glow
+        R2(gx + 12, gy + 12, gw - 24, gh - 24, 0xffe27a, 0.22);
+        // Glass mullions
+        for (let mx = gx + 36; mx < gx + gw - 12; mx += 36) R2(mx, gy + 5, 2, gh - 10, 0x0e1828, 0.95);
+        for (let my = gy + 26; my < gy + gh - 10; my += 26) R2(gx + 5, my, gw - 10, 2, 0x0e1828, 0.95);
+        // Glass sheen highlight
+        R2(gx + 10, gy + 8, gw - 20, 6, 0x8ae8ff, 0.3);
+
+        // 4. Rooftop VIP Helipad / Star Terrace Crest
+        const hx = tx + Math.floor(tw / 2), hy = ty + th - 120;
+        R2(hx - 44, hy - 44, 88, 88, 0x221a30, 0.95);
+        R2(hx - 42, hy - 42, 84, 84, 0xd4a82a, 0.9);
+        R2(hx - 39, hy - 39, 78, 78, 0x181224, 1);
+        // Helipad circle & VIP Star
+        R2(hx - 28, hy - 28, 56, 56, 0xd4a82a, 0.3);
+        R2(hx - 25, hy - 25, 50, 50, 0x181224, 1);
+        // "VIP" Crest Inscription
+        R2(hx - 14, hy - 6, 28, 12, 0xffd24a, 0.85);
+        R2(hx - 10, hy - 4, 20, 8, 0x181224, 1);
+        R2(hx - 2, hy - 14, 4, 28, 0xffd24a, 0.9);
+
+        // 5. Penthouse Chiller & HVAC Units
+        for (const chx of [tx + 16, tx + tw - 64]) {
+          const chy = ty + th - 110;
+          R2(chx + 2, chy + 2, 48, 54, 0x000000, 0.3);
+          R2(chx, chy, 48, 54, 0x443a50, 1);
+          R2(chx + 2, chy + 2, 44, 50, 0x5a4e68, 1);
+          R2(chx + 6, chy + 6, 36, 36, 0x201828, 1);
+          R2(chx + 22, chy + 6, 4, 36, 0x7c708a, 0.9);
+          R2(chx + 6, chy + 22, 36, 4, 0x7c708a, 0.9);
+        }
+
+        // 6. Integrated VIP Tower Marquee Sign on 2nd Floor Front Cornice
+        parts.push(this.add.image(tx + Math.floor(tw / 2), ty + th - 24, 'casino_sign_vip').setOrigin(0.5, 0.5));
+      } else if (b.look === 'bank') {
+        // PORT CITY TRUST: Stepped dark-navy & brushed-gold perimeter parapet and front cornice
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+        R2(x, y, w, 6, 0x0c1626, 0.96);
+        R2(x, y, 6, h, 0x0c1626, 0.96);
+        R2(x + w - 6, y, 6, h, 0x0c1626, 0.96);
+        R2(x + 2, y + 2, w - 4, 2, 0xd4a82a, 0.92);
+        R2(x + 2, y + 2, 2, h - 10, 0xd4a82a, 0.92);
+        R2(x + w - 4, y + 2, 2, h - 10, 0xd4a82a, 0.92);
+        // Front architectural cornice molding in deep navy & brushed gold
+        R2(x - 2, y + h - 12, w + 4, 10, 0x0a1424, 0.98);
+        R2(x, y + h - 11, w, 3, 0xd4a82a, 0.96);
+        R2(x, y + h - 7, w, 1, 0xffe27a, 0.92);
+        R2(x, y + h - 4, w, 2, 0x1c3a62, 0.95);
       } else if (b.look === 'totoya') {
         // TOTOYA architectural roof coping, skylight bays, and signature crimson + electric-blue front parapet fascia
         const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
@@ -1144,6 +1706,248 @@ export default class GameScene extends Phaser.Scene {
         R2(x, y + h - 13, w, 4, 0xd4a82a, 0.98);
         R2(x, y + h - 8, w, 2, 0xffe688, 0.95);
         R2(x, y + h - 4, w, 3, 0x1e3a62, 0.95);
+      } else if (b.look === 'hospital') {
+        // ST. MARY HOSPITAL: Modern 2-story medical center rooftop crown,
+        // clinical white & soft blue perimeter coping, central elevator & stair penthouse with medical cross emblem,
+        // and dual high-efficiency HVAC chiller plants.
+        parts[0].setTint(0xeef6fb);
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+
+        // 1. Perimeter parapet: clinical white + soft medical blue accent
+        R2(x, y, w, 10, 0x1a2e42, 0.98);
+        R2(x, y, 10, h, 0x1a2e42, 0.98);
+        R2(x + w - 10, y, 10, h, 0x1a2e42, 0.98);
+        R2(x, y + h - 14, w, 14, 0x1a2e42, 0.98);
+        // Medical blue coping band
+        R2(x + 2, y + 2, w - 4, 3, 0x2578b8, 0.96);
+        R2(x + 2, y + 2, 3, h - 4, 0x2578b8, 0.96);
+        R2(x + w - 5, y + 2, 3, h - 4, 0x2578b8, 0.96);
+        R2(x + 10, y + 10, w - 20, h - 24, 0x24384e, 0.65);
+        R2(x + 14, y + 14, w - 28, h - 32, 0xdceaf4, 0.9);
+
+        // Expansion seams
+        for (let gx = x + 64; gx < x + w - 32; gx += 64) R2(gx, y + 14, 2, h - 32, 0xb8ccd8, 0.6);
+        for (let gy = y + 64; gy < y + h - 32; gy += 64) R2(x + 14, gy, w - 28, 2, 0xb8ccd8, 0.6);
+
+        // 2. Central Mechanical & Staircase Penthouse House (aligned with north stairs core)
+        const ex = x + Math.floor(w / 2) - 84, ey = y + 22, ew = 168, eh = 84;
+        R2(ex + 4, ey + 4, ew, eh, 0x000000, 0.32);
+        R2(ex, ey, ew, eh, 0x182c40, 1);
+        R2(ex + 3, ey + 3, ew - 6, eh - 6, 0x243e58, 1);
+        R2(ex, ey, ew, 3, 0x2578b8, 0.95);
+        R2(ex, ey + eh - 3, ew, 3, 0x2578b8, 0.95);
+
+        // Illuminated Medical Cross Emblem on penthouse roof
+        const cx0 = ex + Math.floor(ew / 2), cy0 = ey + Math.floor(eh / 2);
+        R2(cx0 - 18, cy0 - 18, 36, 36, 0xffffff, 0.95);
+        R2(cx0 - 16, cy0 - 16, 32, 32, 0x2578b8, 0.95);
+        R2(cx0 - 4, cy0 - 12, 8, 24, 0xd82828, 1);
+        R2(cx0 - 12, cy0 - 4, 24, 8, 0xd82828, 1);
+
+        // 3. Dual HVAC Chiller Plants (West & East)
+        for (const sideX of [x + 36, x + w - 148]) {
+          const cy1 = y + 36;
+          R2(sideX + 4, cy1 + 4, 112, 74, 0x000000, 0.28);
+          R2(sideX, cy1, 112, 74, 0x4a5a6a, 1);
+          R2(sideX + 2, cy1 + 2, 108, 70, 0x627486, 1);
+          // Dual fan exhausts
+          for (const fx of [sideX + 14, sideX + 64]) {
+            R2(fx, cy1 + 14, 34, 34, 0x1c242e, 1);
+            R2(fx + 3, cy1 + 17, 28, 28, 0x10161c, 1);
+            R2(fx + 15, cy1 + 17, 4, 28, 0x5a6a7c, 0.9);
+            R2(fx + 3, cy1 + 29, 28, 4, 0x5a6a7c, 0.9);
+          }
+          // Aluminum ventilation duct connecting to penthouse
+          const ductX = sideX < x + w / 2 ? sideX + 112 : ex + ew;
+          const ductW = sideX < x + w / 2 ? ex - (sideX + 112) : sideX - (ex + ew);
+          if (ductW > 0) {
+            R2(ductX, y + 54, ductW, 18, 0x8aa0b4, 1);
+            R2(ductX, y + 54, ductW, 3, 0xc8d8e8, 1);
+          }
+        }
+
+        // 4. Modern Front Parapet Trim (White + Medical Blue)
+        R2(x - 2, y + h - 14, w + 4, 12, 0x14283c, 0.98);
+        R2(x, y + h - 13, w, 4, 0x2578b8, 0.98);
+        R2(x, y + h - 8, w, 2, 0xffffff, 0.95);
+        R2(x, y + h - 4, w, 3, 0x8ac4ec, 0.95);
+      } else if (b.look === 'cityhall') {
+        // CITY HALL ANNEX: Prestigious municipal government skyscraper crown,
+        // polished granite & limestone perimeter parapets with brushed-gold coping,
+        // North mechanical & communications penthouse with antenna mast & aviation beacons,
+        // grand central civic skylight atrium over concourse, and dual symmetrical HVAC chiller plants + ductwork.
+        const fullH = h + 8; // Extend to y + fullH (y1) to perfectly align with facade top
+        if (parts[0] && parts[0].setSize) {
+          parts[0].setSize(w, fullH);
+          parts[0].setTint(0x354456); // Municipal slate deck pavers
+        }
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+
+        // 1. Full-coverage architectural deck & stepped perimeter parapet wall
+        // Outer parapet wall (deep civic navy / dark granite)
+        R2(x, y, w, 10, 0x0c1828, 0.98);
+        R2(x, y, 10, fullH, 0x0c1828, 0.98);
+        R2(x + w - 10, y, 10, fullH, 0x0c1828, 0.98);
+        R2(x, y + fullH - 16, w, 16, 0x0c1828, 0.98);
+
+        // Gold parapet coping trim & inner architectural reveal
+        R2(x + 2, y + 2, w - 4, 3, 0xc59b27, 0.95);
+        R2(x + 2, y + 2, 3, fullH - 4, 0xc59b27, 0.95);
+        R2(x + w - 5, y + 2, 3, fullH - 4, 0xc59b27, 0.95);
+        R2(x + 3, y + 3, w - 6, 1, 0xfadb6a, 0.92);
+
+        // Inner limestone reveal border
+        R2(x + 10, y + 10, w - 20, fullH - 26, 0x1b2838, 0.85);
+        R2(x + 14, y + 14, w - 28, fullH - 34, 0x2b3a4c, 0.9);
+
+        // Municipal stone paving grid & expansion joints (every 64px)
+        for (let gx = x + 64; gx < x + w - 32; gx += 64) R2(gx, y + 14, 2, fullH - 34, 0x1a2634, 0.65);
+        for (let gy = y + 64; gy < y + fullH - 32; gy += 64) R2(x + 14, gy, w - 28, 2, 0x1a2634, 0.65);
+
+        // 2. North Mechanical Penthouse & Communications Core (aligned with interior elevator/stair core lx = 7..12)
+        const ex = x + Math.floor(w / 2) - 96, ey = y + 20, ew = 192, eh = 88;
+        R2(ex + 6, ey + 6, ew, eh, 0x000000, 0.38); // drop shadow
+        R2(ex, ey, ew, eh, 0x142030, 1);
+        R2(ex + 3, ey + 3, ew - 6, eh - 6, 0x23344a, 1);
+        // Architectural gold entablature trim
+        R2(ex, ey, ew, 4, 0xc59b27, 0.98);
+        R2(ex, ey + 4, ew, 1, 0xfadb6a, 0.95);
+        R2(ex, ey + eh - 4, ew, 4, 0xc59b27, 0.98);
+        // Penthouse louvered ventilation grilles
+        for (let vx = ex + 20; vx < ex + ew - 30; vx += 40) {
+          R2(vx, ey + 18, 28, 48, 0x0c1420, 1);
+          for (let ly = ey + 22; ly < ey + 64; ly += 6) R2(vx + 3, ly, 22, 2, 0x62748a, 0.9);
+        }
+        // Central rooftop communications & flag mast
+        const mastX = ex + Math.floor(ew / 2);
+        R2(mastX - 8, ey + 8, 16, 16, 0x1a2838, 1);
+        R2(mastX - 2, ey - 22, 4, 30, 0xd0d8e2, 1);
+        R2(mastX - 8, ey - 10, 16, 2, 0x8a98a8, 1);
+        R2(mastX - 3, ey - 26, 6, 5, 0xff2828, 1); // blinking aviation warning beacon
+        // Penthouse corner warning beacons
+        R2(ex + 6, ey + 6, 6, 6, 0xff3838, 0.95);
+        R2(ex + ew - 12, ey + 6, 6, 6, 0xff3838, 0.95);
+
+        // 3. Grand Central Civic Lightwell / Skylight Atrium (over 3-story central concourse)
+        const sx = x + Math.floor(w / 2) - 136, sy = y + 138, sw = 272, sh2 = 172;
+        R2(sx + 6, sy + 6, sw, sh2, 0x000000, 0.35); // shadow
+        R2(sx, sy, sw, sh2, 0x0e1c2e, 1);
+        R2(sx + 3, sy + 3, sw - 6, sh2 - 6, 0xc59b27, 0.95); // gold frame
+        R2(sx + 7, sy + 7, sw - 14, sh2 - 14, 0x163454, 0.98); // deep blue solar glass
+        // Skylight mullion grid
+        for (let mx = sx + 45; mx < sx + sw - 16; mx += 44) R2(mx, sy + 7, 3, sh2 - 14, 0x0a1420, 0.95);
+        for (let my = sy + 44; my < sy + sh2 - 16; my += 42) R2(sx + 7, my, sw - 14, 3, 0x0a1420, 0.95);
+        // Sky reflections & warm interior concourse glow
+        R2(sx + 16, sy + 14, sw - 36, 12, 0x80d0ff, 0.28);
+        R2(sx + 36, sy + 56, sw - 72, 60, 0xffea94, 0.18);
+
+        // 4. Symmetrical Municipal HVAC Chiller Equipment Pits (West & East wings)
+        for (const sideX of [x + 36, x + w - 164]) {
+          const cy0 = y + 42;
+          // Raised concrete equipment pad with safety border
+          R2(sideX - 6, cy0 - 6, 134, 274, 0x141e2a, 0.95);
+          R2(sideX - 4, cy0 - 4, 130, 270, 0x2e3c4c, 0.92);
+          // Dual High-Capacity Chiller Turbines
+          for (let u = 0; u < 2; u++) {
+            const uy = cy0 + u * 114;
+            R2(sideX + 4, uy + 4, 114, 90, 0x000000, 0.32);
+            R2(sideX, uy, 114, 90, 0x4e5e70, 1);
+            R2(sideX + 3, uy + 3, 108, 84, 0x6a7c90, 1);
+            R2(sideX, uy, 114, 4, 0x9ab0c4, 1);
+            // Twin circular turbine exhaust fans
+            for (const fx of [sideX + 12, sideX + 62]) {
+              R2(fx, uy + 14, 40, 40, 0x18222e, 1);
+              R2(fx + 4, uy + 18, 32, 32, 0x0b1016, 1);
+              R2(fx + 18, uy + 18, 4, 32, 0x5a6e84, 0.9);
+              R2(fx + 4, uy + 32, 32, 4, 0x5a6e84, 0.9);
+              R2(fx + 15, uy + 29, 10, 10, 0xc59b27, 0.95); // brass hub
+            }
+            // Control panel with LEDs
+            R2(sideX + 12, uy + 64, 90, 14, 0x1c2634, 1);
+            R2(sideX + 18, uy + 69, 6, 4, 0x34d399, 1); // green LED
+            R2(sideX + 28, uy + 69, 6, 4, 0xfbbf24, 1); // amber LED
+          }
+          // Aluminum ventilation duct connecting chillers into mechanical penthouse
+          const ductX = sideX < x + w / 2 ? sideX + 114 : ex + ew;
+          const ductW = sideX < x + w / 2 ? ex - (sideX + 114) : sideX - (ex + ew);
+          if (ductW > 0) {
+            R2(ductX, y + 54, ductW, 22, 0x8698aa, 1);
+            R2(ductX, y + 54, ductW, 4, 0xc2d0de, 1);
+            R2(ductX, y + 90, ductW, 18, 0x728496, 1);
+          }
+        }
+
+        // 5. Monumental Front Crown Cornice (aligning perfectly with the facade width & roof bottom)
+        R2(x - 2, y + fullH - 16, w + 4, 16, 0x0a1626, 0.98);
+        R2(x, y + fullH - 15, w, 4, 0xc59b27, 0.98);
+        R2(x, y + fullH - 11, w, 2, 0xfadb6a, 0.95);
+        R2(x, y + fullH - 6, w, 4, 0x182c44, 0.98);
+        R2(x, y + fullH - 2, w, 2, 0x060e18, 0.98);
+      } else if (b.look === 'school') {
+        // LINCOLN HIGH SCHOOL: Classic collegiate architecture roof
+        // Dark slate shingle roof deck, carved limestone cornices,
+        // Central historic colonial clock tower / cupola with green copper patina roof,
+        // clock face, copper weather vane, and classroom ventilation dormers.
+        const fullH = h + 8;
+        if (parts[0] && parts[0].setSize) {
+          parts[0].setSize(w, fullH);
+          parts[0].setTint(0x423832); // Historic dark terracotta slate
+        }
+        const R2 = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
+
+        // 1. Limestone perimeter cornice & eaves
+        R2(x, y, w, 8, 0x1a1614, 0.98);
+        R2(x, y, 8, fullH, 0x1a1614, 0.98);
+        R2(x + w - 8, y, 8, fullH, 0x1a1614, 0.98);
+        R2(x, y + fullH - 12, w, 12, 0x1a1614, 0.98);
+
+        // Carved limestone trim
+        R2(x + 2, y + 2, w - 4, 3, 0xd4ceb8, 0.95);
+        R2(x + 2, y + 2, 3, fullH - 4, 0xd4ceb8, 0.95);
+        R2(x + w - 5, y + 2, 3, fullH - 4, 0xd4ceb8, 0.95);
+        R2(x + 2, y + fullH - 10, w - 4, 3, 0xd4ceb8, 0.95);
+
+        // Shingle texture rows
+        for (let sy = y + 16; sy < y + fullH - 16; sy += 18) {
+          R2(x + 8, sy, w - 16, 2, 0x2b221c, 0.7);
+          R2(x + 8, sy + 2, w - 16, 1, 0x584a3e, 0.5);
+        }
+
+        // 2. Central Colonial Clock Tower / Cupola (centered above main entrance)
+        const cupX = x + Math.floor(w / 2) - 36, cupY = y + Math.floor(fullH / 2) - 36, cupW = 72, cupH = 72;
+        R2(cupX + 6, cupY + 6, cupW, cupH, 0x000000, 0.4); // shadow
+        // White colonial tower pedestal
+        R2(cupX, cupY, cupW, cupH, 0xd4ceb8, 1);
+        R2(cupX + 3, cupY + 3, cupW - 6, cupH - 6, 0xe8e4d2, 1);
+        // Copper patina mansard roof crown
+        R2(cupX - 4, cupY - 4, cupW + 8, 8, 0x427c68, 1);
+        R2(cupX - 4, cupY - 4, cupW + 8, 2, 0x5eb89a, 1);
+        R2(cupX + 8, cupY - 14, cupW - 16, 10, 0x427c68, 1);
+        R2(cupX + 8, cupY - 14, cupW - 16, 2, 0x5eb89a, 1);
+        // Historic analog clock face on south side
+        const clockX = cupX + Math.floor(cupW / 2);
+        const clockY = cupY + Math.floor(cupH / 2);
+        R2(clockX - 14, clockY - 14, 28, 28, 0x24282c, 1);
+        R2(clockX - 12, clockY - 12, 24, 24, 0xf6f6f0, 1);
+        // Clock hands
+        R2(clockX - 1, clockY - 8, 2, 9, 0x141418, 1);
+        R2(clockX - 1, clockY - 1, 7, 2, 0x141418, 1);
+        // Weather vane / lightning rod on spire
+        R2(clockX - 1, cupY - 26, 2, 14, 0xd4a82a, 1);
+        R2(clockX - 6, cupY - 22, 12, 2, 0xd4a82a, 1);
+
+        // 3. West & East Classroom Skylights / Ventilation Dormers
+        [-1, 1].forEach((side) => {
+          const ventX = x + Math.floor(w / 2) + side * Math.floor(w * 0.28) - 24;
+          const ventY = y + 28, ventW = 48, ventH = 32;
+          R2(ventX + 4, ventY + 4, ventW, ventH, 0x000000, 0.35);
+          R2(ventX, ventY, ventW, ventH, 0x283038, 1);
+          R2(ventX + 2, ventY + 2, ventW - 4, ventH - 4, 0x505c68, 1);
+          // Louvers
+          for (let ly = ventY + 6; ly < ventY + ventH - 6; ly += 5) {
+            R2(ventX + 4, ly, ventW - 8, 2, 0x182028, 0.9);
+          }
+        });
       }
       if (b.broken) for (let i = 0; i < 4; i++) parts.push(this.add.rectangle(x + 20 + ((i * 53 + b.id * 17) % Math.max(30, w - 60)), y + 14 + ((i * 31 + b.id * 7) % Math.max(20, h - 40)), 22, 14, 0x15110e, 0.85).setOrigin(0, 0));
       let fg = null;
@@ -1187,6 +1991,7 @@ export default class GameScene extends Phaser.Scene {
 
   // eaves, gutters, chimneys, AC units and vents (deterministic per building)
   decorateRoof(parts, b, x, y, w, h) {
+    if (b.look === 'cityhall' || b.look === 'school' || b.look === 'casino') return;
     const R = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
     const hash = (n) => ((b.id * 2654435761 + n * 40503) >>> 0) % 1000 / 1000;
     const pitched = b.style === 'shingle' || b.style === 'tent';
@@ -1202,7 +2007,7 @@ export default class GameScene extends Phaser.Scene {
         R(cx, cy, 14, 16, 0x4a4442); R(cx, cy, 14, 3, 0x8c8782); R(cx + 11, cy, 3, 16, 0x2e2a28); R(cx + 2, cy + 5, 4, 2, 0x6a625e);
         R(cx - 2, cy - 2, 18, 5, 0xb8b2aa); R(cx + 2, cy, 10, 2, 0x100c0a);
       }
-    } else if (b.style !== 'glass' && b.look !== 'home') {
+    } else if (b.style !== 'glass' && b.look !== 'home' && b.look !== 'bank') {
       const n = 1 + Math.floor(hash(4) * 3);
       for (let i = 0; i < n; i++) {
         const ax = x + 16 + Math.floor(hash(10 + i) * Math.max(8, w - 60)), ay = y + 10 + Math.floor(hash(20 + i) * Math.max(6, h - 44));
@@ -1240,7 +2045,28 @@ export default class GameScene extends Phaser.Scene {
   solidAt(x, y) {
     const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
-    return this.blockMove[ty * W + tx] === 1;
+    if (this.blockMove[ty * W + tx] === 1) return true;
+    if (this.schoolObstacles) {
+      for (let i = 0; i < this.schoolObstacles.length; i++) {
+        const o = this.schoolObstacles[i];
+        if (o.navR2) {
+          const dx = x - o.x, dy = y - o.cy;
+          if (dx * dx + dy * dy <= o.navR2) return true;
+        } else if (o.halfW && o.halfH) {
+          if (Math.abs(x - o.x) <= o.halfW && Math.abs(y - o.cy) <= o.halfH) return true;
+        }
+      }
+    }
+    if (this.cityHallObstacles) {
+      const curFl = this.cityHallFloor || 1;
+      for (let i = 0; i < this.cityHallObstacles.length; i++) {
+        const o = this.cityHallObstacles[i];
+        if (o.cityHallFloor && o.cityHallFloor !== curFl) continue;
+        const dx = x - o.x, dy = y - o.cy;
+        if (dx * dx + dy * dy <= o.navR2) return true;
+      }
+    }
+    return false;
   }
 
   // does a w x h box centred on (x,y) overlap any solid tile?
@@ -1366,6 +2192,28 @@ export default class GameScene extends Phaser.Scene {
     this.wallBuild.dirty = true;
     this.refreshCell(tx, ty);
     if (this.wiseDoor && tx === this.wiseDoor.tx && ty === this.wiseDoor.ty) this.animWiseDoor(open);
+    if (this.bankDoor && !this._inBankDoorSet && ((tx === this.bankDoor.t0.tx && ty === this.bankDoor.t0.ty) || (tx === this.bankDoor.t1.tx && ty === this.bankDoor.t1.ty))) {
+      this.bankDoorSet(open);
+      return;
+    }
+    if (this.cityHallDoor && !this._inCityHallDoorSet && (this.cityHallFloor || 1) === 1 && ((tx === this.cityHallDoor.t0.tx && ty === this.cityHallDoor.t0.ty) || (tx === this.cityHallDoor.t1.tx && ty === this.cityHallDoor.t1.ty))) {
+      this.cityHallDoorSet(open);
+      return;
+    }
+    const sidr = !this._inSchoolDoorSet && this.schoolInteriorDoorByTile && this.schoolInteriorDoorByTile.get(ty * W + tx);
+    if (sidr) {
+      this.schoolInteriorDoorSet(sidr, open, quiet);
+      return;
+    }
+    if (!this._inSchoolDoorSet && this.schoolFrontDoor && this.schoolFrontDoor.tiles.some(t => t.tx === tx && t.ty === ty)) {
+      this.schoolFrontDoorSet(open, quiet);
+      return;
+    }
+    const bidr = !this._inBankInteriorDoorSet && this.bankInteriorDoorByTile && this.bankInteriorDoorByTile.get(ty * W + tx);
+    if (bidr) {
+      this.bankInteriorDoorSet(bidr, open, quiet);
+      return;
+    }
     const sdr = this.storeDoorAt && this.storeDoorAt.get(ty * W + tx); if (sdr) this.animStoreDoor(sdr, open);
     if (quiet) return;
     if (Math.hypot(this.player.x - (tx * TILE + 16), this.player.y - (ty * TILE + 16)) < 480) (open ? sfx.door() : sfx.doorClose());      // only doors you could actually hear
@@ -1376,7 +2224,7 @@ export default class GameScene extends Phaser.Scene {
      a half after the last one has left, so they never flap while somebody stands in the doorway. The two door tiles change at once (the
      collision opens when the panels start to part and closes only when nobody is in the doorway); the four-frame slide is only the picture. */
   casinoDoorTick(now) {
-    const d = this.casinoDoor; if (!d || now - (d.chk || 0) < 110) return;
+    const d = this.casinoDoor; if (!d || (this.casinoFloor || 1) !== 1 || now - (d.chk || 0) < 110) return;
     d.chk = now;
     const cx = (d.t1.tx) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 62, R_HOLD = 76;
     const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
@@ -1395,10 +2243,199 @@ export default class GameScene extends Phaser.Scene {
     const d = this.casinoDoor; if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
     d.evs.forEach((e) => e.remove(false)); d.evs = [];
     d.state = open ? 'opening' : 'closing'; d.nearAt = this.gt;
-    this.setDoor(d.t0.tx, d.t0.ty, open, true); this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    if ((this.casinoFloor || 1) === 1) {
+      this.setDoor(d.t0.tx, d.t0.ty, open, true); this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    }
     if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
     const seq = open ? [1, 2, 3] : [2, 1, 0];
     seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => { if (d.img && d.img.scene) d.img.setTexture('casino_door_' + fr); if (i === seq.length - 1) d.state = open ? 'open' : 'closed'; })));
+  }
+
+  /* Port City Trust Bank's reinforced glass double entrance doors: slide apart when the player, a customer, or a guard approaches,
+     and slide closed shortly after the doorway is clear. */
+  bankDoorTick(now) {
+    const d = this.bankDoor;
+    if (!d || now - (d.chk || 0) < 110) return;
+    d.chk = now;
+    const cx = d.t1.tx * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 68, R_HOLD = 82;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => { if (!hit && c && c.state !== 'inside' && near(c, r)) hit = true; });
+      if (!hit) this.enemies.children.iterate((e) => { if (!hit && e && near(e, r)) hit = true; });
+      return hit;
+    };
+    if (d.state === 'closed') {
+      if (anyNear(R_OPEN)) this.bankDoorSet(true);
+    } else if (d.state === 'open') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (now - d.nearAt > 1600) this.bankDoorSet(false);
+    }
+  }
+
+  bankDoorSet(open) {
+    const d = this.bankDoor;
+    if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    d.nearAt = this.gt;
+    this._inBankDoorSet = true;
+    this.setDoor(d.t0.tx, d.t0.ty, open, true);
+    this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    this._inBankDoorSet = false;
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture('bank_door_' + fr);
+      if (i === seq.length - 1) d.state = open ? 'open' : 'closed';
+    })));
+  }
+
+  /* Lincoln High School doors (Interior Classroom Doors & Front Entrance Double Doors):
+     Open and close ONLY when the player presses E nearby, animating through 4 frames synchronized with collision. */
+  schoolInteriorDoorSet(d, open, quiet = false) {
+    if (!d) return;
+    if (!open && !quiet) {
+      const p = this.player;
+      let blocked = false;
+      for (const t of d.tiles) {
+        const cx = (t.tx + 0.5) * TILE, cy = (t.ty + 0.5) * TILE;
+        if (Math.hypot(cx - p.x, cy - p.y) < 22) blocked = true;
+        this.enemies.children.iterate((e) => { if (e && !e.dead && Math.hypot(cx - e.x, cy - e.y) < 24) blocked = true; });
+        this.civilians.children.iterate((c) => { if (c && !c.dead && Math.hypot(cx - c.x, cy - c.y) < 24) blocked = true; });
+      }
+      if (blocked) {
+        this.events.emit('toast', 'Something is in the way');
+        return;
+      }
+    }
+    d.evs = [];
+    if (quiet) {
+      this._inSchoolDoorSet = true;
+      d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, open, true));
+      this._inSchoolDoorSet = false;
+      d.state = open ? 'open' : 'closed';
+      if (d.img && d.img.scene) d.img.setTexture(d.prefix + (open ? '3' : '0'));
+      return;
+    }
+    d.state = open ? 'opening' : 'closing';
+    if (!open) {
+      this._inSchoolDoorSet = true;
+      d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, false, true));
+      this._inSchoolDoorSet = false;
+    }
+    if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < 480) (open ? sfx.door() : sfx.doorClose());
+    this.alertNoise(d.x, d.y, 90, 'step');
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(65 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture(d.prefix + fr);
+      if (open && i === 1) {
+        this._inSchoolDoorSet = true;
+        d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, true, true));
+        this._inSchoolDoorSet = false;
+      }
+      if (i === seq.length - 1) {
+        if (open) {
+          this._inSchoolDoorSet = true;
+          d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, true, true));
+          this._inSchoolDoorSet = false;
+        }
+        d.state = open ? 'open' : 'closed';
+      }
+    })));
+  }
+
+  schoolFrontDoorSet(open, quiet = false) {
+    const d = this.schoolFrontDoor;
+    if (!d) return;
+    d.nearAt = this.gt;
+    this.schoolInteriorDoorSet(d, open, quiet);
+  }
+
+  schoolDoorTick(now) {
+    const d = this.schoolFrontDoor;
+    if (!d || now - (d.chk || 0) < 100) return;
+    d.chk = now;
+    const cx = d.x, cy = d.y, R_OPEN = 64, R_HOLD = 78;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => {
+        if (hit || !c || c.dead || c.state === 'inside' || c.state === 'idle' || c.shopkeeper) return;
+        if (near(c, r)) hit = true;
+      });
+      if (!hit) {
+        this.enemies.children.iterate((e) => {
+          if (!hit && e && !e.dead && near(e, r)) hit = true;
+        });
+      }
+      return hit;
+    };
+    if (d.state === 'closed' || d.state === 'closing') {
+      if (anyNear(R_OPEN)) this.schoolFrontDoorSet(true);
+    } else if (d.state === 'open' || d.state === 'opening') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (d.state === 'open' && now - (d.nearAt || 0) > 950) this.schoolFrontDoorSet(false);
+    }
+  }
+
+  /* Port City Trust Bank interior doors (Manager's Office, Office Rooms, Records Room, Staff-Only Door):
+       Open and close ONLY when the player presses E nearby, animating through 4 frames synchronized with collision. */
+  bankInteriorDoorSet(d, open, quiet = false) {
+    if (!d) return;
+    if (!open && !quiet) {
+      const p = this.player;
+      let blocked = false;
+      for (const t of d.tiles) {
+        const cx = (t.tx + 0.5) * TILE, cy = (t.ty + 0.5) * TILE;
+        if (Math.hypot(cx - p.x, cy - p.y) < 22) blocked = true;
+        this.enemies.children.iterate((e) => { if (e && !e.dead && Math.hypot(cx - e.x, cy - e.y) < 24) blocked = true; });
+        this.civilians.children.iterate((c) => { if (c && !c.dead && Math.hypot(cx - c.x, cy - c.y) < 24) blocked = true; });
+      }
+      if (blocked) {
+        this.events.emit('toast', 'Something is in the way');
+        return;
+      }
+    }
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    if (quiet) {
+      this._inBankInteriorDoorSet = true;
+      d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, open, true));
+      this._inBankInteriorDoorSet = false;
+      d.state = open ? 'open' : 'closed';
+      if (d.img && d.img.scene) d.img.setTexture(d.prefix + (open ? '3' : '0'));
+      return;
+    }
+    d.state = open ? 'opening' : 'closing';
+    // Synchronize collision: when closing, block passage immediately; when opening, clear collision as door swings open
+    if (!open) {
+      this._inBankInteriorDoorSet = true;
+      d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, false, true));
+      this._inBankInteriorDoorSet = false;
+    }
+    if (Math.hypot(this.player.x - d.x, this.player.y - d.y) < 480) (open ? sfx.door() : sfx.doorClose());
+    this.alertNoise(d.x, d.y, 90, 'step');
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(65 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture(d.prefix + fr);
+      if (open && i === 1) {
+        this._inBankInteriorDoorSet = true;
+        d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, true, true));
+        this._inBankInteriorDoorSet = false;
+      }
+      if (i === seq.length - 1) {
+        if (open) {
+          this._inBankInteriorDoorSet = true;
+          d.tiles.forEach((t) => this.setDoor(t.tx, t.ty, true, true));
+          this._inBankInteriorDoorSet = false;
+        }
+        d.state = open ? 'open' : 'closed';
+      }
+    })));
   }
 
   // the WISE SOLE glass door swings through three frames (the tile - and with it the collision - changes at once)
@@ -1614,7 +2651,7 @@ export default class GameScene extends Phaser.Scene {
     if (!w) return null;
     const p = this.places[w.place];
     if (!p) return null;
-    if (w.place === 'reyes_office') return { x: p.x + w.off[0], y: p.y + w.off[1], place: w.place };
+    if (w.place === 'sean' || w.place === 'jiro' || w.place === 'jansenn' || w.place === 'reyes_office' || (w.place && w.place.startsWith('cityhall_'))) return { x: p.x + w.off[0], y: p.y + w.off[1], place: w.place };
     const spot = this.freeSpotNear(p.x + w.off[0], p.y + w.off[1], 120) || p;
     return { x: spot.x, y: spot.y, place: w.place };
   }
@@ -1636,8 +2673,18 @@ export default class GameScene extends Phaser.Scene {
         delete this.storyNpcs[id];
       }
       if (want && !this.storyNpcs[id]) {
-        const c = this.spawnCivilian({ x: want.x, y: want.y, kind: 'story', npcId: id });
+        const flr = id === 'sean' ? 1 : id === 'jiro' ? 2 : undefined;
+        const c = this.spawnCivilian({ x: want.x, y: want.y, kind: 'story', npcId: id, casinoFloor: flr });
         c.placeKey = want.place;
+        if (flr) {
+          c.casinoFloor = flr;
+          if (flr !== (this.casinoFloor || 1)) {
+            c.setVisible(false);
+            if (c.shadow) c.shadow.setVisible(false);
+            if (c.body) c.body.enable = false;
+            c.sleeping = true;
+          }
+        }
         this.storyNpcs[id] = c;
       }
     });
@@ -1656,6 +2703,24 @@ export default class GameScene extends Phaser.Scene {
         if (n.chat && n.chat.visible) n.chat.setVisible(false);
         return;
       }
+      if (n.hospitalFloor && (this.hospitalFloor || 1) !== n.hospitalFloor) {
+        if (n.tag && n.tag.visible) n.tag.setVisible(false);
+        if (n.mark && n.mark.visible) n.mark.setVisible(false);
+        if (n.chat && n.chat.visible) n.chat.setVisible(false);
+        return;
+      }
+      if (n.cityHallFloor && (this.cityHallFloor || 1) !== n.cityHallFloor) {
+        if (n.tag && n.tag.visible) n.tag.setVisible(false);
+        if (n.mark && n.mark.visible) n.mark.setVisible(false);
+        if (n.chat && n.chat.visible) n.chat.setVisible(false);
+        return;
+      }
+      if (n.casinoFloor && (this.casinoFloor || 1) !== n.casinoFloor) {
+        if (n.tag && n.tag.visible) n.tag.setVisible(false);
+        if (n.mark && n.mark.visible) n.mark.setVisible(false);
+        if (n.chat && n.chat.visible) n.chat.setVisible(false);
+        return;
+      }
       if (Math.abs(p.x - n.x) > 1500 || Math.abs(p.y - n.y) > 1300) { if (n.tag && n.tag.visible) n.tag.setVisible(false); if (n.mark && n.mark.visible) n.mark.setVisible(false); if (n.chat && n.chat.visible) n.chat.setVisible(false); return; }       // far away: tag, exclamation mark and chat bubble stay hidden
       if (n.tag && n.tag.text !== STORY_NPCS[id].name) n.tag.setText(STORY_NPCS[id].name);
       if (!n.tag) n.tag = this.add.text(0, 0, STORY_NPCS[id].name, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: STORY_NPCS[id].color, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
@@ -1664,7 +2729,7 @@ export default class GameScene extends Phaser.Scene {
       }
       const d = Math.hypot(p.x - n.x, p.y - n.y);
       const e58 = this.elev(58);
-      n.tag.setPosition(n.x + e58.x, n.y + e58.y).setRotation(-this.camRot).setScale(1, UPY).setVisible(d < 260 && !p.vehicle && ((id !== 'sean' && id !== 'jiro') || this.insideBuilding));
+      n.tag.setPosition(n.x + e58.x, n.y + e58.y).setRotation(-this.camRot).setScale(1, UPY).setVisible(d < 260 && !p.vehicle && ((id !== 'sean' && id !== 'jiro') || this.insideBuilding) && (id !== 'principal' || this.inSchool(p)));
       if (id === 'sean' || id === 'jiro') {
         if (!n.nextChat) n.nextChat = this.gt + 2500 + Math.random() * 4000;
         if (d < 240 && this.gt > n.nextChat) { n.chatUntil = this.gt + 4200; n.nextChat = this.gt + 13000 + Math.random() * 10000; const L = AMBIENT[id]; n.chatLine = L[Math.floor(Math.random() * L.length)]; }
@@ -1673,7 +2738,7 @@ export default class GameScene extends Phaser.Scene {
         n.chat.setVisible(show);
         if (show) { const eh = this.elev(84); n.chat.setText(n.chatLine || '').setPosition(n.x + eh.x, n.y + eh.y).setRotation(-this.camRot).setScale(1, UPY); }
       }
-      const giver = avail.some((m) => m.giver === id) || (id === 'yosen' && ystate().found && !this.missions.active && !yosenActive() && ystate().done < questCount());
+      const giver = avail.some((m) => m.giver === id);
       const target = this.missions.obj && ((this.missions.obj.type === 'talk' && this.missions.obj.npc === id));
       n.mark.setVisible((giver || target) && d < 1200).setRotation(-this.camRot).setScale(1, UPY).setPosition(n.x + this.elev(74 + Math.sin(this.gt / 220) * -3).x, n.y + this.elev(74 + Math.sin(this.gt / 220) * -3).y).setText(target ? '?' : '!').setColor(target ? '#7aff9a' : '#ffd23a');
     });
@@ -2135,8 +3200,17 @@ export default class GameScene extends Phaser.Scene {
     this.scene.launch('Atm', { name: st && st.name });
   }
 
-  inCasinoWing(p) { const w = this.wd.casino && this.wd.casino.wing; return !!w && p.x >= w.interior.x0 * TILE && p.x < (w.interior.x1 + 1) * TILE && p.y >= w.interior.y0 * TILE && p.y < (w.interior.y1 + 1) * TILE; }
-  inCasinoMain(p) { const c = this.wd.casino; return !!c && p.x >= c.interior.x0 * TILE && p.x < (c.interior.x1 + 1) * TILE && p.y >= c.interior.y0 * TILE && p.y < (c.interior.y1 + 1) * TILE; }
+  inCasino(p = this.player) {
+    const cs = this.wd && this.wd.casino;
+    return !!cs && p && p.x >= cs.X * TILE && p.x < (cs.X + cs.W) * TILE && p.y >= cs.Y * TILE && p.y < (cs.Y + cs.H) * TILE;
+  }
+  inMusicBar(p = this.player) {
+    const mb = this.wd && this.wd.musicBar;
+    if (!mb || !p || p.vehicle) return false;
+    return p.x >= mb.x * TILE && p.x < (mb.x + mb.w) * TILE && p.y >= mb.y * TILE && p.y < (mb.y + mb.h) * TILE;
+  }
+  inCasinoWing(p) { return (this.casinoFloor === 2) || (p && p.vip); }
+  inCasinoMain(p) { return this.inCasino(p) && (this.casinoFloor || 1) === 1; }
   casinoLabel(st) {
     switch (st.game) {
       case 'slots': return 'Play the slot machine';
@@ -2145,12 +3219,169 @@ export default class GameScene extends Phaser.Scene {
       case 'baccarat': return st.vip ? 'Play VIP Baccarat' : 'Play Baccarat';
       case 'holdem': return st.stakes === 'high' ? "Play private Texas Hold'em" : "Play Texas Hold'em";
       case 'atm': return 'Use the ATM';
-      case 'stairs': return st.dir === 'up' ? (Casino.vipLevel() >= 1 ? 'Take the stairs up to the VIP level' : 'VIP stairs (members only)') : 'Take the stairs down to the main floor';
+      case 'stairs': return st.dir === 'up' ? (Casino.vipLevel() >= 1 ? 'Take the stairs up to VIP Tower' : 'VIP stairs (members only)') : 'Take the stairs down to the main floor';
       default: return st.vip ? 'VIP cashier (chips & membership)' : 'Cashier (chips & membership)';
     }
   }
 
-  // the staircase: VIP members only going up; both floors are separate rooms, so a fade + a new position is the whole trip
+  setCasinoFloor(targetFloor) {
+    const cs = this.wd && this.wd.casino;
+    if (!cs || !cs.floors || !cs.floors[targetFloor]) return;
+    const fl = cs.floors[targetFloor];
+    this.casinoFloor = targetFloor;
+    const CX = cs.X, CY = cs.Y, CW = cs.W, CH = cs.H;
+    const FACE = new Map([
+      [T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass],
+      [T.reyesWallCap, T.reyesWall], [T.hospWallCap, T.hospWall]
+    ]);
+
+    // 1. Update ground & object tiles for the unified casino footprint
+    for (let ly = 0; ly < CH; ly++) {
+      for (let lx = 0; lx < CW; lx++) {
+        const tx = CX + lx, ty = CY + ly, i = ty * W + tx;
+        const gIdx = fl.ground[ly][lx];
+        this.wd.ground[ty][tx] = gIdx;
+        this.groundLayer.putTileAt(gIdx, tx, ty);
+
+        let oIdx = fl.obj[ly][lx];
+        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass) {
+          const southObj = ly + 1 < CH ? fl.obj[ly + 1][lx] : this.wd.obj[ty + 1]?.[tx];
+          if (WALL_FAMILY.has(southObj)) {
+            oIdx = oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
+          }
+        }
+        this.wd.obj[ty][tx] = oIdx;
+
+        if (oIdx >= 0) {
+          const tile = this.objLayer.putTileAt(oIdx, tx, ty);
+          if (tile) {
+            const collide = SOLID.has(oIdx);
+            tile.setCollision(collide, collide, collide, collide);
+            tile.alpha = WALL_TOPS.has(oIdx) ? 1 : 0;
+          }
+        } else {
+          this.objLayer.removeTileAt(tx, ty);
+        }
+
+        // Reset wall & furniture flags
+        this.isWall[i] = 0;
+        this.isLow[i] = 0;
+        this.wallFace[i] = 0;
+        this.noFace[i] = 0;
+        if (this.doorSkin) this.doorSkin.delete(i);
+
+        if (this.lowH && this.lowH.has(oIdx)) {
+          this.isLow[i] = 1;
+          this.wallFace[i] = oIdx;
+        } else if (WALL_FAMILY.has(oIdx)) {
+          this.isWall[i] = 1;
+          this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
+        }
+        this.refreshCell(tx, ty);
+      }
+    }
+
+    // 2. Door tiles for front entrance on floor 1
+    if (targetFloor === 1 && cs.doorTiles) {
+      cs.doorTiles.forEach((d) => { this.noFace[d.ty * W + d.tx] = 1; });
+    }
+
+    // 3. Toggle floor-tagged rugs and 3D decor across active chunks
+    this.chunks.forEach((c) => {
+      for (const it of c.items) {
+        if (it.casinoFloor) {
+          it.hidden = it.casinoFloor !== targetFloor;
+          if (it.im) it.im.setVisible(!it.hidden);
+        }
+      }
+    });
+
+    // 4. Toggle floor-tagged upright wall decorations (neons, chandeliers)
+    if (this.casinoDecs) {
+      this.casinoDecs.forEach((d) => {
+        const img = d.img || d;
+        const flr = d.casinoFloor || img.casinoFloor || 1;
+        if (img && img.setVisible) img.setVisible(flr === targetFloor);
+      });
+    }
+
+    // 4b. Toggle front double glass entrance door sprite (active on 1F, hidden on 2F)
+    if (this.casinoDoor && this.casinoDoor.img) {
+      this.casinoDoor.img.setVisible(targetFloor === 1);
+    }
+
+    // 5. Wake NPCs on active floor and hide NPCs on inactive floor
+    if (this.civilians && this.civilians.children) {
+      this.civilians.children.iterate((c) => {
+        if (!c || !c.casinoFloor || c.dead) return;
+        if (c.casinoFloor === targetFloor) {
+          c.sleeping = false;
+          if (c.body) c.body.enable = true;
+          c.setVisible(true);
+          if (c.shadow) c.shadow.setVisible(true);
+        } else {
+          c.sleeping = true;
+          c.stop();
+          if (c.body) c.body.enable = false;
+          c.setVisible(false);
+          if (c.shadow) c.shadow.setVisible(false);
+          if (c.carryImg) c.carryImg.setVisible(false);
+          if (c.tag) c.tag.setVisible(false);
+          if (c.mark) c.mark.setVisible(false);
+          if (c.chat) c.chat.setVisible(false);
+        }
+      });
+    }
+
+    if (this.enemies && this.enemies.children) {
+      this.enemies.children.iterate((e) => {
+        if (!e || !e.casinoFloor || e.dead) return;
+        if (e.casinoFloor === targetFloor) {
+          e.sleeping = false;
+          if (e.body) e.body.enable = true;
+          e.setVisible(true);
+          if (e.shadow) e.shadow.setVisible(true);
+        } else {
+          e.sleeping = true;
+          e.stop();
+          if (e.body) e.body.enable = false;
+          e.setVisible(false);
+          if (e.shadow) e.shadow.setVisible(false);
+        }
+      });
+    }
+
+    if (this.storyNpcs) {
+      if (this.storyNpcs.sean) {
+        const on = targetFloor === 1;
+        this.storyNpcs.sean.setVisible(on);
+        if (this.storyNpcs.sean.shadow) this.storyNpcs.sean.shadow.setVisible(on);
+        if (this.storyNpcs.sean.body) this.storyNpcs.sean.body.enable = on;
+        this.storyNpcs.sean.sleeping = !on;
+        if (!on) {
+          if (this.storyNpcs.sean.tag) this.storyNpcs.sean.tag.setVisible(false);
+          if (this.storyNpcs.sean.mark) this.storyNpcs.sean.mark.setVisible(false);
+          if (this.storyNpcs.sean.chat) this.storyNpcs.sean.chat.setVisible(false);
+        }
+      }
+      if (this.storyNpcs.jiro) {
+        const on = targetFloor === 2;
+        this.storyNpcs.jiro.setVisible(on);
+        if (this.storyNpcs.jiro.shadow) this.storyNpcs.jiro.shadow.setVisible(on);
+        if (this.storyNpcs.jiro.body) this.storyNpcs.jiro.body.enable = on;
+        this.storyNpcs.jiro.sleeping = !on;
+        if (!on) {
+          if (this.storyNpcs.jiro.tag) this.storyNpcs.jiro.tag.setVisible(false);
+          if (this.storyNpcs.jiro.mark) this.storyNpcs.jiro.mark.setVisible(false);
+          if (this.storyNpcs.jiro.chat) this.storyNpcs.jiro.chat.setVisible(false);
+        }
+      }
+    }
+
+    this.wallBuild.dirty = true;
+  }
+
+  // the staircase: VIP members only going up; seamless floor transition within the single building
   useStairs(st) {
     const cs = this.wd.casino; if (!cs || this.stairBusy || this.over) return;
     if (st.dir === 'up' && Casino.vipLevel() < 1) {
@@ -2158,28 +3389,33 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
     const dest = st.dir === 'up' ? cs.stairsDown : cs.stairsUp, cam = this.cameras.main;
-    this.stairBusy = true; cam.fadeOut(240, 0, 0, 0);
+    const targetFloor = st.dir === 'up' ? 2 : 1;
+    this.stairBusy = true;
+    sfx.door();
+    cam.fadeOut(240, 0, 0, 0);
     this.time.delayedCall(280, () => {
+      this.setCasinoFloor(targetFloor);
       const p = this.player; p.setPosition(dest.x, dest.y); p.body.reset(dest.x, dest.y); p.setVelocity(0, 0);
-      this.casinoFloor = st.dir === 'up' ? 2 : 1;
       cam.fadeIn(280, 0, 0, 0);
-      this.events.emit('banner', { title: st.dir === 'up' ? 'VIP LEVEL' : 'MAIN FLOOR', sub: st.dir === 'up' ? 'THE CASINO - SECOND FLOOR' : 'THE CASINO - FIRST FLOOR' });
+      this.events.emit('banner', { title: targetFloor === 2 ? 'VIP TOWER SALON' : 'MAIN FLOOR', sub: targetFloor === 2 ? 'CASINO & VIP TOWER - SECOND FLOOR' : 'CASINO & VIP TOWER - FIRST FLOOR' });
       this.time.delayedCall(320, () => { this.stairBusy = false; });
     });
   }
 
-  // which casino floor is the player on, and keep people out of rooms they are not cleared for (a revoked or lost pass, a bad save)
+  // which casino floor is the player on, and keep people out of rooms they are not cleared for
   casinoTick(now) {
-    const cs = this.wd.casino; if (!cs || now - (this.cstick || 0) < 400) return;
+    const cs = this.wd.casino; if (!cs || this.stairBusy || now - (this.cstick || 0) < 400) return;
     this.cstick = now;
-    const p = this.player, wing = this.inCasinoWing(p);
-    this.casinoFloor = wing ? 2 : this.inCasinoMain(p) ? 1 : 0;
-    if (wing && Casino.vipLevel() < 1) {
+    const p = this.player;
+    if ((this.casinoFloor || 1) !== 1 && !this.inCasino(p)) {
+      this.setCasinoFloor(1);
+    }
+    if ((this.casinoFloor || 1) === 2 && Casino.vipLevel() < 1) {
       p.setPosition(cs.stairsUp.x, cs.stairsUp.y); p.body.reset(cs.stairsUp.x, cs.stairsUp.y);
       this.events.emit('toast', 'Security walks you back down: the VIP level is for members.');
       return;
     }
-    if (wing && Casino.vipLevel() < 2) {
+    if ((this.casinoFloor || 1) === 2 && Casino.vipLevel() < 2) {
       for (const r of cs.privateRooms || []) if (p.x >= r.x0 * TILE && p.x < (r.x1 + 1) * TILE && p.y >= r.y0 * TILE && p.y < (r.y1 + 1) * TILE) {
         p.setPosition(r.exit.x, r.exit.y); p.body.reset(r.exit.x, r.exit.y); this.events.emit('toast', 'Security: "The private rooms are for VIP Gold members."');
       }
@@ -2215,30 +3451,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /* ------------------------------------------------------------- Yosen Blackthorn */
-  // one quest at a time: intro first, then the next quest of his chain is offered (accept or decline); while one runs he only reminds you of it
+  // Central shadow informant of the main campaign: mission objectives first, then campaign offers, then informant intel
   yosenTalk() {
-    const y = ystate(), m = this.missions, q = currentQuest();
+    const y = ystate(), m = this.missions;
     if (!y.found) { y.found = true; this.yosenFound(); }
-    if (!y.met) { this.startDialogue('y_intro', { onEnd: () => { y.met = true; this.yosenOffer(true); } }); return; }
-    if (yosenActive()) { this.startDialogue(q ? q.remind : 'y_after'); return; }
-    if (!q) { this.startDialogue('y_after'); return; }
-    if (m.active) { this.startDialogue('y_busy'); return; }
-    this.yosenOffer(false);
-  }
-
-  yosenOffer(first) {
-    const y = ystate(), q = currentQuest(), m = this.missions;
-    if (!q || m.active) { if (m.active) this.startDialogue('y_busy'); return; }
-    this.yosenAccepted = false;
-    this.startDialogue(y.declined && !first ? q.again : q.offer, {
-      onEnd: () => {
-        if (this.yosenAccepted && !this.missions.active && !yosenActive()) {
-          y.declined = false;
-          this.missions.start('yosen_' + y.done, { tpl: 'yosen', params: { n: y.done } });
-        } else if (!this.yosenAccepted) { y.declined = true; this.events.emit('toast', 'Yosen: "The offer stays open."'); }
-        this.yosenAccepted = false;
-      }
-    });
+    const t = m.onTalk('yosen');
+    if (t) { this.startDialogue(t.id, { onEnd: t.then }); return; }
+    if (!m.active) {
+      const av = m.availableStory().find((x) => x.giver === 'yosen');
+      if (av) { this.offerMission(av, 'yosen'); return; }
+    }
+    this.startDialogue(null, { dialogue: chatDialogue('yosen', dialogueState(this)) });
   }
 
   // the player has come close enough to see who he is: the "?" becomes his marker, his name is known
@@ -2271,6 +3494,7 @@ export default class GameScene extends Phaser.Scene {
     if (name === 'totoya_spawn') { this.spawnOrRetrieveTesla(); return; }
     if (name && name.startsWith('totoya_repair:')) { this.repairTesla(Number(name.split(':')[1]) || 0); return; }
     if (name && name.startsWith('reyes_floor:')) { this.transitionReyesFloor(Number(name.split(':')[1]) || 1, 'elevator'); return; }
+    if (name && name.startsWith('cityhall_floor:')) { this.transitionCityHallFloor(Number(name.split(':')[1]) || 1, 'elevator'); return; }
     if (name && name.startsWith('gang')) { this.gangScript(name); return; }
     if (name === 'm7_start_chase') this.events.emit('toast', 'Sirens! Take the van and lose them!');
   }
@@ -2536,7 +3760,7 @@ export default class GameScene extends Phaser.Scene {
     const fl = ry.floors[targetFloor];
     this.reyesFloor = targetFloor;
     const RX = ry.X, RY = ry.Y, RW = ry.W, RH = ry.H;
-    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass]]);
+    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass], [T.reyesWallCap, T.reyesWall]]);
 
     // 1. Update ground & object tiles for the unified tower footprint
     for (let ly = 0; ly < RH; ly++) {
@@ -2548,10 +3772,10 @@ export default class GameScene extends Phaser.Scene {
 
         let oIdx = fl.obj[ly][lx];
         // Convert interior wall tiles to cap tiles where another wall cell sits immediately south
-        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass) {
+        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass || oIdx === T.reyesWall || oIdx === T.reyesWallWood) {
           const southObj = ly + 1 < RH ? fl.obj[ly + 1][lx] : this.wd.obj[ty + 1]?.[tx];
           if (WALL_FAMILY.has(southObj)) {
-            oIdx = oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
+            oIdx = oIdx === T.reyesWall ? T.reyesWallCap : oIdx === T.reyesWallWood ? T.reyesWallCap : oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
           }
         }
         this.wd.obj[ty][tx] = oIdx;
@@ -2580,8 +3804,10 @@ export default class GameScene extends Phaser.Scene {
         } else if (WALL_FAMILY.has(oIdx)) {
           this.isWall[i] = 1;
           this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
-          if ((ly === 0 || ly === RH - 1) && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.wallCap || oIdx === T.wall2Cap)) {
+          if (ly === RH - 1 && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.wallCap || oIdx === T.wall2Cap)) {
             this.wallFace[i] = T.facPolice;
+          } else if (ly === 0 && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.reyesWall)) {
+            this.wallFace[i] = T.reyesWall;
           }
         }
         this.refreshCell(tx, ty);
@@ -2807,6 +4033,553 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  /* ------------------------------------------------------------- ST. MARY HOSPITAL (2 Connected Floors) */
+  inHospital(p = this.player) {
+    const hp = this.wd && this.wd.hospital;
+    if (!hp || !p) return false;
+    return p.x >= hp.X * TILE && p.x < (hp.X + hp.W) * TILE && p.y >= hp.Y * TILE && p.y < (hp.Y + hp.H) * TILE;
+  }
+
+  setHospitalFloor(targetFloor) {
+    const hp = this.wd && this.wd.hospital;
+    if (!hp || !hp.floors || !hp.floors[targetFloor]) return;
+    const fl = hp.floors[targetFloor];
+    this.hospitalFloor = targetFloor;
+    const HX = hp.X, HY = hp.Y, HW = hp.W, HH = hp.H;
+    const FACE = new Map([
+      [T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass],
+      [T.reyesWallCap, T.reyesWall], [T.hospWallCap, T.hospWall]
+    ]);
+
+    // 1. Update ground & object tiles for the hospital footprint
+    for (let ly = 0; ly < HH; ly++) {
+      for (let lx = 0; lx < HW; lx++) {
+        const tx = HX + lx, ty = HY + ly, i = ty * W + tx;
+        const gIdx = fl.ground[ly][lx];
+        this.wd.ground[ty][tx] = gIdx;
+        this.groundLayer.putTileAt(gIdx, tx, ty);
+
+        let oIdx = fl.obj[ly][lx];
+        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass || oIdx === T.hospWall) {
+          const southObj = ly + 1 < HH ? fl.obj[ly + 1][lx] : this.wd.obj[ty + 1]?.[tx];
+          if (WALL_FAMILY.has(southObj)) {
+            oIdx = oIdx === T.hospWall ? T.hospWallCap : oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
+          }
+        }
+        this.wd.obj[ty][tx] = oIdx;
+
+        if (oIdx >= 0) {
+          const tile = this.objLayer.putTileAt(oIdx, tx, ty);
+          if (tile) {
+            const collide = SOLID.has(oIdx);
+            tile.setCollision(collide, collide, collide, collide);
+            tile.alpha = WALL_TOPS.has(oIdx) ? 1 : 0;
+          }
+        } else {
+          this.objLayer.removeTileAt(tx, ty);
+        }
+
+        // Reset wall & furniture flags
+        this.isWall[i] = 0;
+        this.isLow[i] = 0;
+        this.wallFace[i] = 0;
+        this.noFace[i] = 0;
+        if (this.doorSkin) this.doorSkin.delete(i);
+
+        if (this.lowH && this.lowH.has(oIdx)) {
+          this.isLow[i] = 1;
+          this.wallFace[i] = oIdx;
+        } else if (WALL_FAMILY.has(oIdx)) {
+          this.isWall[i] = 1;
+          this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
+        }
+        this.refreshCell(tx, ty);
+      }
+    }
+
+    // 2. Apply floor skins
+    (fl.skins || []).forEach((s) => {
+      const tx = HX + s.lx, ty = HY + s.ly, i = ty * W + tx;
+      if (s.doorSkin && this.doorSkin) {
+        this.doorSkin.set(i, s.doorSkin);
+        if (this.isWall[i]) this.wallFace[i] = this.wd.obj[ty][tx] === T.doorOpen ? s.doorSkin[1] : s.doorSkin[0];
+      } else if (s.face !== undefined && this.isWall[i]) {
+        this.wallFace[i] = s.face;
+      }
+      if (s.noFace) this.noFace[i] = 1;
+    });
+
+    // 3. Toggle floor-tagged rugs and 3D decor across active chunks
+    this.chunks.forEach((c) => {
+      for (const it of c.items) {
+        if (it.hospitalFloor) {
+          it.hidden = it.hospitalFloor !== targetFloor;
+          if (it.im) it.im.setVisible(!it.hidden);
+        }
+      }
+    });
+
+    // 4. Toggle floor-tagged upright wall decorations
+    if (this.hospitalFloorDecs) {
+      this.hospitalFloorDecs.forEach((d) => {
+        if (d.img) d.img.setVisible(d.hospitalFloor === targetFloor);
+      });
+    }
+
+    // 4b. Toggle front double glass entrance door sprite & ER crash doors (active on 1F, hidden on 2F)
+    if (this.hospDoor && this.hospDoor.img) {
+      this.hospDoor.img.setVisible(targetFloor === 1);
+    }
+    if (this.hospErDoor && this.hospErDoor.img) {
+      this.hospErDoor.img.setVisible(targetFloor === 1);
+    }
+
+    // 5. Wake NPCs on active floor and hide NPCs on inactive floor
+    this.civilians.children.iterate((c) => {
+      if (!c || !c.hospitalFloor || c.dead) return;
+      if (c.hospitalFloor === targetFloor) {
+        c.sleeping = false;
+        c.body.enable = true;
+        c.setVisible(true);
+        c.shadow.setVisible(true);
+      } else {
+        c.sleeping = true;
+        c.stop();
+        c.body.enable = false;
+        c.setVisible(false);
+        c.shadow.setVisible(false);
+        if (c.carryImg) c.carryImg.setVisible(false);
+      }
+    });
+
+    this.wallBuild.dirty = true;
+  }
+
+  transitionHospitalFloor(targetFloor, via = 'stairsUp') {
+    const hp = this.wd && this.wd.hospital;
+    if (!hp || this.stairBusy || this.over) return;
+    const fl = hp.floors && hp.floors[targetFloor];
+    if (!fl) return;
+    if (targetFloor === (this.hospitalFloor || 1)) {
+      this.events.emit('toast', `You are already on Floor ${targetFloor}F`);
+      return;
+    }
+    const cam = this.cameras.main;
+    this.stairBusy = true;
+    sfx.door();
+    cam.fadeOut(220, 0, 0, 0);
+    this.time.delayedCall(240, () => {
+      this.setHospitalFloor(targetFloor);
+      const p = this.player;
+      let destX = hp.stairsUp.x, destY = hp.stairsUp.arriveY;
+      if (via === 'stairsUp') {
+        destX = hp.stairsDown.x;
+        destY = hp.stairsDown.arriveY;
+      } else if (via === 'stairsDown') {
+        destX = hp.stairsUp.x;
+        destY = hp.stairsUp.arriveY;
+      }
+      p.setPosition(destX, destY);
+      p.body.reset(destX, destY);
+      p.setVelocity(0, 0);
+      cam.fadeIn(250, 0, 0, 0);
+      this.events.emit('banner', {
+        title: fl.name,
+        sub: fl.subtitle,
+        color: '#8ad8ff'
+      });
+      this.time.delayedCall(280, () => {
+        this.stairBusy = false;
+      });
+    });
+  }
+
+  hospitalTick(now) {
+    if (!this.wd || !this.wd.hospital || this.stairBusy || now - (this.hospChk || 0) < 350) return;
+    this.hospChk = now;
+    if ((this.hospitalFloor || 1) !== 1 && !this.inHospital(this.player)) {
+      this.setHospitalFloor(1);
+    }
+  }
+
+  hospitalDoorTick(now) {
+    const d = this.hospDoor;
+    if (!d || (this.hospitalFloor || 1) !== 1 || now - (d.chk || 0) < 120) return;
+    d.chk = now;
+    const cx = (d.t0.tx + 1) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 68, R_HOLD = 82;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => { if (!hit && c && c.state !== 'inside' && (!c.hospitalFloor || c.hospitalFloor === 1) && near(c, r)) hit = true; });
+      return hit;
+    };
+    if (d.state === 'closed') {
+      if (anyNear(R_OPEN)) this.hospitalDoorSet(true);
+    } else if (d.state === 'open') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (now - d.nearAt > 1800) this.hospitalDoorSet(false);
+    }
+  }
+
+  hospitalDoorSet(open) {
+    const d = this.hospDoor;
+    if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    d.nearAt = this.gt;
+    if ((this.hospitalFloor || 1) === 1) {
+      this.setDoor(d.t0.tx, d.t0.ty, open, true);
+      this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    }
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture('hosp_door_' + fr);
+      if (i === seq.length - 1) d.state = open ? 'open' : 'closed';
+    })));
+  }
+
+  hospitalErDoorTick(now) {
+    const d = this.hospErDoor;
+    if (!d || (this.hospitalFloor || 1) !== 1 || now - (d.chk || 0) < 120) return;
+    d.chk = now;
+    const cx = (d.t0.tx + 1) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 68, R_HOLD = 82;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => { if (!hit && c && c.state !== 'inside' && (!c.hospitalFloor || c.hospitalFloor === 1) && near(c, r)) hit = true; });
+      return hit;
+    };
+    if (d.state === 'closed') {
+      if (anyNear(R_OPEN)) this.hospitalErDoorSet(true);
+    } else if (d.state === 'open') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (now - d.nearAt > 1800) this.hospitalErDoorSet(false);
+    }
+  }
+
+  hospitalErDoorSet(open) {
+    const d = this.hospErDoor;
+    if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    d.nearAt = this.gt;
+    if ((this.hospitalFloor || 1) === 1) {
+      this.setDoor(d.t0.tx, d.t0.ty, open, true);
+      this.setDoor(d.t1.tx, d.t1.ty, open, true);
+    }
+    if (Math.hypot(this.player.x - d.t1.tx * TILE, this.player.y - d.t1.ty * TILE) < 420) (open ? sfx.door() : sfx.doorClose());
+    const seq = open ? [1, 2, 3] : [2, 1, 0];
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => {
+      if (d.img && d.img.scene) d.img.setTexture('hosp_er_door_' + fr);
+      if (i === seq.length - 1) d.state = open ? 'open' : 'closed';
+    })));
+  }
+
+  /* ------------------------------------------------------------- CITY HALL ANNEX (3 Connected Floors) */
+  inSchool(p = this.player) {
+    const sc = this.wd && this.wd.school;
+    if (!sc || !p) return false;
+    return p.x >= sc.X * TILE && p.x < (sc.X + sc.W) * TILE && p.y >= sc.Y * TILE && p.y < (sc.Y + sc.H) * TILE;
+  }
+
+  inCityHall(p = this.player) {
+    const ch = this.wd && this.wd.cityhall;
+    if (!ch || !p) return false;
+    return p.x >= ch.X * TILE && p.x < (ch.X + ch.W) * TILE && p.y >= ch.Y * TILE && p.y < (ch.Y + ch.H) * TILE;
+  }
+
+  setCityHallFloor(targetFloor) {
+    const ch = this.wd && this.wd.cityhall;
+    if (!ch || !ch.floors || !ch.floors[targetFloor - 1]) return;
+    const fl = ch.floors[targetFloor - 1];
+    this.cityHallFloor = targetFloor;
+    const CX = ch.X, CY = ch.Y, CW = ch.W, CH = ch.H;
+    const FACE = new Map([[T.wallCap, T.wall], [T.wall2Cap, T.wall2], [T.tentCap, T.tent], [T.glassCap, T.glass], [T.reyesWallCap, T.reyesWall]]);
+
+    // 1. Update ground & object tiles for the skyscraper footprint
+    for (let ly = 0; ly < CH; ly++) {
+      for (let lx = 0; lx < CW; lx++) {
+        const tx = CX + lx, ty = CY + ly, i = ty * W + tx;
+        const gIdx = fl.ground[ly][lx];
+        this.wd.ground[ty][tx] = gIdx;
+        this.groundLayer.putTileAt(gIdx, tx, ty);
+
+        let oIdx = fl.obj[ly][lx];
+        if (oIdx === T.wall2 || oIdx === T.wall || oIdx === T.glass || oIdx === T.reyesWall || oIdx === T.reyesWallWood) {
+          const southObj = ly + 1 < CH ? fl.obj[ly + 1][lx] : this.wd.obj[ty + 1]?.[tx];
+          if (WALL_FAMILY.has(southObj)) {
+            oIdx = oIdx === T.reyesWall ? T.reyesWallCap : oIdx === T.reyesWallWood ? T.reyesWallCap : oIdx === T.wall ? T.wallCap : oIdx === T.wall2 ? T.wall2Cap : T.glassCap;
+          }
+        }
+        this.wd.obj[ty][tx] = oIdx;
+
+        if (oIdx >= 0) {
+          const tile = this.objLayer.putTileAt(oIdx, tx, ty);
+          if (tile) {
+            const collide = SOLID.has(oIdx);
+            tile.setCollision(collide, collide, collide, collide);
+            tile.alpha = WALL_TOPS.has(oIdx) ? 1 : 0;
+          }
+        } else {
+          this.objLayer.removeTileAt(tx, ty);
+        }
+
+        this.isWall[i] = 0;
+        this.isLow[i] = 0;
+        this.wallFace[i] = 0;
+        this.noFace[i] = 0;
+        if (this.doorSkin) this.doorSkin.delete(i);
+
+        if (this.lowH && this.lowH.has(oIdx)) {
+          this.isLow[i] = 1;
+          this.wallFace[i] = oIdx;
+        } else if (WALL_FAMILY.has(oIdx)) {
+          this.isWall[i] = 1;
+          this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
+          if (ly === CH - 1 && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.wallCap || oIdx === T.wall2Cap)) {
+            this.wallFace[i] = T.facCityHall;
+          } else if (ly === 0 && (oIdx === T.wall || oIdx === T.wall2 || oIdx === T.glass)) {
+            this.wallFace[i] = T.glass;
+          }
+        }
+        this.refreshCell(tx, ty);
+      }
+    }
+
+    // 2. Apply floor skins
+    (fl.skins || []).forEach((s) => {
+      const tx = s.gx, ty = s.gy, i = ty * W + tx;
+      if (s.doorSkin && this.doorSkin) {
+        this.doorSkin.set(i, s.doorSkin);
+        if (this.isWall[i]) this.wallFace[i] = this.wd.obj[ty][tx] === T.doorOpen ? s.doorSkin[1] : s.doorSkin[0];
+      } else if (s.face !== undefined && this.isWall[i]) {
+        this.wallFace[i] = s.face;
+      }
+      if (s.noFace) this.noFace[i] = 1;
+    });
+
+    // 3. Toggle front door & sync its collision state on 1F
+    if (this.cityHallDoor && this.cityHallDoor.img) {
+      this.cityHallDoor.img.setVisible(targetFloor === 1);
+      if (targetFloor === 1) {
+        const isOpen = this.cityHallDoor.state === 'open' || this.cityHallDoor.state === 'opening';
+        this._inCityHallDoorSet = true;
+        this.setDoor(this.cityHallDoor.t0.tx, this.cityHallDoor.t0.ty, isOpen, true);
+        this.setDoor(this.cityHallDoor.t1.tx, this.cityHallDoor.t1.ty, isOpen, true);
+        this._inCityHallDoorSet = false;
+      }
+    }
+
+    // 3b. Toggle floor-specific pillar & flagpole circular colliders
+    if (this.cityHallObstacles) {
+      this.cityHallObstacles.forEach((o) => {
+        if (o.zone && o.zone.body) {
+          o.zone.body.enable = !o.cityHallFloor || o.cityHallFloor === targetFloor;
+        }
+      });
+    }
+
+    // 4. Toggle floor-tagged items
+    this.chunks.forEach((c) => {
+      for (const it of c.items) {
+        if (it.cityHallFloor) {
+          it.hidden = it.cityHallFloor !== targetFloor;
+          if (it.im) it.im.setVisible(!it.hidden);
+        }
+      }
+    });
+
+    // 5. Toggle wall decs
+    if (this.cityHallFloorDecs) {
+      this.cityHallFloorDecs.forEach((d) => {
+        if (d.img) d.img.setVisible(d.cityHallFloor === targetFloor);
+      });
+    }
+
+    // 6. Wake/sleep civilians
+    this.civilians.children.iterate((c) => {
+      if (!c || !c.cityHallFloor || c.dead) return;
+      if (c.cityHallFloor === targetFloor) {
+        c.sleeping = false;
+        c.body.enable = true;
+        c.setVisible(true);
+        c.shadow.setVisible(true);
+      } else {
+        c.sleeping = true;
+        c.stop();
+        c.body.enable = false;
+        c.setVisible(false);
+        c.shadow.setVisible(false);
+        if (c.carryImg) c.carryImg.setVisible(false);
+      }
+    });
+
+    this.wallBuild.dirty = true;
+  }
+
+  transitionCityHallFloor(targetFloor, via = 'elevator') {
+    const ch = this.wd && this.wd.cityhall;
+    if (!ch || this.stairBusy || this.over) return;
+    const fl = ch.floors && ch.floors[targetFloor - 1];
+    if (!fl) return;
+    if (targetFloor === (this.cityHallFloor || 1)) {
+      this.events.emit('toast', `You are already on Floor ${targetFloor}F`);
+      return;
+    }
+    const cam = this.cameras.main;
+    this.stairBusy = true;
+    sfx.door();
+    cam.fadeOut(220, 0, 0, 0);
+    this.time.delayedCall(240, () => {
+      this.setCityHallFloor(targetFloor);
+      const p = this.player;
+      let destX = ch.elevator.x, destY = ch.elevator.arriveY;
+      if (via === 'stairsUp') {
+        destX = targetFloor > 1 ? ch.stairsDown.x : ch.elevator.x;
+        destY = ch.stairsDown.arriveY;
+      } else if (via === 'stairsDown') {
+        destX = targetFloor < 3 ? ch.stairsUp.x : ch.elevator.x;
+        destY = ch.stairsUp.arriveY;
+      }
+      p.setPosition(destX, destY);
+      p.body.reset(destX, destY);
+      p.setVelocity(0, 0);
+      this.stairArrivalCooldown = this.gt + 900;
+      cam.fadeIn(250, 0, 0, 0);
+      this.events.emit('banner', {
+        title: fl.name,
+        sub: fl.subtitle,
+        color: '#c59b27'
+      });
+      this.time.delayedCall(280, () => {
+        this.stairBusy = false;
+      });
+    });
+  }
+
+  openCityHallElevator() {
+    const cur = this.cityHallFloor || 1;
+    const floorLabels = [
+      [1, '1F — Grand Concourse (Reception & Citizen Services)'],
+      [2, '2F — City Planning & Zoning (Archives & Blueprints)'],
+      [3, "3F — Mayoral Suite & Council Hearing Chambers"]
+    ];
+    const choices = floorLabels.map(([fl, label]) => ({
+      text: fl === cur ? `${label} [Current Floor]` : label,
+      next: fl === cur ? 'same' : `go_${fl}`
+    }));
+    choices.push({ text: 'Step Back', next: 'bye' });
+
+    const nodes = {
+      a: {
+        who: 'player',
+        text: `CITY HALL ANNEX — EXECUTIVE ELEVATOR\nCurrent Floor: ${cur}F. Select destination:`,
+        choices
+      },
+      same: {
+        who: 'player',
+        text: `You are already on Floor ${cur}F.`,
+        end: true
+      },
+      go_1: { who: 'player', text: 'Elevator descending to 1F — Grand Concourse...', effects: { event: 'cityhall_floor:1' }, end: true },
+      go_2: { who: 'player', text: `Elevator ${cur < 2 ? 'ascending' : 'descending'} to 2F — City Planning & Public Records...`, effects: { event: 'cityhall_floor:2' }, end: true },
+      go_3: { who: 'player', text: "Elevator ascending to 3F — Mayoral Executive Suite & Council Chambers...", effects: { event: 'cityhall_floor:3' }, end: true },
+      bye: { who: 'player', text: 'You step away from the elevator controls.', end: true }
+    };
+    this.startDialogue(null, { dialogue: { start: 'a', nodes } });
+  }
+
+  cityHallTick(now) {
+    if (!this.wd || !this.wd.cityhall || this.stairBusy) return;
+    const ch = this.wd.cityhall;
+    const p = this.player;
+    const curFl = this.cityHallFloor || 1;
+    if (p && !p.vehicle && !p.dead && this.inCityHall(p) && now > (this.stairArrivalCooldown || 0)) {
+      const stairThreshY = (ch.Y + 1.32) * TILE;
+      if (p.y < stairThreshY && p.body && p.body.velocity.y < -15) {
+        if (curFl < 3 && Math.abs(p.x - ch.stairsUp.x) < 26) {
+          this.transitionCityHallFloor(curFl + 1, 'stairsUp');
+          return;
+        }
+        if (curFl > 1 && Math.abs(p.x - ch.stairsDown.x) < 26) {
+          this.transitionCityHallFloor(curFl - 1, 'stairsDown');
+          return;
+        }
+      }
+    }
+    if (now - (this.chChk || 0) < 350) return;
+    this.chChk = now;
+    if (curFl !== 1 && !this.inCityHall(p)) {
+      this.setCityHallFloor(1);
+    }
+  }
+
+  cityHallDoorTick(now) {
+    const d = this.cityHallDoor;
+    if (!d || (this.cityHallFloor || 1) !== 1 || now - (d.chk || 0) < 100) return;
+    d.chk = now;
+    const cx = (d.t0.tx + 1) * TILE, cy = (d.t0.ty + 0.5) * TILE, R_OPEN = 64, R_HOLD = 78;
+    const near = (o, r) => o && o.active && !o.dead && o.visible !== false && Math.hypot(o.x - cx, o.y - cy) < r;
+    const anyNear = (r) => {
+      if (near(this.player, r) && !this.player.vehicle) return true;
+      let hit = false;
+      this.civilians.children.iterate((c) => {
+        if (hit || !c || c.state === 'inside' || c.state === 'idle' || c.guard || c.shopkeeper) return;
+        if ((!c.cityHallFloor || c.cityHallFloor === 1) && near(c, r)) hit = true;
+      });
+      if (!hit) {
+        this.enemies.children.iterate((e) => {
+          if (!hit && e && near(e, r)) hit = true;
+        });
+      }
+      return hit;
+    };
+    if (d.state === 'closed' || d.state === 'closing') {
+      if (anyNear(R_OPEN)) this.cityHallDoorSet(true);
+    } else if (d.state === 'open' || d.state === 'opening') {
+      if (anyNear(R_HOLD)) d.nearAt = now;
+      else if (d.state === 'open' && now - d.nearAt > 850) this.cityHallDoorSet(false);
+    }
+  }
+
+  cityHallDoorSet(open) {
+    const d = this.cityHallDoor;
+    if (!d || (open ? d.state === 'open' || d.state === 'opening' : d.state === 'closed' || d.state === 'closing')) return;
+    d.evs.forEach((e) => e.remove(false));
+    d.evs = [];
+    d.state = open ? 'opening' : 'closing';
+    d.nearAt = this.gt;
+    if ((this.cityHallFloor || 1) === 1) {
+      this._inCityHallDoorSet = true;
+      this.setDoor(d.t0.tx, d.t0.ty, open, true);
+      this.setDoor(d.t1.tx, d.t1.ty, open, true);
+      this._inCityHallDoorSet = false;
+    }
+    if (Math.hypot(this.player.x - (d.t0.tx + 1) * TILE, this.player.y - (d.t0.ty + 0.5) * TILE) < 420) {
+      (open ? sfx.door() : sfx.doorClose());
+    }
+    const curFrame = d.frame ?? (open ? 0 : 3);
+    const targetFrame = open ? 3 : 0;
+    const seq = [];
+    if (open) {
+      for (let f = curFrame + 1; f <= targetFrame; f++) seq.push(f);
+      if (!seq.length) seq.push(3);
+    } else {
+      for (let f = curFrame - 1; f >= targetFrame; f--) seq.push(f);
+      if (!seq.length) seq.push(0);
+    }
+    seq.forEach((fr, i) => d.evs.push(this.time.delayedCall(75 * (i + 1), () => {
+      d.frame = fr;
+      if (d.img && d.img.scene) d.img.setTexture('cityhall_door_' + fr);
+      if (i === seq.length - 1) d.state = open ? 'open' : 'closed';
+    })));
+  }
+
   missionEvent(name, payload) { if (this.missions) this.missions.onEvent(name, payload); }
 
   /* ------------------------------------------------------------- money & flags */
@@ -2920,17 +4693,33 @@ export default class GameScene extends Phaser.Scene {
   }
 
   applyPlayerSave(load) {
-    const s = load.player, p = this.player;
-    const spot = this.freeSpotNear(s.x, s.y, 220) || { x: s.x, y: s.y };
+    const s = load?.player, p = this.player;
+    if (!s || !p) return;
+    const sx = (typeof s.x === 'number' && !isNaN(s.x)) ? s.x : this.wd.spawn.x;
+    const sy = (typeof s.y === 'number' && !isNaN(s.y)) ? s.y : this.wd.spawn.y;
+    const spot = this.freeSpotNear(sx, sy, 220) || { x: sx, y: sy };
     p.setPosition(spot.x, spot.y);
     p.body.reset(spot.x, spot.y);
-    p.hp = s.hp; p.armor = s.armor; p.stamina = s.stamina;
-    p.weapons = { fists: {}, ...s.weapons };
-    p.ammo = { ...p.ammo, ...s.ammo };
-    p.medkits = s.medkits; p.plates = s.plates; p.backpack = s.backpack; p.supplies = { ...(s.supplies || {}) };
-    p.current = p.weapons[s.current] ? s.current : 'fists';
-    p.gun.setTexture(p.weaponTex);
-    if (load.wantedHeat) this.wanted.add(load.wantedHeat, null);
+    p.hp = s.hp ?? p.hp; p.stamina = s.stamina ?? 100;
+    p.armors = s.armors || { none: true };
+    const savedTier = s.armorTier || (s.armor > 0 ? 'light' : 'none');
+    p.armors[savedTier] = true;
+    p.equipArmor(savedTier, false);
+    p.armor = (typeof s.armor === 'number' && !isNaN(s.armor)) ? s.armor : p.armor;
+    p.weapons = { ...(s.weapons || {}) };
+    delete p.weapons.fists;
+    p.ammo = { ...p.ammo, ...(s.ammo || {}) };
+    p.medkits = s.medkits ?? 1; p.plates = s.plates ?? 0; p.backpack = s.backpack ?? 0; p.supplies = { ...(s.supplies || {}) };
+    p.current = (s.current && (p.weapons[s.current] || MELEE[s.current])) ? s.current : 'fists';
+    p.slots = s.slots ? { ...s.slots } : { 1: null, 2: null, 3: null, 4: 'medkit' };
+    if (p.slots[1] === 'fists' || (p.slots[1] && !p.weapons[p.slots[1]])) p.slots[1] = null;
+    if (p.slots[2] === 'fists' || (p.slots[2] && !p.weapons[p.slots[2]])) p.slots[2] = null;
+    if (p.current === 'fists' || !p.weaponTex) {
+      p.gun.setVisible(false);
+    } else {
+      p.gun.setVisible(true).setTexture(p.weaponTex);
+    }
+    if (load.wantedHeat) this.wanted.restore(load.wantedHeat);
   }
 
   respawn() {
@@ -3035,7 +4824,13 @@ export default class GameScene extends Phaser.Scene {
       if (Math.hypot(o.x - x, o.y - y) > 420 || !this.hasLOS(o.x, o.y, x, y)) return;
       witnessed = true; incident.policeSaw = true; this.wanted.policeSees(now, pos);
     });
-    if (witnessed) this.wanted.add(severity, pos, reason);
+    if (witnessed) {
+      // the same victim is only ever charged once: a punch followed by the killing blow costs (kill - punch), not punch + kill
+      let charge = severity;
+      if (opts.victim) { charge = Math.max(0, severity - (opts.victim._charged || 0)); opts.victim._charged = Math.max(opts.victim._charged || 0, severity); }
+      incident.charged = true;
+      if (charge > 0) this.wanted.add(charge, pos, reason);
+    }
     return witnessed;
   }
 
@@ -3047,6 +4842,9 @@ export default class GameScene extends Phaser.Scene {
     if (incident.called || incident.policeSaw) return;
     if (incident.epoch !== this.wanted.epoch || this.gt - incident.at > 10000) return;
     incident.called = true;
+    // the crime was already charged when it was committed: the call only tells police where it happened (never adds stars a second time).
+    // If nothing was charged (nobody counted it), the call is the one and only report and carries half the severity.
+    if (incident.charged) { if (this.wanted.level > 0 && !this.wanted.lastKnown) this.wanted.lastKnown = { x: pos.x, y: pos.y }; return; }
     this.wanted.add(severity * 0.5, pos, 'reported by a witness');
   }
 
@@ -3148,7 +4946,7 @@ export default class GameScene extends Phaser.Scene {
     this.arresting = true;
     const p = this.player;
     if (p.vehicle) this.exitVehicle(true);
-    const fine = Math.min(Math.round(profile.money), Math.round(60 + this.wanted.level * 50 + this.wanted.heat));
+    const fine = Math.min(Math.round(profile.money), Math.round(60 + this.wanted.level * 50 + this.wanted.heat * 0.4));
     this.events.emit('toast', 'BUSTED! You were arrested.');
     this.cameras.main.fadeOut(700, 0, 0, 0);
     this.time.delayedCall(900, () => {
@@ -3205,15 +5003,15 @@ export default class GameScene extends Phaser.Scene {
       if (lvl === 0 && o.mode === 'chase') o.endChase();
     });
 
-    const footCap = [0, 0, 2, 5, 8, 12][lvl];
-    const carCap = [0, 0, 0, 1, 2, 4][lvl];
+    const footCap = this.responseFootCap(lvl);
+    const carCap = [0, 0, 1, 2, 3, 4][lvl];
     let foot = 0, cars = 0;
     this.enemies.children.iterate((e) => { if (e && !e.dead && e.response) foot++; });
     this.vehicles.children.iterate((v) => { if (v && v.active && v.mode === 'chase' && !v.wrecked) cars++; });
     this.responseTimer -= 2500;
     if (lvl >= 2 && this.responseTimer <= 0) {
       this.responseTimer = 11000 - lvl * 1500;
-      if (cars < carCap && lvl >= 3) this.spawnPoliceCar(pos);
+      if (cars < carCap && (lvl >= 3 || foot >= 1)) this.spawnPoliceCar(pos);
       else if (foot < footCap) this.spawnPoliceFoot(pos, lvl);
     }
     // stand down once the heat is gone: response units leave, cars are removed when out of sight
@@ -3246,17 +5044,112 @@ export default class GameScene extends Phaser.Scene {
     return null;
   }
 
+  /* The police response gets visibly stronger with every tier:
+       1-2 stars  patrol officers (varied duty uniforms, polos, vests) in varied patrol sedans & SUVs
+       3 stars    senior command officers (white/navy command uniforms, gold braid, gold shields) in Command SUVs
+       4 stars    SWAT teams (tactical helmets, balaclavas, plate carriers) in tactical SUVs & armored SWAT vans
+       5 stars    military soldiers (camo flak vests, combat helmets, military gear) in jeeps, troop transport trucks & APCs */
+  responseFootCap(lvl) { return [0, 0, 2, 4, 6, 9][lvl] || 0; }
+
+  responseFoot(lvl) {
+    const r = Math.random();
+    if (lvl >= 5) {
+      // 5 stars: Military soldiers (Woodland, Desert, Urban night assault, Camo special forces)
+      const roles = ['army', 'army2', 'army3', 'army4'];
+      const role = roles[Math.floor(r * roles.length)];
+      // Military weapons: M4A1, SCAR-L, AK-47, Bolt Sniper, or Heavy Support
+      const weapons = ['m4', 'm4', 'scar', 'rifle', 'sniper'];
+      const weapon = weapons[Math.floor(Math.random() * weapons.length)];
+      return { role, weapon, type: 'rifle', hp: 160 + Math.floor(Math.random() * 30), reduce: 0.35 };
+    }
+    if (lvl === 4) {
+      // 4 stars: SWAT tactical operators (All-black assault, Urban grey breacher, HRT navy rifleman, OD green operator)
+      const roles = ['swat', 'swat2', 'swat3', 'swat4'];
+      const role = roles[Math.floor(r * roles.length)];
+      // SWAT tactical weapons: MP5, Tactical Shotgun, M4A1, SCAR-L, SVD semi-sniper
+      const weapons = ['mp5', 'sg_tac', 'm4', 'scar', 'sniper2'];
+      const weapon = weapons[Math.floor(Math.random() * weapons.length)];
+      return { role, weapon, type: weapon === 'sg_tac' ? 'shotgun' : weapon === 'sniper2' ? 'sniper' : 'heavy', hp: 125 + Math.floor(Math.random() * 25), reduce: 0.3 };
+    }
+    if (lvl === 3) {
+      // 3 stars: Senior command officers (Chief white command, Lieutenant navy jacket, Tactical supervisor in vest)
+      const roles = ['copcmd', 'copcmd2', 'copcmd3'];
+      const role = roles[Math.floor(r * roles.length)];
+      // Upgraded senior sidearms & tactical shotguns/carbines: Deagle, .357 Revolver, Tactical Shotgun, MP5, M4A1
+      const weapons = ['deagle', 'revolver', 'sg_tac', 'mp5', 'm4'];
+      const weapon = weapons[Math.floor(Math.random() * weapons.length)];
+      return { role, weapon, type: weapon === 'sg_tac' ? 'shotgun' : 'pistol', hp: 85 + Math.floor(Math.random() * 20), reduce: 0.18 };
+    }
+    // 1-2 stars: Normal police patrol officers (long-sleeve duty, polo, high-vis vest, state trooper tan, metro patrol vest)
+    const roles = ['police', 'police2', 'police3', 'police4', 'police5'];
+    const role = roles[Math.floor(r * roles.length)];
+    // Standard equipment: Glock 17, .357 Revolver, and at 2 stars backup Pump Shotgun or MP5
+    let weapon = 'pistol';
+    if (lvl >= 2 && Math.random() < 0.45) {
+      weapon = Math.random() < 0.5 ? 'shotgun' : 'mp5';
+    } else if (Math.random() < 0.25) {
+      weapon = 'revolver';
+    }
+    const hasVest = role === 'police3' || role === 'police5';
+    return { role, weapon, type: weapon === 'shotgun' ? 'shotgun' : 'pistol', hp: 55 + Math.floor(Math.random() * 15), reduce: hasVest ? 0.15 : 0 };
+  }
+
+  responseCar(lvl) {
+    const r = Math.random();
+    if (lvl >= 5) {
+      // Military vehicles: Patrol Jeeps, Troop Transport Trucks, and Armoured APCs
+      if (r < 0.4) return { type: 'armyjeep', variant: Math.random() < 0.5 ? 0 : 1 };
+      if (r < 0.75) return { type: 'armytruck', variant: Math.random() < 0.5 ? 0 : 1 };
+      return { type: 'armyapc', variant: 0 };
+    }
+    if (lvl === 4) {
+      // SWAT vehicles: Tactical SWAT SUVs and Armored Vans
+      if (r < 0.55) return { type: 'swatvan', variant: 0 };
+      if (r < 0.85) return { type: 'swatsuv', variant: 0 };
+      return { type: 'cmdsuv', variant: 0 };
+    }
+    if (lvl === 3) {
+      // Upgraded senior officer vehicles: Command SUVs (black command, white supervisor, unmarked slick-top)
+      return { type: 'cmdsuv', variant: Math.floor(Math.random() * 3) };
+    }
+    // Normal police (1-2 stars): varied patrol sedans and SUVs
+    if (r < 0.55) {
+      return { type: 'police', variant: Math.floor(Math.random() * 3) };
+    }
+    return { type: 'policesuv', variant: Math.floor(Math.random() * 3) };
+  }
+
   spawnPoliceFoot(pos, lvl) {
     const station = this.wd.policeStation;
     const p = this.player;
+    if (this.responseFootCount() >= this.responseFootCap(lvl)) return;
     const spot = (station && Math.hypot(station.x - p.x, station.y - p.y) > 520 && Math.random() < 0.5) ? station : this.offscreenSpot();
     if (!spot) return;
-    const e = this.spawnEnemy({ x: spot.x, y: spot.y, role: lvl >= 5 && Math.random() < 0.45 ? 'swat' : 'police', type: lvl >= 4 && Math.random() < 0.3 ? 'rifle' : 'pistol', mode: 'guard', radius: 40, route: null, response: true });
+    const look = this.responseFoot(lvl);
+    const e = this.spawnEnemy({
+      x: spot.x,
+      y: spot.y,
+      role: look.role,
+      weapon: look.weapon,
+      hp: look.hp,
+      reduce: look.reduce,
+      type: look.type,
+      mode: 'guard',
+      radius: 40,
+      route: null,
+      response: true
+    });
     e.lastKnown = { x: pos.x, y: pos.y };
     e.lastSeen = this.gt;
     e.enterSearch(this.gt);
     e.searchUntil = this.gt + 30000;
-    this.events.emit('toast', 'Police units are responding!');
+    this.events.emit('toast', lvl >= 5 ? 'Military units are deploying!' : lvl === 4 ? 'SWAT is responding!' : lvl === 3 ? 'Police command units are responding!' : 'Police units are responding!');
+  }
+
+  responseFootCount() {
+    let n = 0;
+    this.enemies.children.iterate((e) => { if (e && !e.dead && e.response) n++; });
+    return n;
   }
 
   spawnPoliceCar(pos) {
@@ -3270,16 +5163,35 @@ export default class GameScene extends Phaser.Scene {
       if (!this.chaseCars().some((o) => Math.hypot(o.x - cand.x, o.y - cand.y) < 320)) spot = cand;
     }
     if (!spot) return;
-    const v = this.spawnVehicle({ type: 'police', variant: 0, x: spot.x, y: spot.y, heading: Math.atan2(pos.y - spot.y, pos.x - spot.x), mode: 'chase', temp: true });
+    const car = this.responseCar(this.wanted.level);
+    const v = this.spawnVehicle({ type: car.type, variant: car.variant, x: spot.x, y: spot.y, heading: Math.atan2(pos.y - spot.y, pos.x - spot.x), mode: 'chase', temp: true });
     v.driver = 'ai';
-    v.sirenOn = true;
-    this.events.emit('toast', 'Police cars are on the way!');
+    v.sirenOn = !v.cfg.military;
+    this.events.emit('toast', this.wanted.level >= 5 ? (car.type === 'armytruck' ? 'Military troop transport deploying!' : car.type === 'armyapc' ? 'Armored personnel carrier on the way!' : 'Military patrol jeeps on the way!') : this.wanted.level === 4 ? (car.type === 'swatvan' ? 'A SWAT armored van is on the way!' : 'Tactical SWAT unit on the way!') : this.wanted.level === 3 ? 'Police command vehicle on the way!' : 'Police patrol units on the way!');
   }
 
   unloadOfficers(v) {
     const p = this.player;
-    for (let i = 0; i < 2; i++) {
-      const e = this.spawnEnemy({ x: v.x + (i ? 24 : -24), y: v.y + 24, role: this.wanted.level >= 5 && i === 0 ? 'swat' : 'police', type: 'pistol', mode: 'guard', radius: 40, route: null, response: true });
+    // the crew that steps out matches the vehicle they arrived in
+    const tierMap = { police: 2, policesuv: 2, cmdsuv: 3, swatvan: 4, swatsuv: 4, armyjeep: 5, armytruck: 5, armyapc: 5 };
+    const tier = tierMap[v.vtype] || this.wanted.level;
+    const crew = v.vtype === 'armytruck' ? 4 : (v.vtype === 'armyapc' || v.vtype === 'swatvan' || v.vtype === 'swatsuv') ? 3 : 2;
+    for (let i = 0; i < crew; i++) {
+      if (this.responseFootCount() >= this.responseFootCap(Math.max(tier, this.wanted.level)) + 2) break;       // never flood the street
+      const look = this.responseFoot(tier);
+      const e = this.spawnEnemy({
+        x: v.x + (i % 2 ? 26 : -26),
+        y: v.y + 24 + Math.floor(i / 2) * 20,
+        role: look.role,
+        weapon: look.weapon,
+        hp: look.hp,
+        reduce: look.reduce,
+        type: look.type,
+        mode: 'guard',
+        radius: 40,
+        route: null,
+        response: true
+      });
       e.lastKnown = { x: p.x, y: p.y };
       e.lastSeen = this.gt;
       e.enterSearch(this.gt);
@@ -3291,7 +5203,7 @@ export default class GameScene extends Phaser.Scene {
   vehicleLabel(v) {
     const name = VEHICLES[v.vtype].name;
     if (v.ownedId) return v.locked ? `Unlock & enter your ${name} (L toggles lock)` : `Enter your ${name} (L locks)`;
-    if (v.locked) return `${name} is locked - F twice to break in`;
+    if (v.locked) return `Lockpick ${name} (${lockpickDifficulty(v.vtype).label})`;
     return `Enter ${name}`;
   }
 
@@ -3299,19 +5211,33 @@ export default class GameScene extends Phaser.Scene {
     const p = this.player;
     if (p.vehicle || v.wrecked || p.dead) return;
     if (v.locked && !v.ownedId) {
-      if (this.gt - (v.breakAt || -99999) < 2500) {
-        v.locked = false;
-        sfx.crash(0.5);
-        this.reportCrime(v.x, v.y, CRIME.THEFT + 2, 'breaking into a car');
-        this.alertNoise(v.x, v.y, 220, 'shot');
-        this.events.emit('toast', 'You smash the window and unlock the door');
-        return;
-      }
-      v.breakAt = this.gt;
-      this.events.emit('toast', 'Locked! Press F again to break in (witnesses will call the police)');
+      if (this.scene.isActive('Lockpick')) return;
+      sfx.click();
+      this.scene.pause('Game');
+      this.scene.launch('Lockpick', { vehicle: v, game: this });
       return;
     }
     this.enterVehicle(v);
+  }
+
+  onLockpickFailed(v, diff) {
+    if (!v || !v.active) return;
+    const name = VEHICLES[v.vtype] ? VEHICLES[v.vtype].name : 'vehicle';
+    const triggerAlarm = diff && (diff.policeAlert || Math.random() < (diff.alarmChance ?? 0.35));
+    if (triggerAlarm) {
+      sfx.carAlarm();
+      if (v.honk) v.honk(this.gt, 300);
+      v.sigManual = 1;
+      v.sigDir = 1;
+      this.time.delayedCall(4500, () => { if (v && v.active && !v.driver) { v.sigManual = 0; v.sigDir = 0; } });
+      this.alertNoise(v.x, v.y, 320, 'shot');
+      const heat = diff.militaryAlert ? CRIME.CAR_THEFT * 2 : diff.policeAlert ? CRIME.CAR_THEFT * 1.5 : CRIME.THEFT + 4;
+      this.reportCrime(v.x, v.y, heat, 'breaking into a car');
+      this.events.emit('toast', `Lockpick failed! ${name} alarm triggered!`);
+    } else {
+      this.alertNoise(v.x, v.y, 120, 'step');
+      this.events.emit('toast', `Lockpick failed — the ${name} remains locked`);
+    }
   }
 
   // spawn particles h px above a ground point (straight up the SCREEN, whatever the camera angle)
@@ -3529,7 +5455,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (e.isPolice && !e.copKillCounted && e.playerHitAt !== undefined && this.gt - e.playerHitAt < 4000) {          // an officer's death is ONE crime event, and only if the PLAYER just hurt him (not traffic, despawning or other NPCs)
       e.copKillCounted = true;
       if (!e.response && e.angry) this.reportCrime(e.x, e.y, CRIME.KILL_COP, 'killed an officer', { victim: e });
-      else if (e.angry) this.wanted.add(CRIME.KILL_COP * 0.6, { x: e.x, y: e.y }, 'killed an officer');
+      else if (e.angry) this.wanted.add(CRIME.KILL_COP * 0.4, { x: e.x, y: e.y }, 'killed an officer');
     }
     this.events.emit('kill', this.kills);
   }
@@ -3539,12 +5465,27 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.addCorpse(c.x, c.y);
     if (byPlayer) { this.kills++; this.reportCrime(c.x, c.y, CRIME.KILL_CIVILIAN, 'murder', { victim: c }); this.events.emit('kill', this.kills); this.addRep(-4); }
     if (Math.random() < 0.12) this.spawnItem(c.x + 8, c.y, 'medkit');
+    if (Math.random() < 0.35) this.spawnItem(c.x - 8, c.y + 4, 'cash');
   }
 
   addCorpse(x, y) {
     const c = this.add.image(x, y, 'corpse').setDepth(3).setRotation((Math.random() - 0.5) * 0.4).setFlipX(Math.random() < 0.5);
     this.corpses.push(c);
-    if (this.corpses.length > 60) this.corpses.shift().destroy();
+    this.tweens.add({
+      targets: c,
+      alpha: 0,
+      delay: 8000,
+      duration: 2500,
+      onComplete: () => {
+        const idx = this.corpses.indexOf(c);
+        if (idx >= 0) this.corpses.splice(idx, 1);
+        c.destroy();
+      }
+    });
+    if (this.corpses.length > 30) {
+      const old = this.corpses.shift();
+      if (old) old.destroy();
+    }
   }
 
   /* -------------------------------------------------------------------- loot */
@@ -3559,15 +5500,16 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     s.itemId = id;
     s.glow = glow;
     s.mission = mission;
-    this.tweens.add({ targets: glow, alpha: { from: 0.4, to: 1 }, scale: { from: mission ? 1.2 : 0.9, to: mission ? 1.6 : 1.15 }, yoyo: true, repeat: -1, duration: 700 });
+    s.tw = this.tweens.add({ targets: glow, alpha: { from: 0.4, to: 1 }, scale: { from: mission ? 1.2 : 0.9, to: mission ? 1.6 : 1.15 }, yoyo: true, repeat: -1, duration: 700 });
     this.items.push(s);
-    if (this.items.length > 300) { const old = this.items.find((q) => !q.mission); if (old) this.removeItem(old); }
+    if (this.items.length > 120) { const old = this.items.find((q) => !q.mission); if (old) this.removeItem(old); }
     return s;
   }
 
   removeItem(s) {
     const i = this.items.indexOf(s);
     if (i >= 0) this.items.splice(i, 1);
+    if (s.tw) { try { s.tw.stop(); } catch (e) { /* ignore */ } }
     this.tweens.killTweensOf(s.glow);
     s.glow.destroy();
     s.destroy();
@@ -3616,6 +5558,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (this.casinoGateKeys) this.casinoGateKeys.forEach((g) => { if (Casino.vipLevel() >= g.level) this.lockedDoors.delete(g.key); else this.lockedDoors.add(g.key); });
     if (this.wd.casino) {
       for (const st of this.wd.casino.stations) {
+        if (st.casinoFloor && st.casinoFloor !== (this.casinoFloor || 1)) continue;
         const d = Math.hypot(st.x - p.x, st.y - p.y);
         if (d < 40) consider(d, { kind: 'casino', ref: st, x: st.x, y: st.y, label: this.casinoLabel(st) });
       }
@@ -3677,13 +5620,119 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         }
       }
     }
+    if (this.wd.hospital && !p.vehicle && this.inHospital(p)) {
+      const hp = this.wd.hospital;
+      const curFl = this.hospitalFloor || 1;
+      if (curFl === 1 && hp.stairsUp) {
+        const du = Math.hypot(hp.stairsUp.x - p.x, hp.stairsUp.y - p.y);
+        if (du < 52) {
+          consider(du - 3, {
+            kind: 'hospital_stairs_up',
+            x: hp.stairsUp.x,
+            y: hp.stairsUp.y,
+            label: 'Take Stairs Up to 2F (ICU, OR & Wards)',
+            rawLabel: 'Press E to Take Stairs Up to 2F'
+          });
+        }
+      } else if (curFl === 2 && hp.stairsDown) {
+        const dd = Math.hypot(hp.stairsDown.x - p.x, hp.stairsDown.y - p.y);
+        if (dd < 52) {
+          consider(dd - 3, {
+            kind: 'hospital_stairs_down',
+            x: hp.stairsDown.x,
+            y: hp.stairsDown.y,
+            label: 'Take Stairs Down to 1F (ER, Reception & Rx)',
+            rawLabel: 'Press E to Take Stairs Down to 1F'
+          });
+        }
+      }
+    }
+    if (this.wd.cityhall && !p.vehicle && this.inCityHall(p)) {
+      const ch = this.wd.cityhall;
+      const curFl = this.cityHallFloor || 1;
+      const de = Math.hypot(ch.elevator.x - p.x, ch.elevator.y - p.y);
+      if (de < 52) {
+        consider(de - 4, {
+          kind: 'cityhall_elev',
+          x: ch.elevator.x,
+          y: ch.elevator.y,
+          label: `Use Elevator (${curFl}F)`,
+          rawLabel: `Press E to Use Elevator (${curFl}F)`
+        });
+      }
+      if (curFl < 3) {
+        const du = Math.hypot(ch.stairsUp.x - p.x, ch.stairsUp.y - p.y);
+        if (du < 48) {
+          consider(du - 3, {
+            kind: 'cityhall_stairs_up',
+            x: ch.stairsUp.x,
+            y: ch.stairsUp.y,
+            label: `Take Stairs Up to ${curFl + 1}F`,
+            rawLabel: `Press E to Take Stairs Up to ${curFl + 1}F`
+          });
+        }
+      }
+      if (curFl > 1) {
+        const dd = Math.hypot(ch.stairsDown.x - p.x, ch.stairsDown.y - p.y);
+        if (dd < 48) {
+          consider(dd - 3, {
+            kind: 'cityhall_stairs_down',
+            x: ch.stairsDown.x,
+            y: ch.stairsDown.y,
+            label: `Take Stairs Down to ${curFl - 1}F`,
+            rawLabel: `Press E to Take Stairs Down to ${curFl - 1}F`
+          });
+        }
+      }
+    }
+    if (this.schoolFrontDoor) {
+      const fd = this.schoolFrontDoor;
+      const d = Math.hypot(fd.x - p.x, (fd.y + 12) - p.y);
+      if (d < 58) {
+        const act = (fd.state === 'open' || fd.state === 'opening') ? 'Close' : 'Open';
+        consider(d - 12, { kind: 'door', ref: { x: fd.tiles[0].tx, y: fd.tiles[0].ty }, x: fd.x, y: fd.y, label: `${act} ${fd.label}`, rawLabel: `[E] ${act} ${fd.label}` });
+      }
+    }
+    if (this.schoolInteriorDoors) {
+      for (const dObj of this.schoolInteriorDoors) {
+        const d = Math.hypot(dObj.x - p.x, dObj.y - p.y);
+        if (d < 52) {
+          const act = (dObj.state === 'open' || dObj.state === 'opening') ? 'Close' : 'Open';
+          consider(d - 12, { kind: 'door', ref: { x: dObj.tx, y: dObj.ty }, x: dObj.x, y: dObj.y, label: `${act} ${dObj.label}`, rawLabel: `[E] ${act} ${dObj.label}` });
+        }
+      }
+    }
     for (const dr of this.wd.doors) {
+      if (dr.cityHallFloor && dr.cityHallFloor !== (this.cityHallFloor || 1)) continue;
       const cx = dr.x * TILE + TILE / 2, cy = dr.y * TILE + TILE / 2;
       const d = Math.hypot(cx - p.x, cy - p.y);
       if (d < 54) {
-        const locked = this.lockedDoors.has(dr.y * W + dr.x);
-        const bk = this.bankHeist && this.bankHeist.wd && this.bankHeist.doorHandled(dr.y * W + dr.x) && (locked || this.bankHeist.keys.vault.includes(dr.y * W + dr.x)) ? this.bankHeist.doorLabel(dr.y * W + dr.x) : null;
-        consider(d, { kind: 'door', ref: dr, x: cx, y: cy, label: bk ? bk : locked ? ((this.casinoGateKeys || []).some((g) => g.key === dr.y * W + dr.x) ? 'Private room (VIP Gold only)' : 'Locked door') : this.doorState(dr.x, dr.y) === 'closed' ? 'Open door' : 'Close door' });
+        const ds = this.doorState(dr.x, dr.y);
+        if (!ds) continue;
+        const key = dr.y * W + dr.x;
+        const locked = this.lockedDoors.has(key);
+        const sidr = this.schoolInteriorDoorByTile && this.schoolInteriorDoorByTile.get(key);
+        if (sidr && !locked) {
+          const act = (sidr.state === 'open' || sidr.state === 'opening' || ds === 'open') ? 'Close' : 'Open';
+          consider(d - 12, { kind: 'door', ref: dr, x: cx, y: cy, label: `${act} ${sidr.label}`, rawLabel: `[E] ${act} ${sidr.label}` });
+          continue;
+        }
+        if (this.schoolFrontDoor && this.schoolFrontDoor.tiles.some(t => t.tx === dr.x && t.ty === dr.y)) {
+          const fd = this.schoolFrontDoor;
+          const act = (fd.state === 'open' || fd.state === 'opening' || ds === 'open') ? 'Close' : 'Open';
+          consider(d - 12, { kind: 'door', ref: dr, x: cx, y: cy, label: `${act} ${fd.label}`, rawLabel: `[E] ${act} ${fd.label}` });
+          continue;
+        }
+        const bidr = this.bankInteriorDoorByTile && this.bankInteriorDoorByTile.get(key);
+        if (bidr && !locked) {
+          const act = (bidr.state === 'open' || bidr.state === 'opening' || ds === 'open') ? 'Close' : 'Open';
+          consider(d - 12, { kind: 'door', ref: dr, x: cx, y: cy, label: `${act} ${bidr.label}`, rawLabel: `[E] ${act} ${bidr.label}` });
+          continue;
+        }
+        const isVault = this.bankHeist && this.bankHeist.wd && this.bankHeist.keys.vault.includes(key);
+        const bk = this.bankHeist && this.bankHeist.wd && this.bankHeist.doorHandled(key) && (locked || isVault) ? this.bankHeist.doorLabel(key) : null;
+        const lbl = bk ? bk : locked ? ((this.casinoGateKeys || []).some((g) => g.key === key) ? 'Private room (VIP Gold only)' : 'Locked door') : ds === 'closed' ? 'Open door' : 'Close door';
+        consider(isVault ? d - 12 : d, { kind: 'door', ref: dr, x: cx, y: cy, label: lbl, rawLabel: isVault ? `[E] ${lbl}` : undefined });
       }
     }
     if (this.fireBays) {
@@ -3706,18 +5755,25 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c.state === 'flee' || c.state === 'phone') return;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
-      if (d > (c.npcId === 'ezekiel' ? 74 : (c.npcId === 'mark' || c.npcId === 'reyes' || c.isReceptionist) ? 84 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;                // Ezekiel stands behind his counter; Mark & Reyes can be talked to across their desks
+      const isDeskStory = c.npcId === 'mark' || c.npcId === 'reyes' || c.npcId === 'salcedo' || c.npcId === 'cortez' || c.npcId === 'sofia' || c.npcId === 'adrian' || c.npcId === 'principal';
+      if (d > (c.npcId === 'ezekiel' ? 74 : (isDeskStory || c.isReceptionist) ? 84 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;
       if (c.kind === 'story') {
         if (c.npcId === 'fare') return;
         const isMark = c.npcId === 'mark';
         const isReyes = c.npcId === 'reyes';
+        const isSalcedo = c.npcId === 'salcedo';
+        const isCortez = c.npcId === 'cortez';
+        const isSofia = c.npcId === 'sofia';
+        const isAdrian = c.npcId === 'adrian';
+        const isPrincipal = c.npcId === 'principal';
+        const label = isMark ? 'Talk to Mark' : isReyes ? 'Talk to Councilman Reyes' : isSalcedo ? 'Talk to Mayor Salcedo' : isCortez ? 'Talk to Chief Cortez' : isSofia ? 'Talk to Sofia Ramirez' : isAdrian ? 'Talk to Adrian Villanueva' : isPrincipal ? 'Talk to Principal Arthur Vance' : `Talk to ${this.npcName(c.npcId)}`;
         consider(d + 4, {
           kind: 'story',
           ref: c,
           x: c.x,
           y: c.y,
-          label: isMark ? 'Talk to Mark' : isReyes ? 'Talk to Councilman Reyes' : `Talk to ${this.npcName(c.npcId)}`,
-          rawLabel: isMark ? 'Press E to Talk to Mark' : isReyes ? 'Press E to Talk to Councilman Reyes' : undefined
+          label,
+          rawLabel: (isMark || isReyes || isSalcedo || isCortez || isSofia || isAdrian || isPrincipal) ? `Press E to ${label}` : undefined
         });
       } else if (c.isReceptionist) {
         if (d < 84) {
@@ -3733,8 +5789,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       } else if (c.kind === 'shopkeeper') {
         if (p.y < c.y + 8 || Math.abs(p.x - c.x) > 80) return;                  // only from the customer side of the counter (never through the back wall, shelves or the side units)
         consider(d + 6, { kind: 'shop', ref: c, x: c.x, y: c.y, label: `Browse ${c.shopName || 'shop'}` });
-      } else if (d < 46) {
-        consider(d + 8, { kind: 'talk', ref: c, x: c.x, y: c.y, label: 'Talk' });
+      } else if (d < (c.npcId === 'jansenn' ? 84 : (c.name ? 64 : 46))) {
+        const lbl = c.name ? `Talk to ${c.name}` : 'Talk';
+        consider(d + 8, { kind: 'talk', ref: c, x: c.x, y: c.y, label: lbl, rawLabel: c.name ? `Press E to ${lbl}` : undefined });
       }
     });
     this.enemies.children.iterate((e) => {                 // the named gate guards always talk
@@ -3801,6 +5858,16 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
       this.transitionReyesFloor((this.reyesFloor || 1) + 1, 'stairsUp');
     } else if (t.kind === 'reyes_stairs_down') {
       this.transitionReyesFloor((this.reyesFloor || 1) - 1, 'stairsDown');
+    } else if (t.kind === 'hospital_stairs_up') {
+      this.transitionHospitalFloor(2, 'stairsUp');
+    } else if (t.kind === 'hospital_stairs_down') {
+      this.transitionHospitalFloor(1, 'stairsDown');
+    } else if (t.kind === 'cityhall_elev') {
+      this.openCityHallElevator();
+    } else if (t.kind === 'cityhall_stairs_up') {
+      this.transitionCityHallFloor((this.cityHallFloor || 1) + 1, 'stairsUp');
+    } else if (t.kind === 'cityhall_stairs_down') {
+      this.transitionCityHallFloor((this.cityHallFloor || 1) - 1, 'stairsDown');
     } else if (t.kind === 'reyes_reception') {
       this.reyesReceptionistTalk();
     } else if (t.kind === 'crate') {
@@ -3852,6 +5919,36 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
           this.events.emit('toast', "The key fits - the safehouse is open");
           this.missionEvent('unlocked');
         } else this.events.emit('toast', 'Locked. You need a key.');
+        return;
+      }
+      if (this.hospErDoor && (key === this.hospErDoor.t0.ty * W + this.hospErDoor.t0.tx || key === this.hospErDoor.t1.ty * W + this.hospErDoor.t1.tx)) {
+        this.hospitalErDoorSet(this.hospErDoor.state === 'closed' || this.hospErDoor.state === 'closing');
+        return;
+      }
+      if (this.hospDoor && (key === this.hospDoor.t0.ty * W + this.hospDoor.t0.tx || key === this.hospDoor.t1.ty * W + this.hospDoor.t1.tx)) {
+        this.hospitalDoorSet(this.hospDoor.state === 'closed' || this.hospDoor.state === 'closing');
+        return;
+      }
+      if (this.bankDoor && (key === this.bankDoor.t0.ty * W + this.bankDoor.t0.tx || key === this.bankDoor.t1.ty * W + this.bankDoor.t1.tx)) {
+        this.bankDoorSet(this.bankDoor.state === 'closed' || this.bankDoor.state === 'closing');
+        return;
+      }
+      if (this.cityHallDoor && (this.cityHallFloor || 1) === 1 && (key === this.cityHallDoor.t0.ty * W + this.cityHallDoor.t0.tx || key === this.cityHallDoor.t1.ty * W + this.cityHallDoor.t1.tx)) {
+        this.cityHallDoorSet(this.cityHallDoor.state === 'closed' || this.cityHallDoor.state === 'closing');
+        return;
+      }
+      const sidr = this.schoolInteriorDoorByTile && this.schoolInteriorDoorByTile.get(key);
+      if (sidr) {
+        this.schoolInteriorDoorSet(sidr, sidr.state === 'closed' || sidr.state === 'closing');
+        return;
+      }
+      if (this.schoolFrontDoor && this.schoolFrontDoor.tiles.some(t => t.tx === x && t.ty === y)) {
+        this.schoolFrontDoorSet(this.schoolFrontDoor.state === 'closed' || this.schoolFrontDoor.state === 'closing');
+        return;
+      }
+      const bidr = this.bankInteriorDoorByTile && this.bankInteriorDoorByTile.get(key);
+      if (bidr) {
+        this.bankInteriorDoorSet(bidr, bidr.state === 'closed' || bidr.state === 'closing');
         return;
       }
       if (this.doorState(x, y) === 'closed') this.setDoor(x, y, true);
@@ -3950,9 +6047,68 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   }
 
   onBulletVehicle(b, v) {
-    this.emitUp(this.fxSpark, b.x, b.y, CHEST, 3);
-    v.takeDamage(b.damage * 0.12);
-    if (v.driver === 'player' && b.owner === 'enemy') this.player.takeDamage(b.damage * 0.25);
+    if (!b.active || !v.active || v.wrecked) return;
+    const isPlayerInVehicle = v.driver === 'player' || this.player.vehicle === v;
+    const dmg = b.damage || 20;
+
+    // Relative bullet hit coordinates in vehicle reference frame
+    const dx = b.x - v.x, dy = b.y - v.y;
+    const c = Math.cos(v.heading), s = Math.sin(v.heading);
+    // u: forward/backward distance from car center along heading
+    const u = dx * c + dy * s;
+    // w: lateral distance across car heading (negative = driver side / left, positive = passenger side / right)
+    const w = -dx * s + dy * c;
+    const len = (v.cfg && v.cfg.len) || 54;
+    const wid = (v.cfg && v.cfg.wid) || 24;
+
+    if (v.vtype === 'moto') {
+      // 1. OPEN-AIR MOTORCYCLE: No cabin, doors, or windows. Rider is directly exposed.
+      const hitRider = Math.abs(u) < len * 0.44;
+      if (isPlayerInVehicle && hitRider) {
+        // Bullet directly strikes the exposed player!
+        this.player.takeDamage(dmg);
+        v.takeDamage(dmg * 0.45);
+        if (settings.shake) this.cameras.main.shake(90, 0.005);
+      } else {
+        // Bullet strikes the motorcycle frame / wheels / engine
+        v.takeDamage(dmg * 0.85);
+      }
+      this.emitUp(this.fxSpark, b.x, b.y, CHEST, 3);
+      this.combat.kill(b);
+      return;
+    }
+
+    // 2. ENCLOSED VEHICLES (Sedans, SUVs, Sports, Trucks, Vans, Police Cruisers):
+    // Hood / Engine compartment (front ~25% of the vehicle)
+    const isHood = u > len * 0.22;
+    // Trunk compartment (rear ~25% of the vehicle)
+    const isTrunk = u < -len * 0.25;
+
+    if (isHood || isTrunk) {
+      // Bullets strike heavy sheet metal, engine block, or trunk:
+      // Vehicle takes full damage, and the solid bodywork shields the driver!
+      v.takeDamage(dmg * 0.85);
+      this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
+    } else {
+      // Passenger cabin zone: windows, glass, and driver seat
+      // Driver is seated on the left side of the vehicle:
+      const isDriverSide = w <= wid * 0.12;
+
+      if (isPlayerInVehicle && isDriverSide) {
+        // Bullet penetrates the windshield, driver's side window, or rear glass, hitting the player!
+        this.player.takeDamage(dmg);
+        // Vehicle also takes damage from window shatter & cabin penetration
+        v.takeDamage(dmg * 0.5);
+        this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
+        if (settings.shake) this.cameras.main.shake(90, 0.005);
+        if (sfx.crash) sfx.crash(0.2);
+      } else {
+        // Bullet strikes the passenger side or lower door panel without striking the driver directly
+        v.takeDamage(dmg * 0.85);
+        this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
+      }
+    }
+
     this.combat.kill(b);
   }
 
@@ -4002,7 +6158,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.missions.tick(now, dt);
     this.randomEvents.update(now);
     this.towCheck(now);
-    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.storeDoorTick(now); this.policeDoorTick(now); this.policeStaffTick(now); this.casinoDoorTick(now); this.reyesTick(now); this.reyesDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
+    try { this.gangDirector.update(now, dt); this.gangDiscover(now); this.gangTick(now); this.casinoTick(now); this.wiseDoorTick(now); this.storeDoorTick(now); this.policeDoorTick(now); this.policeStaffTick(now); this.casinoDoorTick(now); this.bankDoorTick(now); this.reyesTick(now); this.hospitalTick(now); this.hospitalDoorTick(now); this.hospitalErDoorTick(now); this.reyesDoorTick(now); this.cityHallTick(now); this.cityHallDoorTick(now); this.schoolDoorTick(now); if (this.bankHeist) this.bankHeist.update(now); this.yosenTick(now); } catch (err) { if (!this.gangErr) { this.gangErr = true; console.error('gang director error (ignored)', err); } }
     this.updateNpcTags();
     if (!profile.flags.kennyFound && this.wd.hideout && now - (this.kennyChk || 0) > 400) {
       this.kennyChk = now;
@@ -4039,9 +6195,27 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (this.fireExt && this.fireExtIn !== this.insideBuilding) { this.fireExtIn = this.insideBuilding; this.fireExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
     if (this.totoyaSign) this.totoyaSign.setAlpha(this.insideBuilding ? 0.1 : 1);
     if (this.totoyaExt && this.totoyaExtIn !== this.insideBuilding) { this.totoyaExtIn = this.insideBuilding; this.totoyaExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }
-    if (this.reyesSign) this.reyesSign.setAlpha(this.insideBuilding ? 0.08 : 1);
-    if (this.reyesExt && this.reyesExtIn !== this.insideBuilding) { this.reyesExtIn = this.insideBuilding; this.reyesExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.08 : 1)); }
+    if (this.reyesSign) this.reyesSign.setAlpha(this.insideBuilding ? 0 : 1);
+    if (this.reyesExt && this.reyesExtIn !== this.insideBuilding) { this.reyesExtIn = this.insideBuilding; this.reyesExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0 : 1)); }
+    if (this.hospitalSign) this.hospitalSign.setAlpha(this.insideBuilding && this.inHospital() ? 0 : 1);
+    if (this.hospitalExt && this.hospitalExtIn !== this.insideBuilding) { this.hospitalExtIn = this.insideBuilding; this.hospitalExt.forEach((i) => i.setAlpha(this.insideBuilding && this.inHospital() ? 0 : 1)); }
     if (this.casinoExt && this.casinoExt.length && this.casinoExtIn !== this.insideBuilding) { this.casinoExtIn = this.insideBuilding; this.casinoExt.forEach((i) => i.setAlpha(this.insideBuilding ? 0.1 : 1)); }       // keep the big storefront sign out of the way indoors
+    const inCityHall = (this.insideBuilding && this.inCityHall(this.player)) || this.inCityHall(this.player);
+    if (this.cityHallSign) this.cityHallSign.setAlpha(inCityHall ? 0 : 1);
+    if (this.cityHallExt && this.cityHallExtIn !== inCityHall) { this.cityHallExtIn = inCityHall; this.cityHallExt.forEach((i) => i.setAlpha(inCityHall ? 0 : 1)); }
+    const inSchool = this.inSchool(this.player);
+    if (this.schoolSign) {
+      this.schoolSign.setAlpha(inSchool ? 0 : 1);
+      this.schoolSign.setVisible(!inSchool);
+    }
+    if (this.schoolExt) {
+      this.schoolExt.forEach((i) => {
+        if (i && i.scene) {
+          i.setAlpha(inSchool ? 0 : 1);
+          i.setVisible(!inSchool);
+        }
+      });
+    }
 
     this.updateCamera(now, Math.min(delta, 250), aimWorld);       // the camera eases with the REAL frame time (dt is capped at 50 ms for the game logic, so on a slow frame the player used to outrun the camera)
     if ((this.cullT = (this.cullT || 0) - dt) <= 0) { this.cullT = 180; this.cullFar(); }
@@ -4099,12 +6273,55 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
     if (Phaser.Input.Keyboard.JustDown(k.R) || consumeAction('reload')) p.startReload(now);
     if (Phaser.Input.Keyboard.JustDown(k.C) || consumeAction('crouch')) { p.crouching = !p.crouching; sfx.click(); if (p.crouching) this.missionEvent('tut:crouch'); }
-    ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'].forEach((kn, i) => { if (Phaser.Input.Keyboard.JustDown(k[kn])) p.selectCategory(i); });
+    if (Phaser.Input.Keyboard.JustDown(k.ONE) || consumeAction('slot1')) {
+      const w1 = p.slots[1];
+      if (w1 && p.weapons[w1]) {
+        if (p.current === w1) {
+          p.equip('fists');
+          this.events.emit('toast', 'Holstered weapon (Bare hands)');
+        } else {
+          p.equip(w1);
+        }
+      } else {
+        p.equip('fists');
+      }
+    }
+    if (Phaser.Input.Keyboard.JustDown(k.TWO) || consumeAction('slot2')) {
+      const w2 = p.slots[2];
+      if (w2 && p.weapons[w2]) {
+        if (p.current === w2) {
+          p.equip(p.slots[1] && p.weapons[p.slots[1]] ? p.slots[1] : 'fists');
+        } else {
+          p.equip(w2);
+        }
+      } else {
+        this.events.emit('toast', 'No secondary weapon in Slot 2 (assign in Tab)');
+      }
+    }
+    if (Phaser.Input.Keyboard.JustDown(k.THREE) || consumeAction('slot3')) {
+      const s3 = p.slots[3];
+      if (s3 && (p.supplies[s3] || 0) > 0) {
+        p.startSupply(s3);
+      } else if (s3) {
+        this.events.emit('toast', `No ${SUPPLIES[s3]?.label || 'food'} remaining in Slot 3`);
+      } else {
+        this.events.emit('toast', 'No food/consumable assigned to Slot 3 (assign in Tab)');
+      }
+    }
+    if (Phaser.Input.Keyboard.JustDown(k.FOUR) || consumeAction('slot4')) {
+      const s4 = p.slots[4] || 'medkit';
+      if (s4 === 'medkit') {
+        p.startMedkit();
+      } else if (SUPPLIES[s4]) {
+        if ((p.supplies[s4] || 0) > 0) {
+          p.startSupply(s4);
+        } else {
+          this.events.emit('toast', `No ${SUPPLIES[s4].label} remaining in Slot 4`);
+        }
+      }
+    }
     if (Phaser.Input.Keyboard.JustDown(k.Z) || consumeAction('melee-swap')) p.cycleMelee();
     if (Phaser.Input.Keyboard.JustDown(k.X) || consumeAction('cycle')) p.cycleWeapon(1);
-    if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('medkit')) { if (p.useMedkit()) this.events.emit('toast', 'Used medkit (+50 HP)'); }
-    if (Phaser.Input.Keyboard.JustDown(k.B)) { const m = useBestSupply(p); if (m) this.events.emit('toast', m); else this.events.emit('toast', "You're fine for now"); }
-    if (Phaser.Input.Keyboard.JustDown(k.G) || consumeAction('armor')) { if (p.useArmor()) this.events.emit('toast', 'Armor plate applied (+40)'); }
     if (Phaser.Input.Keyboard.JustDown(k.L)) this.toggleLock();
     if (Phaser.Input.Keyboard.JustDown(k.J) || consumeAction('jobs')) this.events.emit('request-missions');
     if (Phaser.Input.Keyboard.JustDown(k.K)) this.openGangs();
@@ -4216,7 +6433,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const d = this.audioAcc; this.audioAcc = 0;
     const p = this.player, cb = this.currentBuilding();
     const b = cb >= 0 ? this.wd.buildings.find((x) => x.id === cb) : null;
-    const place = this.casinoFloor > 0 || (b && b.look === 'casino') ? 'casino' : b && b.look === 'bank' ? 'bank' : null;
+    const isMusicBar = (this.inMusicBar && this.inMusicBar(p)) || (!p.vehicle && b && (b.look === 'music_bar' || b.kind === 'music_bar'));
+    const inCasino = (this.inCasino && this.inCasino(p)) || (b && b.look === 'casino');
+    const place = inCasino ? 'casino' : isMusicBar ? 'music_bar' : b && b.look === 'bank' ? 'bank' : null;
     let crowd = 0;
     this.civilians.children.iterate((c) => { if (c && c.active && Math.abs(c.x - p.x) < 420 && Math.abs(c.y - p.y) < 320) crowd++; });
     ambience.update(d, { indoor: cb >= 0, rain: this.atmo.weather === 'rain', night: this.atmo.dark > 0.55, inCar: !!p.vehicle, place, crowd: Math.min(1, crowd / 8) });
@@ -4235,9 +6454,10 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     else if (now < this.combatUntil) want = 'combat';
     else if (p.vehicle) want = 'driving';
     else if (place === 'casino') want = 'casino';
+    else if (place === 'music_bar') want = 'music_bar';
     else if (gangNear || this.inRestricted(p.x, p.y)) want = 'danger';
-    const cur = music.mode, urgent = !want || want === 'chase' || want === 'combat' || cur === 'chase' || cur === 'combat';
-    if (want !== cur && (urgent || now >= this.musicHold)) { music.set(want); this.musicHold = now + 6000; }
+    const cur = music.mode, urgent = !want || want === 'chase' || want === 'combat' || want === 'casino' || want === 'music_bar' || cur === 'chase' || cur === 'combat' || cur === 'music_bar';
+    if (want !== cur && (urgent || now >= this.musicHold)) { music.set(want); this.musicHold = now + (urgent ? 1000 : 6000); }
   }
 
   updateSirenAudio() {
@@ -4283,7 +6503,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     };
     const dark = '#1c1c1c';
     const ocol = {
-      [T.wall]: dark, [T.wall2]: dark, [T.tent]: '#2e3a22', [T.wallCap]: dark, [T.wall2Cap]: dark, [T.tentCap]: '#2e3a22',
+      [T.wall]: dark, [T.wall2]: dark, [T.tent]: '#2e3a22', [T.wallCap]: dark, [T.wall2Cap]: dark, [T.tentCap]: '#2e3a22', [T.schoolWall]: dark, [T.schoolWallCap]: dark, [T.schoolWallWood]: '#381c10', [T.schoolBrick]: '#963828', [T.schoolBrickCap]: '#963828', [T.schoolWin]: '#5a7a8a',
       [T.glass]: '#2f6a96', [T.glassCap]: '#2f6a96', [T.window]: '#5a7a8a', [T.windowBroken]: '#5a7a8a', ...Object.fromEntries(SHOP_WINDOWS.map((i) => [i, '#5a7a8a'])),
       [T.tree]: '#1c3d1c', [T.fence]: '#b0b0b0', [T.barricade]: '#8a5a2a', [T.water]: '#2f6fb0', [T.sandbag]: '#b79a62',
       [T.doorClosed]: '#d09040', [T.doorOpen]: '#d09040', [T.prop]: '#4a4d54', [T.propHigh]: '#4a4d54', [T.bars]: '#777', [T.pump]: '#c0392b'

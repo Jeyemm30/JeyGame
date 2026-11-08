@@ -91,19 +91,19 @@ export function drawReyesArt(scene) {
     c.fillText('R', 48, 46);
 
     // Illuminated lettering
-    font(c, 25, '#040812');
-    c.fillText('REYES HOLDINGS', 206, 33);
-    font(c, 25, '#ffffff');
-    c.fillText('REYES HOLDINGS', 204, 31);
-    font(c, 25, GOLD_HI);
-    c.fillText('REYES HOLDINGS', 204, 31);
+    font(c, 24, '#040812');
+    c.fillText('REYES HOLDINGS', 206, 32);
+    font(c, 24, '#ffffff');
+    c.fillText('REYES HOLDINGS', 204, 30);
+    font(c, 24, GOLD_HI);
+    c.fillText('REYES HOLDINGS', 204, 30);
 
     // Divider bar with diamond center
-    R(c, 92, 50, 224, 2, GOLD);
-    R(c, 201, 48, 6, 6, GOLD_HI);
+    R(c, 92, 49, 224, 2, GOLD);
+    R(c, 201, 47, 6, 6, GOLD_HI);
 
-    font(c, 11, '#9ad0ff');
-    c.fillText('CORPORATE HEADQUARTERS  •  PORT CITY TOWER', 204, 64);
+    font(c, 8.2, '#9ad0ff');
+    c.fillText('CORPORATE HEADQUARTERS  •  PORT CITY TOWER', 204, 63);
   });
 
   // Pillar medallion crest
@@ -266,115 +266,353 @@ export function drawReyesArt(scene) {
 
   /* ============================================================
    * 2. ELEVATOR, STAIRCASES & SHARED CORE (ALL 4 FLOORS)
+   *    Architectural 3D Structures (64x50 px, exact 2-tile core bay width)
    * ============================================================ */
 
-  // Brushed-steel & gold double elevator doors with illuminated digital floor indicator
-  mk('reyes_elevator', 64, 46, (c) => {
-    R(c, 0, 0, 64, 46, '#0c1626');
-    R(c, 2, 2, 60, 42, GOLD);
-    R(c, 4, 4, 56, 38, '#162234');
-    // Digital header transom with floor indicator
-    R(c, 6, 5, 52, 8, '#08101c');
-    R(c, 20, 6, 24, 6, '#122238');
-    font(c, 6, '#58ff9a');
-    c.fillText('▲ 1 2 3 4 ▼', 32, 9);
-    // Left elevator door leaf
-    R(c, 7, 14, 24, 27, '#8e9aa8');
-    R(c, 8, 14, 4, 27, '#b8c4d2');
-    R(c, 19, 16, 2, 23, GOLD);
-    // Right elevator door leaf
-    R(c, 33, 14, 24, 27, '#828e9c');
-    R(c, 35, 14, 4, 27, '#aebac8');
-    R(c, 43, 16, 2, 23, GOLD);
-    // Center seam
-    R(c, 31, 14, 2, 27, '#1a222c');
-    // Call button plate on right frame
-    R(c, 58, 22, 3, 8, GOLD_HI);
-    R(c, 59, 24, 1, 2, '#58ff9a');
-    R(c, 59, 27, 1, 2, '#ffaa44');
-    // Threshold
-    R(c, 4, 41, 56, 3, GOLD_HI);
+  // Grand Recessed Corporate Elevator Bank with brushed stainless steel doors & digital LED transom
+  mk('reyes_elevator', 64, 50, (c) => {
+    // 1. Structural Calacatta marble pilasters (left: x=0..6, right: x=57..63)
+    R(c, 0, 0, 7, 50, '#eae7df');
+    R(c, 0, 0, 1, 50, '#1a1e26');
+    R(c, 1, 0, 1, 50, '#ffffff');
+    R(c, 3, 10, 2, 8, '#d4cebe');
+    R(c, 2, 28, 3, 10, '#d8d2c2');
+    R(c, 5, 12, 1, 38, '#a8a296');
+    R(c, 6, 12, 1, 38, '#3c424e');
+    R(c, 0, 44, 7, 6, '#2a221a');
+    R(c, 0, 44, 7, 1, GOLD);
+
+    R(c, 57, 0, 7, 50, '#eae7df');
+    R(c, 63, 0, 1, 50, '#1a1e26');
+    R(c, 62, 0, 1, 50, '#ffffff');
+    R(c, 57, 12, 1, 38, '#3c424e');
+    R(c, 58, 12, 1, 38, '#a8a296');
+    R(c, 57, 44, 7, 6, '#2a221a');
+    R(c, 57, 44, 7, 1, GOLD);
+
+    // Call button station on right pier
+    R(c, 58, 22, 5, 17, '#18202c');
+    R(c, 59, 23, 3, 15, GOLD);
+    R(c, 59, 24, 3, 4, '#0e141c');
+    font(c, 4, '#58ff9a');
+    c.fillText('1-4', 60.5, 27);
+    R(c, 60, 30, 2, 2, '#fff4a0');
+    R(c, 60, 33, 2, 2, '#ffaa44');
+
+    // 2. Top architectural cornice & entablature (y=0..12, x=0..63)
+    R(c, 0, 0, 64, 4, '#241a12');
+    R(c, 0, 0, 64, 1, GOLD_HI);
+    R(c, 0, 3, 64, 1, GOLD);
+    R(c, 0, 4, 64, 9, '#141c28');
+    R(c, 7, 4, 50, 1, '#2c384a');
+    // Gold crest in relief
+    R(c, 30, 4, 4, 3, GOLD);
+    R(c, 31, 3, 2, 1, GOLD_HI);
+    // Recessed digital LED floor indicator transom
+    R(c, 14, 6, 36, 6, '#080d16');
+    R(c, 14, 6, 36, 1, '#1e2c40');
+    font(c, 5, '#52ff94');
+    c.fillText('◄  1  2  3  4  ►', 32, 10.5);
+
+    // 3. Recessed door alcove ceiling shadow
+    R(c, 7, 13, 50, 2, '#0c121c');
+    R(c, 7, 15, 50, 1, '#16202e');
+
+    // 4. Brushed Stainless Steel Double Doors (Left: x=9..31, Right: x=33..55)
+    // Left door leaf
+    R(c, 9, 16, 23, 32, '#929dae');
+    R(c, 10, 16, 2, 32, '#bcc8d6');
+    R(c, 14, 16, 4, 32, '#dbe6f2');
+    R(c, 24, 16, 3, 32, '#7e8a9a');
+    R(c, 9, 24, 23, 1, '#566070');
+    R(c, 9, 25, 23, 1, '#c8d4e2');
+    R(c, 9, 36, 23, 1, '#566070');
+    R(c, 9, 37, 23, 1, '#c8d4e2');
+    R(c, 30, 20, 1, 24, GOLD_HI);
+    R(c, 29, 20, 1, 24, GOLD);
+
+    // Right door leaf
+    R(c, 33, 16, 23, 32, '#8a96a6');
+    R(c, 34, 16, 2, 32, '#b2becd');
+    R(c, 44, 16, 4, 32, '#d6e2ee');
+    R(c, 51, 16, 3, 32, '#727e8e');
+    R(c, 33, 24, 23, 1, '#566070');
+    R(c, 33, 25, 23, 1, '#c8d4e2');
+    R(c, 33, 36, 23, 1, '#566070');
+    R(c, 33, 37, 23, 1, '#c8d4e2');
+    R(c, 33, 20, 1, 24, GOLD);
+    R(c, 34, 20, 1, 24, GOLD_HI);
+
+    // Center vertical meeting reveal
+    R(c, 32, 13, 1, 35, '#0a0e14');
+
+    // 5. Extruded floor sill plate & guide grooves
+    R(c, 6, 48, 52, 1, GOLD);
+    R(c, 6, 49, 52, 1, '#3a4452');
+    R(c, 10, 48, 21, 1, '#1e242e');
+    R(c, 33, 48, 21, 1, '#1e242e');
   });
 
-  // Modern architectural staircase going UP
-  mk('reyes_stairs_up', 48, 44, (c) => {
-    R(c, 0, 0, 48, 44, '#0e1828');
-    R(c, 2, 2, 44, 40, GOLD);
-    R(c, 4, 4, 40, 36, '#1c2c44');
-    // Ascending marble steps with brass nosing
-    for (let i = 0; i < 6; i++) {
-      const sy = 33 - i * 4;
-      const sx = 6 + i * 2;
-      const sw = 36 - i * 4;
-      R(c, sx, sy, sw, 4, i % 2 === 0 ? '#d8d2c4' : '#beb6a6');
-      R(c, sx, sy, sw, 1, GOLD_HI);
-    }
-    // Handrails
+  // Architectural Ascending Staircase Portal with true 3D depth, step heights & balustrades
+  mk('reyes_stairs_up', 64, 50, (c) => {
+    // 1. Structural marble pilasters (matching elevator frame)
+    R(c, 0, 0, 7, 50, '#eae7df');
+    R(c, 0, 0, 1, 50, '#1a1e26');
+    R(c, 1, 0, 1, 50, '#ffffff');
+    R(c, 5, 11, 1, 39, '#a8a296');
+    R(c, 6, 11, 1, 39, '#3c424e');
+    R(c, 0, 44, 7, 6, '#2a221a');
+    R(c, 0, 44, 7, 1, GOLD);
+
+    R(c, 57, 0, 7, 50, '#eae7df');
+    R(c, 63, 0, 1, 50, '#1a1e26');
+    R(c, 62, 0, 1, 50, '#ffffff');
+    R(c, 57, 11, 1, 39, '#3c424e');
+    R(c, 58, 11, 1, 39, '#a8a296');
+    R(c, 57, 44, 7, 6, '#2a221a');
+    R(c, 57, 44, 7, 1, GOLD);
+
+    // 2. Top architectural beam & illuminated header sign
+    R(c, 0, 0, 64, 4, '#241a12');
+    R(c, 0, 0, 64, 1, GOLD_HI);
+    R(c, 0, 3, 64, 1, GOLD);
+    R(c, 0, 4, 64, 7, '#141c28');
+    R(c, 14, 5, 36, 5, '#080d16');
+    R(c, 14, 5, 36, 1, GOLD);
+    font(c, 4.0, '#6effa8');
+    c.fillText('▲ STAIRS UP ▲', 32, 8);
+
+    // 3. Recessed stairwell shaft interior
+    R(c, 7, 11, 50, 2, '#0c121c');
+    // Diagonal stringers on side walls
+    R(c, 7, 13, 3, 35, '#222c3a');
+    R(c, 9, 13, 1, 35, '#3c4a5c');
+    R(c, 54, 13, 3, 35, '#222c3a');
+    R(c, 54, 13, 1, 35, '#3c4a5c');
+
+    // Upper floor landing visible at top of stairs
+    R(c, 18, 13, 28, 4, '#f0e8d4');
+    R(c, 18, 13, 28, 1, '#fff8e8');
+
+    // 4. Ascending Steps in 3/4 perspective with visible vertical step heights & brass nosings
+    // Step 6 (top)
+    R(c, 17, 17, 30, 2, '#48505e');
+    R(c, 16, 19, 32, 3, '#c2c8d2');
+    R(c, 16, 19, 32, 1, GOLD_HI);
+
+    // Step 5
+    R(c, 15, 22, 34, 2, '#444c5a');
+    R(c, 14, 24, 36, 3, '#cad0da');
+    R(c, 14, 24, 36, 1, GOLD_HI);
+
+    // Step 4
+    R(c, 13, 27, 38, 2, '#404856');
+    R(c, 12, 29, 40, 3, '#d2d8e2');
+    R(c, 12, 29, 40, 1, GOLD_HI);
+
+    // Step 3
+    R(c, 11, 32, 42, 2, '#3c4452');
+    R(c, 10, 34, 44, 3, '#dae0ea');
+    R(c, 10, 34, 44, 1, GOLD_HI);
+
+    // Step 2
+    R(c, 9, 37, 46, 2, '#38404e');
+    R(c, 8, 39, 48, 3, '#e2e8f2');
+    R(c, 8, 39, 48, 1, GOLD_HI);
+
+    // Step 1 (bottom step at floor level)
+    R(c, 8, 42, 48, 2, '#343c4a');
+    R(c, 7, 44, 50, 4, '#ebf0f8');
+    R(c, 7, 44, 50, 1, GOLD_HI);
+
+    // 5. Continuous 3D Architectural Railings & Solid Newel Posts
+    // Left railing
     c.strokeStyle = GOLD_HI;
     c.lineWidth = 2;
     c.beginPath();
-    c.moveTo(7, 36);
-    c.lineTo(16, 12);
-    c.moveTo(41, 36);
-    c.lineTo(32, 12);
+    c.moveTo(8, 44);
+    c.lineTo(17, 16);
     c.stroke();
-    // Header sign
-    R(c, 8, 5, 32, 6, '#081220');
-    font(c, 6, '#6effa8');
-    c.fillText('▲ STAIRS UP', 24, 8);
+    [[9, 44], [11, 39], [13, 34], [15, 29], [17, 24]].forEach(([bx, by]) => {
+      R(c, bx, by - 6, 1, 6, GOLD);
+    });
+    // Left solid newel post
+    R(c, 7, 36, 2, 12, GOLD);
+    R(c, 7, 36, 2, 1, '#ffffff');
+    disc(c, 8, 35, 2, GOLD_HI);
+
+    // Right railing
+    c.strokeStyle = GOLD_HI;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(55, 44);
+    c.lineTo(46, 16);
+    c.stroke();
+    [[54, 44], [52, 39], [50, 34], [48, 29], [46, 24]].forEach(([bx, by]) => {
+      R(c, bx, by - 6, 1, 6, GOLD);
+    });
+    // Right solid newel post
+    R(c, 55, 36, 2, 12, GOLD);
+    R(c, 55, 36, 2, 1, '#ffffff');
+    disc(c, 56, 35, 2, GOLD_HI);
+
+    // 6. Floor transition threshold
+    R(c, 6, 48, 52, 1, GOLD);
+    R(c, 6, 49, 52, 1, '#3a4452');
   });
 
-  // Modern architectural staircase going DOWN
-  mk('reyes_stairs_down', 48, 44, (c) => {
-    R(c, 0, 0, 48, 44, '#0e1828');
-    R(c, 2, 2, 44, 40, '#6a7888');
-    R(c, 4, 4, 40, 36, '#101a28');
-    // Descending recessed steps into shadow
-    for (let i = 0; i < 6; i++) {
-      const sy = 14 + i * 4;
-      const sx = 6 + i * 2;
-      const sw = 36 - i * 4;
-      const col = shade('#b8b2a6', -i * 0.11);
-      R(c, sx, sy, sw, 4, col);
-      R(c, sx, sy, sw, 1, GOLD);
-    }
-    // Handrails
+  // Architectural Descending Staircase Portal with receding depth, lower-floor illumination & railings
+  mk('reyes_stairs_down', 64, 50, (c) => {
+    // 1. Structural marble pilasters
+    R(c, 0, 0, 7, 50, '#eae7df');
+    R(c, 0, 0, 1, 50, '#1a1e26');
+    R(c, 1, 0, 1, 50, '#ffffff');
+    R(c, 5, 11, 1, 39, '#a8a296');
+    R(c, 6, 11, 1, 39, '#3c424e');
+    R(c, 0, 44, 7, 6, '#2a221a');
+    R(c, 0, 44, 7, 1, GOLD);
+
+    R(c, 57, 0, 7, 50, '#eae7df');
+    R(c, 63, 0, 1, 50, '#1a1e26');
+    R(c, 62, 0, 1, 50, '#ffffff');
+    R(c, 57, 11, 1, 39, '#3c424e');
+    R(c, 58, 11, 1, 39, '#a8a296');
+    R(c, 57, 44, 7, 6, '#2a221a');
+    R(c, 57, 44, 7, 1, GOLD);
+
+    // 2. Top architectural beam & amber illuminated header sign
+    R(c, 0, 0, 64, 4, '#241a12');
+    R(c, 0, 0, 64, 1, GOLD_HI);
+    R(c, 0, 3, 64, 1, GOLD);
+    R(c, 0, 4, 64, 7, '#141c28');
+    R(c, 13, 5, 38, 5, '#080d16');
+    R(c, 13, 5, 38, 1, '#d4a82a');
+    font(c, 3.8, '#ffd26a');
+    c.fillText('▼ STAIRS DOWN ▼', 32, 8);
+
+    // 3. Recessed shaft void
+    R(c, 7, 11, 50, 6, '#0a0f16');
+
+    // Landing edge threshold at current floor level
+    R(c, 11, 15, 42, 2, '#d0d8e2');
+    R(c, 11, 17, 42, 1, GOLD_HI);
+
+    // 4. Descending steps plunging down into shadow
+    // Step 1 (top)
+    R(c, 12, 18, 40, 2, '#404a58');
+    R(c, 12, 20, 40, 2, '#a4b0c0');
+    R(c, 12, 20, 40, 1, GOLD);
+
+    // Step 2
+    R(c, 11, 23, 42, 2, '#343e4c');
+    R(c, 11, 25, 42, 2, '#828e9e');
+    R(c, 11, 25, 42, 1, GOLD);
+
+    // Step 3
+    R(c, 10, 28, 44, 2, '#28323e');
+    R(c, 10, 30, 44, 2, '#626e7e');
+    R(c, 10, 30, 44, 1, GOLD);
+
+    // Step 4
+    R(c, 9, 33, 46, 2, '#1c2430');
+    R(c, 9, 35, 46, 2, '#465260');
+    R(c, 9, 35, 46, 1, '#d4a82a');
+
+    // Step 5
+    R(c, 8, 38, 48, 2, '#121822');
+    R(c, 8, 40, 48, 2, '#2c3644');
+
+    // Lower floor illuminated landing
+    R(c, 7, 43, 50, 5, '#e8dcba');
+    R(c, 7, 43, 50, 1, '#f6ebd2');
+    for (let gx = 15; gx < 55; gx += 16) R(c, gx, 43, 1, 5, '#c8bca0');
+
+    // 5. Guardrails & Handrails descending into shaft
     c.strokeStyle = GOLD;
     c.lineWidth = 2;
     c.beginPath();
-    c.moveTo(7, 14);
-    c.lineTo(16, 36);
-    c.moveTo(41, 14);
-    c.lineTo(32, 36);
+    c.moveTo(8, 20);
+    c.lineTo(15, 44);
     c.stroke();
-    // Header sign
-    R(c, 6, 5, 36, 6, '#081220');
-    font(c, 6, '#ffd26a');
-    c.fillText('▼ STAIRS DOWN', 24, 8);
+    R(c, 7, 18, 2, 14, GOLD);
+    disc(c, 8, 17, 2, GOLD_HI);
+
+    c.strokeStyle = GOLD;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(55, 20);
+    c.lineTo(48, 44);
+    c.stroke();
+    R(c, 55, 18, 2, 14, GOLD);
+    disc(c, 56, 17, 2, GOLD_HI);
+
+    // 6. Floor threshold
+    R(c, 6, 48, 52, 1, GOLD);
+    R(c, 6, 49, 52, 1, '#3a4452');
   });
 
-  // Illuminated Corporate Floor Directory Board
-  mk('reyes_directory', 52, 44, (c) => {
-    R(c, 0, 0, 52, 44, '#08101c');
-    R(c, 1, 1, 50, 42, GOLD);
-    R(c, 3, 3, 46, 38, '#0c182c');
-    R(c, 3, 3, 46, 7, GOLD);
-    font(c, 5.5, '#08101c');
-    c.fillText('REYES TOWER', 26, 6.5);
+  // Grand Architectural Corporate Directory Alcove (64x50 px)
+  mk('reyes_directory', 64, 50, (c) => {
+    // 1. Structural marble pilasters
+    R(c, 0, 0, 7, 50, '#eae7df');
+    R(c, 0, 0, 1, 50, '#1a1e26');
+    R(c, 1, 0, 1, 50, '#ffffff');
+    R(c, 5, 11, 1, 39, '#a8a296');
+    R(c, 6, 11, 1, 39, '#3c424e');
+    R(c, 0, 44, 7, 6, '#2a221a');
+    R(c, 0, 44, 7, 1, GOLD);
+
+    R(c, 57, 0, 7, 50, '#eae7df');
+    R(c, 63, 0, 1, 50, '#1a1e26');
+    R(c, 62, 0, 1, 50, '#ffffff');
+    R(c, 57, 11, 1, 39, '#3c424e');
+    R(c, 58, 11, 1, 39, '#a8a296');
+    R(c, 57, 44, 7, 6, '#2a221a');
+    R(c, 57, 44, 7, 1, GOLD);
+
+    // 2. Top architectural cornice
+    R(c, 0, 0, 64, 4, '#241a12');
+    R(c, 0, 0, 64, 1, GOLD_HI);
+    R(c, 0, 3, 64, 1, GOLD);
+    R(c, 0, 4, 64, 7, '#141c28');
+
+    // 3. Recessed dark wood alcove & illuminated multi-tier display panel
+    R(c, 7, 11, 50, 37, '#1a120c');
+    R(c, 8, 12, 48, 35, '#081220');
+    R(c, 8, 12, 48, 1, GOLD);
+    R(c, 8, 12, 1, 35, GOLD);
+    R(c, 55, 12, 1, 35, GOLD);
+
+    // Header banner
+    R(c, 9, 13, 46, 6, '#0f2038');
+    R(c, 11, 14, 3, 3, GOLD);
+    font(c, 4.5, GOLD_HI, 'left');
+    c.fillText('REYES HOLDINGS', 16, 17);
+
+    // 4 Backlit floor rows
     const rows = [
-      ['4F', 'PENTHOUSE'],
-      ['3F', 'EXECUTIVE'],
-      ['2F', 'OFFICES'],
-      ['1F', 'MAIN LOBBY']
+      ['4F', 'PENTHOUSE SUITE', '#ffea78'],
+      ['3F', 'EXECUTIVE DEPT', '#bfe2ff'],
+      ['2F', 'CORPORATE OFFICES', '#bfe2ff'],
+      ['1F', 'MAIN LOBBY & SEC', '#a6ffc4']
     ];
-    rows.forEach(([fl, nm], i) => {
-      const y = 14 + i * 7;
-      font(c, 5.5, GOLD_HI, 'left');
-      c.fillText(fl, 6, y);
-      font(c, 5.5, '#bfe2ff', 'right');
-      c.fillText(nm, 46, y);
-      R(c, 6, y + 3, 40, 1, 'rgba(212,168,42,0.25)');
+    rows.forEach(([fl, nm, col], i) => {
+      const ry = 20 + i * 5.5;
+      R(c, 9, ry, 46, 5, i % 2 ? '#0b1626' : '#0e1c30');
+      R(c, 10, ry + 1, 7, 3, '#1a3050');
+      font(c, 3.6, GOLD_HI, 'left');
+      c.fillText(fl, 11, ry + 3);
+      font(c, 3.3, col, 'left');
+      c.fillText(nm, 18.5, ry + 3);
+      R(c, 9, ry + 5, 46, 1, 'rgba(212,168,42,0.2)');
     });
+
+    // Status bar
+    font(c, 3.3, '#58d888', 'center');
+    c.fillText('• ALL SYSTEMS SECURE •', 32, 45);
+
+    // Base plinth
+    R(c, 6, 48, 52, 2, '#241a12');
   });
 
   /* ============================================================
@@ -395,11 +633,11 @@ export function drawReyesArt(scene) {
     font(c, 15, GOLD_HI);
     c.fillText('R', 24, 23);
     // Main illuminated title
-    font(c, 13, GOLD_HI);
-    c.fillText('REYES HOLDINGS', 94, 18);
-    R(c, 44, 25, 100, 1, GOLD);
-    font(c, 6.5, '#9ed0ff');
-    c.fillText('BUILDING PORT CITY’S FUTURE', 94, 32);
+    font(c, 11, GOLD_HI);
+    c.fillText('REYES HOLDINGS', 94, 17);
+    R(c, 44, 24, 100, 1, GOLD);
+    font(c, 5.2, '#9ed0ff');
+    c.fillText('BUILDING PORT CITY’S FUTURE', 94, 31);
   });
 
   // Curved Marble & Walnut Main Lobby Reception Counter
@@ -415,10 +653,10 @@ export function drawReyesArt(scene) {
     R(c, 2, 15, 132, 2, '#ffffff');
     R(c, 2, 20, 132, 1, GOLD);
     // Center illuminated front badge
-    R(c, 48, 26, 40, 14, '#0c182c');
-    R(c, 48, 26, 40, 1, GOLD_HI);
-    R(c, 48, 39, 40, 1, GOLD_HI);
-    font(c, 7, GOLD_HI);
+    R(c, 44, 26, 48, 14, '#0c182c');
+    R(c, 44, 26, 48, 1, GOLD_HI);
+    R(c, 44, 39, 48, 1, GOLD_HI);
+    font(c, 5.5, GOLD_HI);
     c.fillText('RECEPTION', 68, 33);
     // Dual computers, guest sign-in ledger, and desk lamp on counter
     R(c, 20, 5, 16, 11, '#14181e');

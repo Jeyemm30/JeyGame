@@ -18,10 +18,10 @@ export function catalogFor(kind) {
   const it = (id, price) => ({ kind: 'item', id, label: ITEMS[id].label, price });
   switch (kind) {
     case 'hardware': return [it('m_stick', 12), it('m_knife', 30), it('m_pipe', 40), it('m_crowbar', 45), it('m_bat', 55), it('m_machete', 90), it('medkit', 45)];
-    case 'pharmacy': return [it('medkit', 35), it('armor', 60)];
+    case 'pharmacy': return [it('medkit', 35), it('s_painkillers', 16)];
     case 'clothing': return OUTFITS.map((o) => ({ kind: 'outfit', id: o.id, label: o.label, price: o.price, rep: o.rep }));
     case 'dealer': return ['moto', 'sedan', 'van', 'truck'].map((t) => ({ kind: 'vehicle', id: t, label: VEHICLES[t].name, price: VEHICLES[t].price, rep: t === 'truck' ? 20 : 0 }));
-    default: return [it('medkit', 45), it('armor', 70), it('m_stick', 15), it('m_knife', 35), it('ammo_pistol', 25), it('backpack', 140)];
+    default: return [it('medkit', 45), it('s_bandage', 10), it('m_stick', 15), it('m_knife', 35), it('ammo_pistol', 25), it('backpack', 140)];
   }
 }
 

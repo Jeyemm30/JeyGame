@@ -27,10 +27,31 @@ export default class MenuScene extends Phaser.Scene {
     if (tag.setLetterSpacing) tag.setLetterSpacing(4);
 
     const save = latestSlot();
-    const sub = save ? `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}  -  $${save.data.summary.money}  -  ${save.data.summary.completed}/15 missions` : '';
-    const startNew = () => { sfx.unlock(); resetProfile(); this.registry.set('mapMarkers', []); this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => this.scene.start('Character', { mode: 'new' })); };
+    const money = save?.data?.summary?.money ?? save?.data?.profile?.money ?? 0;
+    const completed = save?.data?.summary?.completed ?? Object.keys(save?.data?.profile?.missions?.completed || {}).length ?? 0;
+    const sub = save ? `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}  -  $${money}  -  ${completed}/21 missions` : '';
+    const startNew = () => {
+      sfx.unlock();
+      resetProfile();
+      this.registry.set('mapMarkers', []);
+      this.cameras.main.fadeOut(300, 0, 0, 0);
+      this.time.delayedCall(300, () => this.scene.start('Character', { mode: 'new' }));
+    };
+    const onContinue = () => {
+      sfx.unlock();
+      if (this.menu) this.menu.locked = true;
+      if (save && save.data) {
+        let done = false;
+        const go = () => { if (done) return; done = true; loadGameInto(this, save.data); };
+        this.cameras.main.fadeOut(300, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', go);
+        this.time.delayedCall(350, go);
+      } else {
+        startNew();
+      }
+    };
     const items = [
-      { text: 'CONTINUE', sub, disabled: !save, fn: () => { sfx.unlock(); this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => loadGameInto(this, save.data)); } },
+      { text: 'CONTINUE', sub: save ? sub : 'Start your journey in Port City', disabled: false, fn: onContinue },
       { text: 'NEW GAME', fn: () => { if (save) confirmBox(this, { title: 'START A NEW GAME?', text: 'Your saved slots are kept, but anything you did not save will be lost. The autosave is replaced as soon as you complete a mission.', yes: 'START NEW GAME', no: 'GO BACK', onYes: startNew, list: this.menu, danger: true }); else startNew(); } },
       { text: 'LOAD GAME', fn: () => { this.scene.pause(); this.scene.launch('SaveLoad', { mode: 'load', from: 'Menu' }); } },
       { text: 'CHARACTER', fn: () => { this.cameras.main.fadeOut(300, 0, 0, 0); this.time.delayedCall(300, () => this.scene.start('Character', { mode: 'edit' })); } },

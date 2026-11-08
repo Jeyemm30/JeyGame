@@ -122,14 +122,15 @@ export function runAutotest(game) {
         log('REFUEL: fuel 10 ->', car.fuel.toFixed(1), 'money 100 ->', Math.round(profile.money));
         gs.exitVehicle(true);
       }
-      // locked car break-in
+      // locked car lockpicking minigame
       const lockedCar = gs.vehicles.getChildren().find((v) => v.mode === 'parked' && v.locked && !v.ownedId);
       if (lockedCar) {
         tp(gs, lockedCar.x, lockedCar.y + 45);
         gs.tryEnterVehicle(lockedCar); const a = !!p.vehicle;
-        gs.tryEnterVehicle(lockedCar);
-        log('LOCK: first E enters?', a, 'second E breaks in -> unlocked', !lockedCar.locked);
-        if (lockedCar.locked === false) { gs.enterVehicle(lockedCar); gs.exitVehicle(true); }
+        await wait(200);
+        if (active('Lockpick')) { S('Lockpick').solveNow(); await wait(700); }
+        log('LOCK: first E enters?', a, 'lockpick solved -> unlocked', !lockedCar.locked, 'entered', !!p.vehicle);
+        if (p.vehicle) gs.exitVehicle(true);
       }
       profile.money = 150; gs.wanted.clear();
 

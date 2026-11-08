@@ -7,7 +7,6 @@ import { profile, loadProfile, resetProfile, repTitle } from '../systems/Profile
 import { latestSlot } from '../systems/Save.js';
 import { sfx } from '../systems/Audio.js';
 import { TH, cityBackdrop, menuList } from '../ui/menuUi.js';
-import { ystate, yosenActive, currentQuest, YOSEN_NAME } from '../story/yosen.js';
 
 /* STORY MISSIONS and SIDE MISSIONS in the CITY OF CHAOS design system: two tabs, a scrollable list of mission cards with a status pill each,
    and a detail panel (description, contact, reward, objectives with progress) with the actions underneath. Story = orange identity, side jobs =
@@ -109,18 +108,7 @@ export default class MissionsScene extends Phaser.Scene {
   }
 
   sideItems() {
-    const act = this.activeInfo();
-    const items = this.sideBase();
-    // Yosen Blackthorn: one entry that always shows his CURRENT quest (once the player has found him); only he can hand it out
-    const y = ystate();
-    if (y.found) {
-      const q = currentQuest(), running = yosenActive();
-      let def = { id: 'side_yosen', title: q ? q.title : YOSEN_NAME, desc: q ? q.desc : 'Yosen has no more favours to ask - for now.', side: true, giver: 'yosen', reward: q ? q.reward : null, objectives: [] };
-      if (q && this.gs && this.gs.places) { try { def.objectives = q.objectives(this.gs); } catch (e) { def.objectives = []; } }
-      if (running && this.gs && this.gs.missions.def && this.gs.missions.def.tpl === 'yosen') def = { ...this.gs.missions.def, side: true, giver: 'yosen' };
-      items.unshift({ kind: 'side', id: 'side_yosen', tpl: 'yosen', def, status: running ? 'active' : q ? 'available' : 'completed', info: { diff: Math.min(3, 1 + Math.floor(y.done / 2)), where: q ? 'Yosen waits in a quiet back alley (the map marker). Talk to him to take the job.' : 'The chain is finished - for now.', icon: 'q_lighter', yosen: true, step: `${Math.min(y.done + (q ? 1 : 0), 5)}/5` } });
-    }
-    return items;
+    return this.sideBase();
   }
 
   sideBase() {

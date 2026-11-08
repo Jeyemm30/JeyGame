@@ -3,7 +3,7 @@ import { WEAPONS, MELEE, ENEMY_DAMAGE_MUL } from '../config.js';
 import { GangAI, gangCfg } from './GangAI.js';
 import { GANG_IDS, BOSSES, GUARDS, MEMBER_VARIANTS, memberRole, bossRole, repOf, GANGS, GANG_CFG, tierMin } from '../story/gangs.js';
 import { sfx } from '../systems/Audio.js';
-import { dirFromAngle, CHEST } from './Player.js';
+import { dirFromAngle, CHEST, WEAPON_HANDLING } from './Player.js';
 import { touchEnabled } from '../systems/Touch.js';
 import { poseFrame, spawnCorpse } from '../systems/Anim.js';
 
@@ -23,8 +23,22 @@ export const ENEMY_TYPES = {
 //  zone      -> military: hostile when you enter a restricted area
 //  always    -> criminals: attack whoever they notice
 export const ROLES = {
-  police: { tex: 'npc_police', hostility: 'wanted', preset: 'pistol' },
+police: { tex: 'npc_police', hostility: 'wanted', preset: 'pistol' },
+  police2: { tex: 'npc_police2', hostility: 'wanted', preset: 'pistol' },
+  police3: { tex: 'npc_police3', hostility: 'wanted', preset: 'pistol' },
+  police4: { tex: 'npc_police4', hostility: 'wanted', preset: 'pistol' },
+  police5: { tex: 'npc_police5', hostility: 'wanted', preset: 'pistol' },
+  copcmd: { tex: 'npc_copcmd', hostility: 'wanted', preset: 'pistol' },
+  copcmd2: { tex: 'npc_copcmd2', hostility: 'wanted', preset: 'pistol' },
+  copcmd3: { tex: 'npc_copcmd3', hostility: 'wanted', preset: 'pistol' },
   swat: { tex: 'npc_swat', hostility: 'wanted', preset: 'heavy' },
+  swat2: { tex: 'npc_swat2', hostility: 'wanted', preset: 'shotgun' },
+  swat3: { tex: 'npc_swat3', hostility: 'wanted', preset: 'rifle' },
+  swat4: { tex: 'npc_swat4', hostility: 'wanted', preset: 'heavy' },
+  army: { tex: 'npc_army', hostility: 'wanted', preset: 'rifle' },
+  army2: { tex: 'npc_army2', hostility: 'wanted', preset: 'rifle' },
+  army3: { tex: 'npc_army3', hostility: 'wanted', preset: 'heavy' },
+  army4: { tex: 'npc_army4', hostility: 'wanted', preset: 'rifle' },
   guard: { tex: 'npc_guard', hostility: 'provoked', preset: 'pistol' },
   casino_guard: { tex: 'npc_casino_guard', hostility: 'provoked', preset: 'pistol' },
   casino_guard2: { tex: 'npc_casino_guard2', hostility: 'provoked', preset: 'pistol' },
@@ -52,7 +66,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const roleCfg = ROLES[spec.role] || ROLES.criminal;
     const preset = spec.type || roleCfg.preset;
-    const cfg = spec.weapon ? { ...gangCfg(spec.weapon), ...(spec.hp ? { hp: spec.hp } : {}) } : ENEMY_TYPES[preset];
+    const cfg = spec.weapon ? { ...gangCfg(spec.weapon), ...(spec.hp ? { hp: spec.hp } : {}), ...(spec.reduce !== undefined ? { reduce: spec.reduce } : {}) } : (spec.reduce !== undefined || spec.hp ? { ...ENEMY_TYPES[preset], ...(spec.hp ? { hp: spec.hp } : {}), ...(spec.reduce !== undefined ? { reduce: spec.reduce } : {}) } : ENEMY_TYPES[preset]);
     super(scene, spec.x, spec.y, roleCfg.tex, 'd0');
     this.cfg = cfg;
     this.kind = preset;
@@ -60,7 +74,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.hostility = roleCfg.hostility;
     this.gang = spec.gang || null; this.boss = spec.boss || null; this.bossName = spec.bossName || null; this.crew = spec.crew || spec.gang || null;
     this.melee = cfg.melee ? MELEE[cfg.melee] : null; this.meleeId = cfg.melee || null; this.foe = null; this.warUntil = 0; this.raidUntil = 0; this.copFoeUntil = 0; this.firedUntil = 0;
-    this.isPolice = this.role === 'police' || this.role === 'swat';
+    this.isPolice = /^(police|copcmd|swat|army)/.test(this.role);
+    this.softCop = /^(police|copcmd)/.test(this.role);          // patrol / command officers: warn and cuff at up to 3 stars (SWAT and soldiers never do)
     this.angry = false;
     this.angryUntil = 0;
     this.response = !!spec.response;
@@ -396,7 +411,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setFlipX(dir === 'l');
     this.setRotation(-rot).setScale(1, sc.upY);
     if (this.moveSpeed > 0) this.animT += dt * (this.moveSpeed / 60);
-    this.setFrame(key + poseFrame({
+    const pose = poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 150, t: this.animT, now: time + this.animOff,
       hurt: time < this.hurtUntil,
       pickup: time < (this.doorPoseUntil || 0) || time < (this.swingUntil || 0),
@@ -404,16 +419,19 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       sit: this.sitting && this.ai === 'idle',
       crouch: this.ai === 'cover' && this.moveSpeed === 0,
       lean: (this.ai === 'suspicious' || this.ai === 'search') && Math.floor(time / 1100) % 2 === 1
-    }));
-
+    });
     const seated = this.sitting && this.ai === 'idle';
+    this.setFrame(key + pose);
     const depth = sc.depthOf(this.x, this.y, seated ? 10 : 0);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
     this.shadow.setVisible(vis && !this.noShadow).setPosition(this.x, this.y + 2);
     this.gun.setVisible(vis && !seated);
     if (vis && !seated) {
       const aimA = (this.ai === 'attack' && this.aimAngle !== undefined) ? this.aimAngle : this.face;
-      const off = 7;
+      const wId = this.melee ? this.melee.id : this.weaponCfg.id;
+      const h = WEAPON_HANDLING[wId] || (this.melee ? { gripX: 0.14, gripY: 0.5, holdOff: 7 } : { gripX: 0.38, gripY: 0.6, holdOff: 7 });
+      this.gun.setOrigin(h.gripX, h.gripY);
+      const off = h.holdOff;
       const go = sc.fromScreen(Math.cos(aimA + rot) * off, Math.sin(aimA + rot) * off * 0.8 - CHEST);
       this.gun.setPosition(this.x + go.x, this.y + go.y);
       this.gun.setRotation(aimA).setFlipY(Math.cos(aimA + rot) < 0);
@@ -440,8 +458,9 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const p = this.scene.player;
     const w = this.weaponCfg;
     const a = Math.atan2(p.y - this.y, p.x - this.x);
-    const len = 8 + this.gun.width * 0.85;
-    const mx = this.x + Math.cos(a) * len, my = this.y + Math.sin(a) * len;
+    const h = WEAPON_HANDLING[w.id] || { gripX: 0.38 };
+    const len = Math.max(8, (1 - h.gripX) * (this.gun.width || 20));
+    const mx = this.x + Math.cos(a) * (7 + len), my = this.y + Math.sin(a) * (7 + len);
     this.scene.combat.fire('enemy', mx, my, a, w, { spread: this.cfg.spread * (p.crouching ? 1.15 : 1), damageMul: ENEMY_DAMAGE_MUL });
     const fo = this.scene.elev(CHEST);
     this.flash.setVisible(this.visible).setPosition(mx + fo.x, my + fo.y).setRotation(Math.random() * 6);
@@ -454,6 +473,17 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   /* ------------------------------------------------------------------- AI */
   updateEnemy(time, dt) {
     const sc = this.scene;
+    if (this.casinoFloor && (sc.casinoFloor || 1) !== this.casinoFloor) {
+      if (!this.dormant) {
+        this.dormant = true;
+        this.stop();
+        this.setVisible(false);
+        this.gun.setVisible(false);
+        this.shadow.setVisible(false);
+        this.syncParts(time, dt);
+      }
+      return;
+    }
     const p = sc.player;
     const dx = p.x - this.x, dy = p.y - this.y;
     const dist = Math.hypot(dx, dy);
@@ -542,7 +572,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     // arrest: an officer who reaches the suspect (wanted 1-3) orders them to freeze, then cuffs them
     const wl = sc.wanted.level;
-    const canCuff = this.role === 'police' && wl >= 1 && wl <= 3 && this.los && dist < 44 && !p.swing && !(p.vehicle && Math.abs(p.vehicle.speed) > 110) && this.ai !== 'patrol' && this.ai !== 'idle' && this.ai !== 'return';
+    const canCuff = this.softCop && wl >= 1 && wl <= 3 && this.los && dist < 44 && !p.swing && !(p.vehicle && Math.abs(p.vehicle.speed) > 110) && this.ai !== 'patrol' && this.ai !== 'idle' && this.ai !== 'return';
     if (canCuff) {
       this.arrestT += dt;
       if (!this.warned) { this.warned = true; if (this.visible) sc.events.emit('toast', 'Police: "Stop! Hands where I can see them!"'); }
@@ -697,9 +727,9 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.stop();
     } else if (cfg.weapon === 'shotgun' && dist > 110) {
       this.moveTo(this.scene.player.x, this.scene.player.y, cfg.run * 0.9, time);
-    } else if (this.role === 'police' && this.scene.wanted.level <= 3 && dist > 40) {
+    } else if (this.softCop && this.scene.wanted.level <= 3 && dist > 40) {
       this.moveTo(this.scene.player.x, this.scene.player.y, cfg.run * 0.85, time); // close in to make the arrest
-    } else if (cfg.weapon !== 'shotgun' && dist < 90 && !(this.role === 'police' && this.scene.wanted.level <= 3)) {
+    } else if (cfg.weapon !== 'shotgun' && dist < 90 && !(this.softCop && this.scene.wanted.level <= 3)) {
       this.moveToward(this.x - Math.cos(toP) * 60, this.y - Math.sin(toP) * 60, cfg.walk, time);
     } else {
       if (time > this.strafeUntil) { this.strafeDir = Math.random() < 0.5 ? -1 : 1; this.strafeUntil = time + rand(1200, 2600); }
@@ -709,7 +739,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     const aimed = Math.abs(wrap(toP - this.aimAngle)) < 0.12;
-    if (time >= this.nextShot && time >= this.burstPauseUntil && aimed && dist <= cfg.range && !(this.role === 'police' && this.scene.wanted.level <= 3 && dist < 60)) {
+    if (time >= this.nextShot && time >= this.burstPauseUntil && aimed && dist <= cfg.range && !(this.softCop && this.scene.wanted.level <= 3 && dist < 60)) {
       this.fireAtPlayer(time);
       this.burstLeft--;
       this.nextShot = time + cfg.fireRate;

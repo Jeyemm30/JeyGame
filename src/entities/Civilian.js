@@ -18,10 +18,12 @@ const SHOP_TALK = ['Welcome! Take a look around.', 'Do not touch the shelves unl
 export default class Civilian extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const kind = spec.kind;
-    const tex = kind === 'story' ? 'story_' + spec.npcId : spec.role ? 'npc_' + spec.role : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
+    const tex = kind === 'story' ? 'story_' + spec.npcId : (spec.role && scene.textures.exists('npc_' + spec.role)) ? 'npc_' + spec.role : kind === 'worker' ? 'npc_worker' : kind === 'medic' ? 'npc_medic' : kind === 'shopkeeper' ? 'npc_shopkeeper' : 'civ' + Phaser.Math.Between(0, CIV_VARIANTS - 1);
     super(scene, spec.x, spec.y, tex, 'd0');
     this.kind = kind;
     this.npcId = spec.npcId || null;
+    this.name = spec.name || null;
+    this.role = spec.role || null;
     this.shopName = spec.shop || null;
     this.crew = spec.npcId === 'kenny' ? 'red' : null;           // Kenny's crew reacts when he is threatened
     scene.add.existing(this);
@@ -40,8 +42,10 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.act = spec.act || null; this.seated = !!spec.sit; this.sitFace = spec.face; this.seed = spec.seed || 0; this.vip = !!spec.vip; this.poseNow = null; this.soft = !!spec.soft;       // soft shoppers (WISE SOLE) never block the player's way
     this.route = spec.route || null; this.routeI = 0; this.pChk = 0; this.pPos = { x: spec.x, y: spec.y };
     this.reyesFloor = spec.reyesFloor || (spec.npcId === 'reyes' ? 4 : null);
+    this.hospitalFloor = spec.hospitalFloor || null;
+    this.cityHallFloor = spec.cityHallFloor || (spec.npcId === 'salcedo' ? 3 : spec.npcId === 'sofia' ? 2 : (spec.npcId === 'cortez' || spec.npcId === 'adrian') ? 1 : null);
     this.isReceptionist = !!spec.isReceptionist;
-    this.fixedFace = spec.fixedFace;
+    this.fixedFace = spec.fixedFace !== undefined ? spec.fixedFace : (spec.npcId === 'salcedo' || spec.npcId === 'cortez' || spec.npcId === 'sofia' || spec.npcId === 'adrian' || spec.npcId === 'reyes' || spec.npcId === 'principal' ? Math.PI / 2 : undefined);
     if (this.fixedFace !== undefined) { this.face = this.fixedFace; this.faceGoal = this.fixedFace; }
     if (this.act) { this.state = this.seated ? 'sit' : 'idle'; if (spec.face !== undefined) { this.face = spec.face; this.faceGoal = spec.face; } }
     this.node = spec.node ?? -1;
@@ -79,6 +83,9 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.shadow = scene.add.sprite(spec.x, spec.y, 'shadow').setDepth(3.5);
     if (this.state === 'sit') { this.face = Math.PI / 2; }
     if (this.reyesFloor && this.reyesFloor !== (scene.reyesFloor || 1)) { this.sleeping = true; this.setVisible(false); this.shadow.setVisible(false); this.body.enable = false; }
+    if (this.hospitalFloor && this.hospitalFloor !== (scene.hospitalFloor || 1)) { this.sleeping = true; this.setVisible(false); this.shadow.setVisible(false); this.body.enable = false; }
+    if (this.cityHallFloor && this.cityHallFloor !== (scene.cityHallFloor || 1)) { this.sleeping = true; this.setVisible(false); this.shadow.setVisible(false); this.body.enable = false; }
+    if (this.casinoFloor && this.casinoFloor !== (scene.casinoFloor || 1)) { this.sleeping = true; this.setVisible(false); this.shadow.setVisible(false); this.body.enable = false; }
   }
 
   /* ------------------------------------------------------------ reactions */
@@ -138,6 +145,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.scene.onCivilianKilled(this, byPlayer);
     this.shadow.destroy();
     if (this.carryImg) this.carryImg.destroy();
+    if (this.guitarImg) this.guitarImg.destroy();
     this.destroy();
   }
 
@@ -194,7 +202,19 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
   /* ------------------------------------------------------------------- AI */
   updateCivilian(time, dt) {
     if (this.reyesFloor && (this.scene.reyesFloor || 1) !== this.reyesFloor) {
-      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); }
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); if (this.guitarImg) this.guitarImg.setVisible(false); }
+      return;
+    }
+    if (this.hospitalFloor && (this.scene.hospitalFloor || 1) !== this.hospitalFloor) {
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); if (this.guitarImg) this.guitarImg.setVisible(false); }
+      return;
+    }
+    if (this.cityHallFloor && (this.scene.cityHallFloor || 1) !== this.cityHallFloor) {
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); if (this.guitarImg) this.guitarImg.setVisible(false); }
+      return;
+    }
+    if (this.casinoFloor && (this.scene.casinoFloor || 1) !== this.casinoFloor) {
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); if (this.guitarImg) this.guitarImg.setVisible(false); }
       return;
     }
     const sc = this.scene;
@@ -203,7 +223,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
 
     // far away: sleep (frozen, not simulated, not drawn)
     if (dist > (touchEnabled() ? 880 : 1150) && this.state !== 'inside' && this.state !== 'follow') {
-      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); }
+      if (!this.sleeping) { this.sleeping = true; this.stop(); this.body.enable = false; this.setVisible(false); this.shadow.setVisible(false); if (this.carryImg) this.carryImg.setVisible(false); if (this.guitarImg) this.guitarImg.setVisible(false); }
       return;
     }
     if (this.sleeping) { this.sleeping = false; this.body.enable = true; this.setVisible(true); this.shadow.setVisible(true); }
@@ -224,7 +244,15 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       case 'walk': this.doWalk(time, dt); break;
       case 'toDoor': this.doToDoor(time, dt); break;
       case 'inside': this.doInside(time); return;
-      case 'idle': this.doIdle(time, dt); break;
+      case 'idle':
+        if (this.npcId === 'jansenn') {
+          this.stop();
+          if (dist < 100) this.turn(Math.atan2(p.y - this.y, p.x - this.x), 2, dt);
+          else this.turn(Math.PI / 2, 2, dt);
+        } else {
+          this.doIdle(time, dt);
+        }
+        break;
       case 'sit': this.stop(); this.turn(this.sitFace ?? Math.PI / 2, 2, dt); break;
       case 'flee': this.doFlee(time, dt); break;
       case 'phone': this.doPhone(time, dt); break;
@@ -522,7 +550,7 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
     this.setFrame(key + (this.smk ? this.smokeFrame(time) : poseFrame({
       moving: this.moveSpeed > 0, sprint: this.moveSpeed > 120, t: this.animT, now: time + this.animOff,
       sit: this.state === 'sit', hurt: time < this.hurtUntil,
-      talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro' || this.npcId === 'reyes') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
+      talk: this.scene.gt < (this.stareUntil || 0) || ((this.npcId === 'kenny' || this.npcId === 'ezekiel' || this.npcId === 'sean' || this.npcId === 'jiro' || this.npcId === 'reyes' || this.npcId === 'principal') && Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) < 110 && this.moveSpeed === 0),
       pickup: ((this.npcId === 'sean' && Math.floor(time / 1000) % 8 === 5) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 7 === 4) || (this.npcId === 'kenny' && Math.floor(time / 1000) % 13 === 9) || (this.npcId === 'gus' && Math.floor(time / 1000) % 9 === 5 && time % 1000 < 1100) || (this.npcId === 'dex' && Math.floor(time / 1000) % 11 === 6) || (this.npcId === 'gordy' && Math.floor(time / 1000) % 12 === 8) || (this.npcId === 'ezekiel' && Math.floor(time / 1000) % 9 === 6) || (this.npcId === 'reyes' && Math.floor(time / 1000) % 10 === 6)) && this.moveSpeed === 0,
       panic: this.state === 'flee' || (this.npcId === 'sean' && this.moveSpeed === 0 && Math.floor(time / 1000) % 11 === 2 && time % 1000 < 700) || (this.npcId === 'ezekiel' && this.moveSpeed === 0 && Math.floor(time / 1000) % 9 === 2 && time % 1000 < 650),   // Ezekiel throws his arms up when he is excited about a sneaker       // Kenny counts his cash / reaches under the counter
       lean: (this.state === 'toDoor' && !!this.doorTarget && Math.hypot(this.doorTarget.x - this.x, this.doorTarget.y - this.y) < 44) || (this.npcId === 'jiro' && Math.floor(time / 1000) % 10 === 8),
@@ -534,6 +562,18 @@ export default class Civilian extends Phaser.Physics.Arcade.Sprite {
       const co = sc.fromScreen(sideF ? (dir === 'r' ? 9 : -9) : 0, -20 + (Math.floor(this.animT / 120) % 2));
       this.carryImg.setVisible(this.visible).setPosition(this.x + co.x, this.y + co.y).setRotation(-rot).setScale(1, sc.upY);
       this.carryImg.setDepth(sc.depthOf(this.x, this.y, dir === 'u' ? -1 : 1));
+    }
+    if (this.npcId === 'jansenn' || this.heldGuitar) {
+      if (!this.guitarImg) this.guitarImg = this.scene.add.image(0, 0, 'electric_guitar');
+      const sideF = dir === 'r' || dir === 'l';
+      const bob = Math.sin(time / 200) * 1.5;
+      const tilt = -0.34 + Math.sin(time / 400) * 0.05;
+      const co = sc.fromScreen(sideF ? (dir === 'r' ? 4 : -4) : 0, -16 + bob);
+      this.guitarImg.setVisible(this.visible)
+        .setPosition(this.x + co.x, this.y + co.y)
+        .setRotation(-rot + tilt)
+        .setScale(1, sc.upY)
+        .setDepth(sc.depthOf(this.x, this.y, dir === 'u' ? -1 : 2));
     }
     const depth = sc.depthOf(this.x, this.y, this.state === 'sit' ? 14 : 0);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }

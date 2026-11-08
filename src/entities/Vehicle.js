@@ -7,7 +7,7 @@ import { NEW_VEHICLES, NEW_MASS } from '../assets/vehicleSpecs.js';
 // len/wid = ground footprint in px; max = top speed px/s; acc = px/s^2; steer = max turn rate (rad/s)
 export const VEHICLES = {
   sedan: { name: 'Sedan', variants: 6, max: 250, acc: 190, brake: 520, steer: 2.3, hp: 100, len: 54, wid: 24, reverse: 0.4, price: 600 },
-  police: { name: 'Police Car', variants: 1, max: 285, acc: 235, brake: 560, steer: 2.5, hp: 140, len: 54, wid: 24, reverse: 0.4, police: true, price: 0 },
+  police: { name: 'Police Car', variants: 3, max: 285, acc: 235, brake: 560, steer: 2.5, hp: 140, len: 54, wid: 24, reverse: 0.4, police: true, price: 0 },
   van: { name: 'Van', variants: 3, max: 210, acc: 140, brake: 470, steer: 1.8, hp: 140, len: 62, wid: 28, reverse: 0.35, price: 900 },
   ambulance: { name: 'Ambulance', variants: 1, max: 235, acc: 170, brake: 500, steer: 1.9, hp: 130, len: 62, wid: 28, reverse: 0.35, price: 0 },
   truck: { name: 'Truck', variants: 3, max: 180, acc: 105, brake: 420, steer: 1.4, hp: 220, len: 76, wid: 32, reverse: 0.3, price: 1500 },
@@ -37,17 +37,28 @@ export function resolveVehicles(scene, a, b) {
   const ma = a.massNow(), mb = b.massNow(), inv = 1 / ma + 1 / mb;
   // closing speed along the normal (actual velocities, including any knock)
   const rel = (A.velocity.x - B.velocity.x) * nx + (A.velocity.y - B.velocity.y) * ny;
+  const key = a.uid < b.uid ? a.uid + ':' + b.uid : b.uid + ':' + a.uid;
+  scene.vehPairs = scene.vehPairs || new Map();
+  const rec = scene.vehPairs.get(key) || { t0: now, last: now, inContact: false };
+  const wasInContact = (now - rec.last < 350) && rec.inContact;
+  if (now - rec.last > 400) { rec.t0 = now; rec.inContact = false; }
+  rec.last = now;
+  scene.vehPairs.set(key, rec);
+
   if (rel < -4) {
     const j = -(1 + 0.22) * rel / inv, impact = -rel;
     a.knockBy(nx * j / ma, ny * j / ma, now); b.knockBy(-nx * j / mb, -ny * j / mb, now);
     // the impact point off the centre spins the cars a little (clamped: no cartwheels)
     const cx = (Math.max(A.left, B.left) + Math.min(A.right, B.right)) / 2, cy = (Math.max(A.top, B.top) + Math.min(A.bottom, B.bottom)) / 2;
     a.spinFrom(cx, cy, nx * j / ma, ny * j / ma); b.spinFrom(cx, cy, -nx * j / mb, -ny * j / mb);
-    if (impact > 25 && now - Math.max(a.hitAt || 0, b.hitAt || 0) > 220) {
+    if (impact >= 48 && !wasInContact && (now - Math.max(a.hitAt || 0, b.hitAt || 0) > 350)) {
       a.hitAt = b.hitAt = now;
-      a.crashHit(impact * (mb / (ma + mb)) * 1.6, b); b.crashHit(impact * (ma / (ma + mb)) * 1.6, a);
+      rec.inContact = true;
+      a.crashHit(impact * (mb / (ma + mb)) * 1.5, b); b.crashHit(impact * (ma / (ma + mb)) * 1.5, a);
       const hear = Math.max(0, 1 - Math.hypot(a.scene.player.x - a.x, a.scene.player.y - a.y) / 900);      // crashes far from the player are inaudible
       if (hear > 0.05) sfx.crash(Math.min(1, impact / 200) * hear);
+    } else {
+      rec.inContact = true;
     }
   }
   // positional separation split by mass, so they never stay overlapped (heavier = moves less)
@@ -63,11 +74,6 @@ export function resolveVehicles(scene, a, b) {
     if (toward > 5) { v.speed *= 0.72; v.kv.x *= 0.8; v.kv.y *= 0.8; }
   });
   // trapped recovery: still overlapping after a second -> shove harder and let AI drivers back out
-  const key = a.uid < b.uid ? a.uid + ':' + b.uid : b.uid + ':' + a.uid;
-  scene.vehPairs = scene.vehPairs || new Map();
-  const rec = scene.vehPairs.get(key) || { t0: now, last: now };
-  if (now - rec.last > 400) rec.t0 = now;
-  rec.last = now; scene.vehPairs.set(key, rec);
   if (now - rec.t0 > 900) {
     a.knockBy(nx * 90 * fa, ny * 90 * fa, now); b.knockBy(-nx * 90 * fb, -ny * 90 * fb, now);
     [a, b].forEach((v) => { if (v.driver === 'ai' && v.pilot && v.startRecovery) v.startRecovery(now); });
@@ -77,11 +83,13 @@ export function resolveVehicles(scene, a, b) {
 
 export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
-    const cfg = VEHICLES[spec.type];
-    const variant = spec.variant % cfg.variants;
-    super(scene, spec.x, spec.y, `veh_${spec.type}${variant}_s`);
+    const cfg = VEHICLES[spec.type] || VEHICLES.sedan;
+    const vCount = (cfg && cfg.variants) || 1;
+    const variant = ((spec.variant !== undefined && spec.variant !== null && !isNaN(spec.variant)) ? Math.abs(spec.variant) : 0) % vCount;
+    const vtype = spec.type || 'sedan';
+    super(scene, spec.x, spec.y, `veh_${vtype}${variant}_s`);
     this.cfg = cfg;
-    this.vtype = spec.type;
+    this.vtype = vtype;
     this.variant = variant;
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -112,11 +120,12 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.sirenOn = false;
     this.cmd = { throttle: 0, steer: 0, handbrake: false };
     this.uid = ++UID; this.kv = { x: 0, y: 0 }; this.hitAt = 0; this.noFeedbackUntil = 0; this.lastDriverAt = 0;
+    this.inObstacleContact = false; this.obstacleBlockedThisFrame = false; this.lastCrashTime = 0; this.prevSpeed = 0;
     this.body.pushable = false;                      // people and scenery can never shove a car; only the vehicle collision layer moves cars
     this.refreshView(true);
     this.body.setImmovable(this.mode === 'parked');
     if (this.mode === 'patrol' || this.mode === 'traffic') this.driver = 'ai';
-    if (cfg.police) {
+    if (cfg.police && !cfg.military) {
       this.lightR = scene.add.sprite(0, 0, 'siren_r').setVisible(false);
       this.lightB = scene.add.sprite(0, 0, 'siren_b').setVisible(false);
     }
@@ -124,6 +133,11 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   }
 
   get key() { return `veh_${this.vtype}${this.variant}_`; }
+
+  onCollideObstacle(obstacle, type) {
+    this.obstacleBlockedThisFrame = true;
+    this.obstacleContactType = type;
+  }
 
   massNow() { return (MASS[this.vtype] || 1) * (this.wrecked ? 6 : this.driver || this.mode === 'chase' ? 1 : 3); }     // parked cars resist more, wrecks barely budge
   knockBy(dx, dy, now) {
@@ -150,12 +164,13 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     if (impact < 12) return;
     const pv = this.scene.player.vehicle;
     const pnear = pv && pv !== this && Math.hypot(pv.x - this.x, pv.y - this.y) < 160;
-    const dmg = this.driver === 'ai' && !pnear ? Math.min(impact * 0.1, Math.max(0, this.hp - this.maxHp * 0.25)) : impact * 0.1;
+    const baseDmg = Math.min(20, Math.max(3, 3 + (impact - 25) * 0.08));
+    const dmg = this.driver === 'ai' && !pnear ? Math.min(baseDmg, Math.max(0, this.hp - this.maxHp * 0.25)) : baseDmg;
     if (this.driver || this.mode === 'chase') { if (this.pilot) (this.pilot.hitT = this.pilot.hitT || []).push(this.scene.gt); }
     if (!this.wrecked && dmg > 0 && (this.driver || other.driver)) this.takeDamage(dmg);
     if (this.driver === 'player') {
-      this.scene.cameras.main.shake(140, Math.min(0.01, impact / 30000));
-      if (impact > 120) this.scene.player.takeDamage(impact * 0.03, true);
+      this.scene.cameras.main.shake(140, Math.min(0.015, impact / 20000));
+      if (impact > 120) this.scene.player.takeDamage(Math.min(6, (impact - 110) * 0.05), true);
     }
   }
   // friction on the knock velocity; parked / wrecked cars slide with it and settle
@@ -239,22 +254,48 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     // collision feedback from the last physics step: if we lost most of our speed, we hit something
     const c = Math.cos(this.heading), s = Math.sin(this.heading);
     const act = (this.body.velocity.x - this.kv.x) * c + (this.body.velocity.y - this.kv.y) * s;
-    if (this.scene.gt > this.noFeedbackUntil && Math.abs(this.speed) > 55 && Math.abs(act) < Math.abs(this.speed) * 0.45) {
-      const impact = Math.abs(this.speed) - Math.abs(act);
-      this.speed = act * 0.3;
-      if (impact > 40) {
+    const isBlocked = this.obstacleBlockedThisFrame || !this.body.blocked.none || (!this.body.touching.none && !this.touchingActor);
+    const preSpd = Math.abs(this.prevSpeed !== undefined ? this.prevSpeed : this.speed);
+    const actForward = act * Math.sign(this.prevSpeed || this.speed || 1);
+    const lostSpeed = preSpd - Math.max(0, actForward);
+    const isImpact = (isBlocked || actForward < preSpd * 0.4) && lostSpeed > 45 && preSpd > 45;
+
+    if (isImpact) {
+      if (!this.inObstacleContact && (this.scene.gt > (this.noFeedbackUntil || 0))) {
+        // Initial impact at speed: genuine crash!
+        this.inObstacleContact = true;
+        this.lastCrashTime = this.scene.gt;
+        const impact = lostSpeed;
         if (this.pilot) { (this.pilot.hitT = this.pilot.hitT || []).push(this.scene.gt); }
         if (this.pilot) { const P = this.pilot, f0 = P.obs && P.obs.front; (P.stats.crashes = P.stats.crashes || []).push({ at: [Math.round(this.x), Math.round(this.y)], impact: Math.round(impact), spd: Math.round(this.speed), hd: +this.heading.toFixed(2), front: f0 && [f0.kind, Math.round(f0.d)], wp: P.wp[0] && [Math.round(P.wp[0].x), Math.round(P.wp[0].y), P.wp[0].node], rec: !!P.rec, mode: this.mode, cmd: this.cmd && [+this.cmd.throttle.toFixed(2), +this.cmd.steer.toFixed(2)] }); if (P.stats.crashes.length > 5) P.stats.crashes.shift(); }
-        // NPC drivers bump into each other all the time: that dents them but never wrecks them (a wreck would block the lane for good) - unless the player is right there smashing into them
+
         const pv = this.scene.player.vehicle;
         const pnear = pv && pv !== this && Math.hypot(pv.x - this.x, pv.y - this.y) < 140;
-        this.takeDamage(this.driver === 'ai' && !pnear ? Math.min(impact * 0.1, Math.max(0, this.hp - this.maxHp * 0.25)) : impact * 0.1);
+        const baseDmg = Math.min(20, Math.max(4, 4 + (impact - 45) * 0.082));
+        const dmg = this.driver === 'ai' && !pnear ? Math.min(baseDmg, Math.max(0, this.hp - this.maxHp * 0.25)) : baseDmg;
+        this.takeDamage(dmg);
+
         const hear = Math.max(0, 1 - Math.hypot(this.scene.player.x - this.x, this.scene.player.y - this.y) / 900);
-        if (hear > 0.05) sfx.crash(Math.min(1, impact / 220) * hear);
+        if (hear > 0.05) sfx.crash(Math.min(1, impact / 200) * hear);
+
         if (this.driver === 'player') {
-          this.scene.cameras.main.shake(140, Math.min(0.01, impact / 30000));
-          if (impact > 120) this.scene.player.takeDamage(impact * 0.035, true);
+          this.scene.cameras.main.shake(150, Math.min(0.016, impact / 16000));
+          if (impact > 120) this.scene.player.takeDamage(Math.min(6, (impact - 110) * 0.05), true);
         }
+
+        // Rebound slightly off the obstacle
+        this.speed = -Math.sign(this.prevSpeed || this.speed || 1) * Math.min(25, impact * 0.16);
+      } else {
+        // Continuous collision: car is already pressing / resting against the obstacle.
+        // DO NOT deal unlimited repeated crash damage!
+        if (inp.throttle && Math.sign(inp.throttle) === Math.sign(this.prevSpeed || 1)) {
+          this.speed = Phaser.Math.Clamp(this.speed, -25, 25);
+        }
+      }
+    } else {
+      // Vehicle is moving freely or backed away: clear contact state
+      if (!isBlocked && (this.scene.gt - (this.lastCrashTime || 0) > 250)) {
+        this.inObstacleContact = false;
       }
     }
 
@@ -292,6 +333,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       this.fuel = Math.max(0, this.fuel - (abs * 0.0011 + (this.driver === 'player' ? 0.02 : 0)) * sec);
     }
     this.refreshView();
+    this.prevSpeed = this.speed;
   }
 
   /* ------------------------------------------------------------------ AI driver
@@ -303,7 +345,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.baseMode = this.mode;
     this.mode = 'chase';
     this.driver = this.driver || 'ai';
-    this.sirenOn = true;
+    this.sirenOn = !this.cfg.military;                // soldiers run without sirens or light bars
     this.unloaded = false;
     this.body.setImmovable(false);
     if (this.pilot) { this.pilot.wp = []; this.pilot.node = -1; this.pilot.rec = null; }
@@ -457,7 +499,12 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
 
   aiThink(now, dt) {
     const sc = this.scene, nav = sc.nav;
-    if (!nav) { this.cmd = { throttle: 0, steer: 0, handbrake: true }; return; }
+    if (!nav || this.unloaded || !this.driver || this.mode === 'parked') {
+      this.cmd = { throttle: 0, steer: 0, handbrake: true };
+      this.speed = 0;
+      if (this.body) this.body.setVelocity(0, 0);
+      return;
+    }
     const P = this.pilotState();
     if (P.avoid.size && now > P.avoidUntil) P.avoid.clear();
     let cruise = 0.5, finalTarget = null, wander = false;
@@ -485,8 +532,26 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
       cruise = 0.95;
       const pt = sc.pursuitTarget(this);
       const d = Math.hypot(pt.x - this.cx, pt.y - this.cy);
-      if (d < 150 && !this.unloaded && pt.seen) { this.unloaded = true; sc.unloadOfficers(this); }
-      if (this.unloaded && d < 220 && pt.seen) { this.cmd = { throttle: -0.3, steer: 0, handbrake: true }; return; }
+      if (d < 150 && !this.unloaded && pt.seen) {
+        this.unloaded = true;
+        this.mode = 'parked';
+        this.driver = null;
+        this.speed = 0;
+        this.cmd = { throttle: 0, steer: 0, handbrake: true };
+        if (this.body) {
+          this.body.setVelocity(0, 0);
+          this.body.setImmovable(true);
+        }
+        this.sirenOn = false;
+        sc.unloadOfficers(this);
+        return;
+      }
+      if (this.unloaded) {
+        this.cmd = { throttle: 0, steer: 0, handbrake: true };
+        this.speed = 0;
+        if (this.body) this.body.setVelocity(0, 0);
+        return;
+      }
       const wasSweep = P.sweep;
       P.sweep = !pt.seen && d < 200;           // arrived but cannot see the suspect: cruise the nearby streets
       if (wasSweep !== P.sweep) { P.wp = []; P.node = -1; }
@@ -618,13 +683,16 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   updateVehicle(now, dt) {
     this.applyKnock(Math.min(this.scene.game.loop.delta || dt, 250) / 1000);      // real frame time: the physics step moves the car for that long, so the friction must match it
     if (this.driver) this.lastDriverAt = now;
-    if (this.driver === 'ai' || this.mode === 'chase') {
+    if (this.driver === 'ai' || (this.mode === 'chase' && !this.unloaded)) {
       // a car that is far from the player (about 1 screen away) re-plans every other frame: its steering command simply stays in force in between
       const pp = this.scene.player, far = this.mode !== 'chase' && (Math.abs(this.x - pp.x) > 900 || Math.abs(this.y - pp.y) > 700);
       if (!(far && (this.aiSkip = !this.aiSkip))) this.aiThink(now, dt);
     }
-    if (this.driver || this.mode === 'chase') this.drive(dt);
-    else if (this.mode === 'parked' && this.speed !== 0) { this.speed = 0; if (Math.hypot(this.kv.x, this.kv.y) < 3) this.setVelocity(0, 0); }
+    if ((this.driver && this.driver !== 'none') || (this.mode === 'chase' && !this.unloaded)) this.drive(dt);
+    else if ((this.mode === 'parked' || this.unloaded) && this.speed !== 0) {
+      this.speed = 0;
+      if (Math.hypot(this.kv.x, this.kv.y) < 3) this.setVelocity(0, 0);
+    }
 
     const depth = this.scene.depthOf(this.x, this.y);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
@@ -643,7 +711,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     }
     signalTick(this, now, dt);
     this.drawLamps();
-    if (this.cfg.police) {
+    if (this.cfg.police && !this.cfg.military) {
       const on = this.sirenOn && !this.wrecked;
       this.lightR.setVisible(on); this.lightB.setVisible(on);
       if (on) {
@@ -653,6 +721,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         this.lightB.setPosition(this.x + bo.x, this.y + bo.y).setRotation(-sc.camRot).setScale(1, sc.upY).setAlpha(t ? 0.2 : 1).setDepth(this.depth + 0.5);
       }
     }
+    this.obstacleBlockedThisFrame = false;
   }
 
   // brake / reverse lights always, headlights + tail glow in the dark (drawn into one shared graphics)
@@ -677,8 +746,9 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
   occupy(driver) {
     this.driver = driver;
     this.mode = driver === 'player' ? 'driven' : this.mode;
+    this.unloaded = false;
     this.locked = false;
-    this.body.setImmovable(false);
+    if (this.body) this.body.setImmovable(false);
   }
 
   release() {

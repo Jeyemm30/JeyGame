@@ -183,7 +183,7 @@ const HORNS = {
   armored:  { f: [123, 147], w: 'sawtooth', dur: 0.75, g: 0.11, lp: 800 },
   electric: { f: [523, 659], w: 'sine', dur: 0.3, g: 0.14, lp: 3000 }
 };
-export const HORN_OF = { compact: 'compact', sedan: 'sedan', taxi: 'taxi', sports: 'sports', luxury: 'luxury', suv: 'suv', pickup: 'pickup', van: 'van', minivan: 'van', delivery: 'delivery', truck: 'truck', bus: 'bus', moto: 'moto', police: 'police', policesuv: 'police', ambulance: 'ambulance', firetruck: 'firetruck', jeep: 'military', apc: 'armored', gangcar: 'sedan', tesla: 'electric' };
+export const HORN_OF = { compact: 'compact', sedan: 'sedan', taxi: 'taxi', sports: 'sports', luxury: 'luxury', suv: 'suv', pickup: 'pickup', van: 'van', minivan: 'van', delivery: 'delivery', truck: 'truck', bus: 'bus', moto: 'moto', police: 'police', policesuv: 'police', cmdsuv: 'police', swatvan: 'police', swatsuv: 'police', ambulance: 'ambulance', firetruck: 'firetruck', jeep: 'military', armyjeep: 'military', armytruck: 'truck', apc: 'armored', armyapc: 'armored', gangcar: 'sedan', tesla: 'electric' };
 let hornsOn = [];
 sfx.horn = (type = 'sedan', vol = 1) => {
   const c = ac(); if (!c || vol < 0.04) return;
@@ -224,6 +224,73 @@ sfx.groundHit = (v = 1) => { noise(0.14, { freq: 500, endFreq: 100, vol: 0.4 * v
 sfx.rattle = (v = 1) => { if (!throttle('rattle', 90)) return; noise(0.1, { freq: 1800, endFreq: 600, vol: 0.35 * v, type: 'bandpass', q: 2 }); for (let i = 0; i < 4; i++) tone(380 + Math.random() * 260, 0.07, { type: 'triangle', vol: 0.09 * v, delay: 0.08 + i * 0.07 }); };
 sfx.plastic = (v = 1) => { if (!throttle('plastic', 70)) return; noise(0.06, { freq: 1400, endFreq: 500, vol: 0.3 * v, type: 'bandpass' }); tone(520, 0.09, { type: 'triangle', vol: 0.14 * v, slideTo: 330 }); tone(330, 0.07, { type: 'triangle', vol: 0.08 * v, delay: 0.16 }); };
 sfx.phone = () => { if (throttle('phone', 800)) { tone(880, 0.06, { type: 'square', vol: 0.1 }); tone(880, 0.06, { type: 'square', vol: 0.1, delay: 0.1 }); } };
+// ---- car lockpicking minigame
+sfx.lockTick = (close01 = 0) => {
+  if (!throttle('lockTick', 48)) return;
+  const f = 950 + close01 * 720 + Math.random() * 60;
+  tone(f, 0.024, { type: 'triangle', vol: 0.06 + close01 * 0.06, slideTo: f * 0.78 });
+  noise(0.018, { freq: 2600 + close01 * 1200, endFreq: 1200, vol: 0.07, type: 'bandpass', q: 3 });
+};
+sfx.lockPin = () => {
+  if (!throttle('lockPin', 140)) return;
+  tone(1320, 0.04, { type: 'triangle', vol: 0.12, slideTo: 1760 });
+  noise(0.025, { freq: 3400, endFreq: 1800, vol: 0.09, type: 'bandpass', q: 4 });
+};
+sfx.lockFail = () => {
+  noise(0.14, { freq: 1400, endFreq: 280, vol: 0.34, type: 'bandpass', q: 2 });
+  tone(185, 0.14, { type: 'sawtooth', vol: 0.18, slideTo: 95 });
+  tone(130, 0.16, { type: 'square', vol: 0.14, delay: 0.06, slideTo: 72 });
+};
+sfx.lockBreak = () => {
+  noise(0.22, { freq: 2800, endFreq: 220, vol: 0.45 });
+  tone(620, 0.06, { type: 'sawtooth', vol: 0.2, slideTo: 180 });
+  tone(145, 0.26, { type: 'sawtooth', vol: 0.22, delay: 0.05, slideTo: 55 });
+};
+sfx.lockOpen = () => {
+  noise(0.08, { freq: 2200, endFreq: 700, vol: 0.24, type: 'bandpass', q: 2 });
+  tone(320, 0.07, { type: 'triangle', vol: 0.16, slideTo: 520 });
+  tone(660, 0.09, { type: 'triangle', vol: 0.18, delay: 0.07 });
+  tone(990, 0.14, { type: 'triangle', vol: 0.2, delay: 0.15 });
+};
+sfx.carAlarm = () => {
+  for (let i = 0; i < 4; i++) {
+    tone(780, 0.14, { type: 'square', vol: 0.11, delay: i * 0.26, slideTo: 620 });
+    tone(520, 0.1, { type: 'sawtooth', vol: 0.08, delay: i * 0.26 + 0.02 });
+  }
+};
+// ---- bank vault combination dial minigame
+sfx.vaultTick = (tension01 = 0) => {
+  if (!throttle('vaultTick', 32)) return;
+  const f = 820 + tension01 * 560 + (Math.random() - 0.5) * 30;
+  tone(f, 0.022, { type: 'triangle', vol: 0.055 + tension01 * 0.065, slideTo: f * 0.72 });
+  noise(0.015, { freq: 2400 + tension01 * 1200, endFreq: 1100, vol: 0.06 + tension01 * 0.04, type: 'bandpass', q: 4 });
+};
+sfx.vaultTumbler = () => {
+  if (!throttle('vaultTumbler', 75)) return;
+  tone(1180, 0.04, { type: 'triangle', vol: 0.14, slideTo: 1580 });
+  tone(590, 0.055, { type: 'sine', vol: 0.12, delay: 0.015, slideTo: 420 });
+  noise(0.028, { freq: 3200, endFreq: 1400, vol: 0.11, type: 'bandpass', q: 5 });
+};
+sfx.vaultLatch = () => {
+  noise(0.06, { freq: 2600, endFreq: 800, vol: 0.22, type: 'bandpass', q: 3 });
+  tone(420, 0.06, { type: 'triangle', vol: 0.16, slideTo: 640 });
+  tone(840, 0.09, { type: 'triangle', vol: 0.18, delay: 0.055 });
+};
+sfx.vaultBolt = () => {
+  noise(0.18, { freq: 950, endFreq: 180, vol: 0.36, type: 'lowpass' });
+  tone(145, 0.16, { type: 'sawtooth', vol: 0.2, slideTo: 78 });
+  tone(310, 0.05, { type: 'square', vol: 0.12, delay: 0.11, slideTo: 190 });
+};
+sfx.vaultOpen = () => {
+  noise(0.28, { freq: 1100, endFreq: 140, vol: 0.42 });
+  tone(120, 0.28, { type: 'sawtooth', vol: 0.24, slideTo: 58 });
+  [392, 523, 659, 784].forEach((f, i) => tone(f, 0.14, { type: 'triangle', vol: 0.17, delay: 0.14 + i * 0.08 }));
+};
+sfx.vaultFail = () => {
+  noise(0.18, { freq: 1300, endFreq: 210, vol: 0.38, type: 'bandpass', q: 2 });
+  tone(190, 0.16, { type: 'sawtooth', vol: 0.2, slideTo: 92 });
+  tone(132, 0.2, { type: 'square', vol: 0.16, delay: 0.07, slideTo: 68 });
+};
 
 
 /* ---- vehicle engine: two detuned saws + a sine sub through a low-pass. Pitch climbs through "gears" with speed and drops at each shift, the

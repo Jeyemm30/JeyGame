@@ -7,7 +7,7 @@ import { R, shade, ellipse, disc, makeCanvas } from './textures.js';
 // shop name (spec.kind in WorldGen) -> style key
 export const STORE_STYLES = {
   Pharmacy: 'pharmacy', Grocery: 'grocery', Hardware: 'hardware', 'Supply Depot': 'supply', Cafe: 'cafe', Diner: 'diner', Pizza: 'pizza',
-  Clothing: 'clothing', 'Gas Mart': 'gasmart', 'Shopping Center': 'mall', Home: 'home', 'Police Station': 'police'
+  Clothing: 'clothing', 'Gas Mart': 'gasmart', 'Shopping Center': 'mall', Home: 'home', 'Police Station': 'police', MusicBar: 'music', LiveMusic: 'music'
 };
 
 const STYLE = {
@@ -22,7 +22,8 @@ const STYLE = {
   gasmart: { name: 'GAS MART', bg: '#d8a517', fg: '#1a1a1a', trim: '#c0302a', icon: 'pump', aw: ['#d8a517', '#c0302a'], door: 'glass', frame: '#c0302a', pane: '#9ccce0', decal: 'bar' },
   police: { name: 'POLICE', bg: '#14223e', fg: '#ffffff', trim: '#3a7ad8', icon: 'badge', aw: ['#14223e', '#e8ecf2'], door: 'glass', frame: '#2a3550', pane: '#9fc4ea', decal: 'bar' },
   home: { name: 'HOME', bg: '#27363a', fg: '#e6f6f2', trim: '#2f9a96', icon: 'house', aw: ['#2f9a96', '#f4f1ea'], door: 'glass', frame: '#2a3236', pane: '#8fd0cc', decal: 'bar' },
-  mall: { name: 'SHOPPING', bg: '#1f4a8a', fg: '#e8f2ff', trim: '#8ac0ff', icon: 'bag', aw: ['#2a62b4', '#f2f6fc'], door: 'glass', frame: '#3a4a60', pane: '#8ab4d8', decal: 'none' }
+  mall: { name: 'SHOPPING', bg: '#1f4a8a', fg: '#e8f2ff', trim: '#8ac0ff', icon: 'bag', aw: ['#2a62b4', '#f2f6fc'], door: 'glass', frame: '#3a4a60', pane: '#8ab4d8', decal: 'none' },
+  music: { name: 'THE NEON CHORD', bg: '#2a0812', fg: '#ff3a8a', trim: '#ffd700', icon: 'cup', aw: null, door: 'custom', frame: '#24140c', pane: '#fef08a', decal: 'none', wide: true }
 };
 export const STYLE_KEYS = Object.keys(STYLE);
 export const styleWide = (k) => !!(STYLE[k] && STYLE[k].wide);
@@ -69,6 +70,7 @@ export function drawStoreArt(scene) {
       }
     });
     // ---- door skins: 3 frames (0 closed, 1 ajar, 2 open); single door 32 x 40, supply depot roll-up 64 x 40
+    if (s.door === 'custom') return;
     const W = s.wide ? 64 : 32;
     for (let f = 0; f < 3; f++) mk(`st_door_${k}_${f}`, W, 40, (c) => {
       if (s.door === 'shutter') {                                      // roll-up shutter: slats that rise

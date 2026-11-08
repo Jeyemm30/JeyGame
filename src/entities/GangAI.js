@@ -27,6 +27,7 @@ export function gangCfg(id) {
     case 'ar': return { ...base, weapon: id, sight: 330, range: Math.min(w.range * 0.55, 380), fireRate: Math.round(Math.max(w.rate * 2.2, 240)), burst: 3, pause: 1800, spread: 0.15 };
     case 'shotgun': return { ...base, weapon: id, range: 200, fireRate: Math.round(Math.max(w.rate * 1.6, 1300)), burst: 1, pause: 1300, spread: 0.12 };
     case 'sniper': return { ...base, weapon: id, sight: 500, range: 460, fireRate: 2600, burst: 1, pause: 800, spread: 0.04 };
+    case 'heavy': return { ...base, weapon: id, sight: 360, range: 400, fireRate: 180, burst: 6, pause: 2000, spread: 0.2 };
     default: return w.rate >= 400 ? { ...base, weapon: id, range: 300, fireRate: Math.round(w.rate * 1.8), burst: 1, pause: 1100, spread: 0.14 } : { ...base, weapon: id, range: 250, fireRate: Math.round(Math.max(w.rate * 3, 700)), burst: 2, pause: 1700, spread: 0.17 };
   }
 }

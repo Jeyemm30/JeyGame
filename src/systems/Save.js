@@ -12,7 +12,9 @@ export function readSlot(slot) {
     const raw = localStorage.getItem(KEY(slot));
     if (!raw) return null;
     const d = JSON.parse(raw);
-    return d && d.v === VERSION ? d : null;
+    if (!d || typeof d !== 'object') return null;
+    if (!d.profile && !d.player) return null;
+    return d;
   } catch (e) { return null; }
 }
 
@@ -40,7 +42,9 @@ export function snapshot(gs) {
     appearance: gs.registry.get('appearance') || null,
     player: {
       x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp), armor: Math.round(p.armor), stamina: Math.round(p.stamina),
+      armorTier: p.armorTier || 'none', armors: { ...(p.armors || { none: true }) },
       weapons: JSON.parse(JSON.stringify(p.weapons)), ammo: { ...p.ammo }, medkits: p.medkits, supplies: { ...p.supplies }, plates: p.plates, backpack: p.backpack, current: p.current,
+      slots: { ...p.slots },
       vehicleId: pv && pv.ownedId ? pv.ownedId : null
     },
     wantedHeat: Math.round(gs.wanted.heat),
@@ -70,11 +74,17 @@ export function writeSlot(slot, gs) {
 // so NPCs, vehicles, missions and items are rebuilt once and never duplicated).
 export function loadGameInto(scene, data) {
   resetRound();                       // a casino round is never carried over a load
+  if (!data) return;
   loadProfile(data.profile);
-  scene.registry.set('appearance', data.appearance || scene.registry.get('appearance'));
-  scene.registry.set('mapMarkers', (data.markers || []).map((m) => ({ ...m })));
-  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Arms', 'Wise', 'Casino', 'Gangs', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Game', 'Menu', 'Character'].forEach((k) => {
-    try { scene.scene.stop(k); } catch (e) { /* not running */ }
+  if (scene.registry) {
+    scene.registry.set('appearance', data.appearance || scene.registry.get('appearance'));
+    scene.registry.set('mapMarkers', (data.markers || []).map((m) => ({ ...m })));
+  }
+  const currentKey = scene.scene ? scene.scene.key : null;
+  ['Pause', 'Settings', 'Map', 'Missions', 'Shop', 'Store', 'Arms', 'Wise', 'Casino', 'Atm', 'Vault', 'Gang', 'Dialogue', 'GameOver', 'Ending', 'UI', 'Character', 'SaveLoad', 'Credits', 'Intro', 'Lockpick'].forEach((k) => {
+    if (k !== currentKey) {
+      try { scene.scene.stop(k); } catch (e) { /* not running */ }
+    }
   });
   scene.scene.start('Game', { load: data });
 }

@@ -22,8 +22,8 @@ export function buildPlaces(gs) {
   const gp2 = poi('gas', 1) || gp;
   const gd2 = doors.filter((d) => d.kind === 'shop').sort((a, b) => dist(a, gp2) - dist(b, gp2))[0];
   set('gas2', gd2.x, gd2.y + 10, 'Gas Station');
-  const park = poi('park', 0);
-  const bench = wd.benches[0] || { x: park.x, y: park.y };
+  const park = wd.pois.find((p) => p.name === 'Greenfield Park') || poi('park', 0);
+  const bench = wd.benches.find((b) => Math.hypot(b.x - park.x, b.y - park.y) < 320) || wd.benches[0] || { x: park.x, y: park.y };
   set('bench', bench.x, bench.y + 24, 'Greenfield Park bench');
   set('park', park.x, park.y + 90, 'Greenfield Park');
   const pond = { x: park.x + 160, y: park.y - 130 };
@@ -54,8 +54,18 @@ export function buildPlaces(gs) {
   if (wd.hideout) { P.kenny = { x: wd.hideout.kenny.x, y: wd.hideout.kenny.y, name: "Kenny's hideout" }; }
   if (wd.wise) { P.wise = { x: wd.wise.owner.x, y: wd.wise.owner.y, name: 'WISE SOLE' }; }
   if (wd.totoya) { P.totoya = { x: wd.totoya.mark.x, y: wd.totoya.mark.y, name: 'TOTOYA Auto Repair' }; }
+  if (wd.school && wd.school.principalSpot) { P.school_principal = { x: wd.school.principalSpot.x, y: wd.school.principalSpot.y, name: "Principal's Office" }; }
   if (wd.reyes) { P.reyes_office = { x: wd.reyes.reyesSpot.x, y: wd.reyes.reyesSpot.y, name: "Councilman Reyes' Penthouse Office" }; }
+  if (wd.cityhall) {
+    const ch = wd.cityhall;
+    P.cityhall_mayor = { x: ch.salcedoSpot.x, y: ch.salcedoSpot.y, name: "Mayor's Executive Office" };
+    P.cityhall_security = { x: ch.cortezSpot.x, y: ch.cortezSpot.y, name: "City Hall Security Desk" };
+    P.cityhall_zoning = { x: ch.sofiaSpot.x, y: ch.sofiaSpot.y, name: "City Planning & Zoning Office" };
+    P.cityhall_reception = { x: ch.adrianSpot.x, y: ch.adrianSpot.y, name: "City Hall Information Desk" };
+  }
   if (wd.casino) { P.sean = { x: wd.casino.sean.x, y: wd.casino.sean.y, name: 'Casino reception' }; P.jiro = { x: wd.casino.jiro.x, y: wd.casino.jiro.y, name: 'Casino card room' }; P.casino = { x: wd.casino.door.x, y: wd.casino.door.y, name: 'Casino' }; }
+  if (wd.musicBar && wd.musicBar.jansenn) { P.jansenn = { x: wd.musicBar.jansenn.x, y: wd.musicBar.jansenn.y, name: 'The Neon Chord Stage' }; P.musicBar = P.jansenn; }
+  if (P.school_principal) P.school = P.school_principal;
   {                                                              // Yosen Blackthorn: the quiet back alley of the west residential block on Market Street's row (a fixed spot)
     const yb = wd.blocks.find((b) => b.c === 0 && b.r === 3) || wd.blocks.find((b) => b.alley !== undefined);
     const s = snap(yb.x0 * TILE + 7 * TILE, (yb.alley + 0.5) * TILE, 160);

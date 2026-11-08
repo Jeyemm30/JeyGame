@@ -184,13 +184,29 @@ const FAMILIES = {
     },
     fbExtra: () => (c, g) => { R(c, g.W / 2 - 12, g.top - 10, 24, 8, shade(g.body, 0.05)); R(c, g.W / 2 - 12, g.top - 10, 24, 1, shade(g.body, 0.3)); if (g.front) { R(c, g.W / 2 - 2, g.top - 18, 4, 9, '#1c1e22'); } R(c, 10, g.top + 4, g.W - 20, 2, shade(g.body, -0.3)); }
   },
-  /* ---- police SUV: navy body, white doors with a blue stripe, roof light bar */
+  /* ---- police SUV: navy body, black & white interceptor, and stealth charcoal */
   policesuv: {
-    side: [68, 48], fb: [38, 54], colors: ['#1f2a44'],
+    side: [68, 48], fb: [38, 54], colors: ['#1f2a44', '#16181d', '#2b303c'],
     shape: [{ cab: [9, 52], ch: 14, fs: 6, rs: 2, hood: 3, deck: 1, doors: [24, 38], pillars: [25, 39] }],
     bh: 19, wheels: (W) => [15, W - 17], wr: 7, fbo: { bh: 19, ch: 14, taper: 3, tw: 6, lightW: 6, police: true },
-    sideExtra: () => (c, g) => { R(c, 4, g.top + 13, g.W - 8, 8, '#f0f0f0'); R(c, 4, g.top + 11, g.W - 8, 2, '#1f4fa8'); R(c, 22, g.top + 14, 20, 3, '#1f4fa8'); R(c, 22, g.top - 20, 16, 4, '#222'); R(c, 23, g.top - 19, 6, 2, '#e03030'); R(c, 31, g.top - 19, 6, 2, '#3060e0'); },
-    fbExtra: () => (c, g) => { R(c, g.W / 2 - 8, g.top - 18, 16, 3, '#222'); R(c, g.W / 2 - 7, g.top - 17, 6, 1, '#e03030'); R(c, g.W / 2 + 1, g.top - 17, 6, 1, '#3060e0'); }
+    sideExtra: (i) => (c, g) => {
+      if (i === 0) {
+        // Classic Navy & White
+        R(c, 4, g.top + 13, g.W - 8, 8, '#f0f0f0'); R(c, 4, g.top + 11, g.W - 8, 2, '#1f4fa8'); R(c, 22, g.top + 14, 20, 3, '#1f4fa8');
+      } else if (i === 1) {
+        // Black & White Interceptor
+        R(c, 4, g.top + 12, g.W - 8, 9, '#f4f4f4'); R(c, 4, g.top + 10, g.W - 8, 2, '#16181d'); font(c, 5, '#16181d'); c.fillText('POLICE', 32, g.top + 17);
+        R(c, g.W - 5, g.top + 7, 4, 12, '#222'); R(c, g.W - 5, g.top + 7, 4, 1, '#666'); // push bar
+      } else {
+        // Stealth Ghost Charcoal
+        R(c, 4, g.top + 12, g.W - 8, 9, '#222630'); R(c, 4, g.top + 10, g.W - 8, 2, '#3e4554'); font(c, 5, '#4b5563'); c.fillText('POLICE', 32, g.top + 17);
+      }
+      R(c, 22, g.top - 20, 16, 4, '#222'); R(c, 23, g.top - 19, 6, 2, '#e03030'); R(c, 31, g.top - 19, 6, 2, '#3060e0');
+    },
+    fbExtra: (i) => (c, g) => {
+      R(c, g.W / 2 - 8, g.top - 18, 16, 3, '#222'); R(c, g.W / 2 - 7, g.top - 17, 6, 1, '#e03030'); R(c, g.W / 2 + 1, g.top - 17, 6, 1, '#3060e0');
+      if (i === 1 && g.front) R(c, 7, g.base - 8, g.W - 14, 3, '#222');
+    }
   },
   /* ---- pickup: cab + open bed with a load */
   pickup: {
@@ -295,6 +311,131 @@ const FAMILIES = {
       [18, 44, W - 18].forEach((wx) => R(c, wx - 9, base - 8, 18, 10, '#1c1e22')); [18, 44, W - 18].forEach((wx) => wheel(c, wx, base + 1, 7));
     }
   }
+};
+
+/* ---- police response vehicles by wanted tier ------------------------------------------------------------------------------------------------
+   3 stars  cmdsuv    : black command SUV, white supervisor SUV, and unmarked executive slick-top
+   4 stars  swatvan   : matte-black armoured van with gun ports;  swatsuv: tactical SWAT assault SUV
+   5 stars  armyjeep  : olive / desert patrol jeep with roof machine gun; armytruck: 6x6 troop transport truck; armyapc: armoured carrier */
+FAMILIES.cmdsuv = {
+  side: [68, 48], fb: [38, 54], colors: ['#14171d', '#e6e9ee', '#1c222c'],
+  shape: [{ cab: [9, 52], ch: 14, fs: 6, rs: 2, hood: 3, deck: 1, doors: [24, 38], pillars: [25, 39] }],
+  bh: 19, wheels: (W) => [15, W - 17], wr: 7, fbo: { bh: 19, ch: 14, taper: 3, tw: 6, lightW: 6, police: true },
+  sideExtra: (i) => (c, g) => {
+    if (i === 0) {
+      // Black Command SUV with gold dual stripes and push bar
+      R(c, 4, g.top + 13, g.W - 8, 8, '#262a33'); R(c, 4, g.top + 11, g.W - 8, 2, '#d4af37'); R(c, 4, g.top + 21, g.W - 8, 1, '#d4af37');
+      font(c, 5, '#d4af37'); c.fillText('COMMAND', 32, g.top + 17);
+      R(c, 18, g.top - 20, 24, 4, '#222'); R(c, 19, g.top - 19, 7, 2, '#e03030'); R(c, 34, g.top - 19, 7, 2, '#3060e0'); R(c, 27, g.top - 19, 6, 2, '#f2f2f2');
+      R(c, g.W - 5, g.top + 7, 4, 12, '#2a2d30'); R(c, g.W - 5, g.top + 7, 4, 1, '#6a6e72');
+    } else if (i === 1) {
+      // White & Gold Supervisor SUV
+      R(c, 4, g.top + 13, g.W - 8, 8, '#c8ccd4'); R(c, 4, g.top + 11, g.W - 8, 2, '#d4af37'); R(c, 4, g.top + 21, g.W - 8, 1, '#d4af37');
+      font(c, 5, '#14171d'); c.fillText('COMMAND', 32, g.top + 17);
+      R(c, 18, g.top - 20, 24, 4, '#222'); R(c, 19, g.top - 19, 7, 2, '#e03030'); R(c, 34, g.top - 19, 7, 2, '#3060e0'); R(c, 27, g.top - 19, 6, 2, '#f2f2f2');
+      R(c, g.W - 5, g.top + 7, 4, 12, '#2a2d30');
+    } else {
+      // Slick-top Unmarked Executive SUV: slate finish, dark tinted windows, gold emblem, concealed visor strobes
+      R(c, 28, g.top + 14, 6, 6, '#d4af37'); R(c, 29, g.top + 15, 4, 4, '#1c222c');
+      R(c, 20, g.top - 17, 8, 2, '#e03030'); R(c, 32, g.top - 17, 8, 2, '#3060e0');
+      R(c, g.W - 5, g.top + 8, 4, 10, '#1c1e22');
+    }
+  },
+  fbExtra: (i) => (c, g) => {
+    R(c, g.W / 2 - 11, g.top - 18, 22, 3, '#222'); R(c, g.W / 2 - 10, g.top - 17, 7, 1, '#e03030'); R(c, g.W / 2 - 2, g.top - 17, 4, 1, '#f2f2f2'); R(c, g.W / 2 + 3, g.top - 17, 7, 1, '#3060e0');
+    if (i !== 2) { R(c, 3, g.top + 7, g.W - 6, 1, '#d4af37'); }
+    if (g.front) R(c, 7, g.base - 8, g.W - 14, 3, '#2a2d30');
+  }
+};
+FAMILIES.swatsuv = {
+  side: [68, 48], fb: [38, 54], colors: ['#121418'],
+  shape: [{ cab: [9, 52], ch: 14, fs: 6, rs: 2, hood: 3, deck: 1, doors: [24, 38], pillars: [25, 39] }],
+  bh: 19, wheels: (W) => [15, W - 17], wr: 7, fbo: { bh: 19, ch: 14, taper: 3, tw: 6, lightW: 6, police: true },
+  sideExtra: () => (c, g) => {
+    R(c, 4, g.top + 13, g.W - 8, 8, '#1e222a'); R(c, 4, g.top + 11, g.W - 8, 2, '#4a5260');
+    font(c, 6, '#f4f4f4'); c.fillText('SWAT', 32, g.top + 17);
+    R(c, g.W - 5, g.top + 6, 4, 14, '#1c1e22'); R(c, g.W - 5, g.top + 6, 4, 1, '#666');
+    R(c, 16, g.top - 20, 28, 4, '#1c1e22');
+    R(c, 18, g.top - 19, 7, 2, '#e03030'); R(c, 26, g.top - 19, 8, 2, '#f2f2f2'); R(c, 35, g.top - 19, 7, 2, '#3060e0');
+    for (let x = 18; x < 50; x += 6) R(c, x, g.top - 7, 1, 6, '#111317');
+  },
+  fbExtra: () => (c, g) => {
+    R(c, g.W / 2 - 12, g.top - 18, 24, 3, '#1c1e22');
+    R(c, g.W / 2 - 10, g.top - 17, 7, 1, '#e03030'); R(c, g.W / 2 - 2, g.top - 17, 4, 1, '#f2f2f2'); R(c, g.W / 2 + 3, g.top - 17, 7, 1, '#3060e0');
+    if (g.front) { R(c, 6, g.base - 8, g.W - 12, 4, '#1c1e22'); }
+    else { font(c, 5, '#f4f4f4'); c.fillText('SWAT', g.W / 2, g.top - 6); }
+  }
+};
+FAMILIES.swatvan = {
+  side: [80, 52], fb: [42, 60], colors: ['#16191f'],
+  shape: [{}],
+  bh: 20, wheels: (W) => [16, W - 20], wr: 7, fbo: { bh: 22, ch: 8, taper: 3, tw: 6, lightW: 6 },
+  custom: (c, W, H, col) => {
+    const body = col, dark = shade(body, -0.4), light = shade(body, 0.45), base = H - 9, top = base - 20, boxTop = top - 14;
+    ellipse(c, W / 2, base + 5, W / 2 - 3, 5, 'rgba(0,0,0,0.4)');
+    R(c, 2, boxTop, 54, 34, body); R(c, 2, boxTop, 54, 2, light); R(c, 2, base - 5, 54, 5, dark);
+    for (let x = 12; x < 54; x += 10) { R(c, x, boxTop + 3, 1, 25, dark); R(c, x + 1, boxTop + 3, 1, 25, shade(body, 0.2)); }
+    for (let x = 5; x < 54; x += 10) { R(c, x, boxTop + 4, 1, 1, '#6a6e76'); R(c, x, boxTop + 26, 1, 1, '#6a6e76'); }
+    R(c, 4, boxTop + 7, 8, 2, '#05060a'); R(c, 42, boxTop + 7, 8, 2, '#05060a');
+    R(c, 2, boxTop + 17, 54, 3, '#e8e8e8'); R(c, 2, boxTop + 20, 54, 1, '#2a5ac8');
+    font(c, 8, '#f2f2f2'); c.fillText('SWAT', 29, boxTop + 12);
+    R(c, 16, boxTop - 4, 26, 4, '#222'); R(c, 17, boxTop - 3, 9, 2, '#e03030'); R(c, 28, boxTop - 3, 9, 2, '#3060e0');
+    R(c, 56, top - 2, W - 59, 22, shade(body, 0.05)); poly(c, [[56, top - 2], [60, boxTop + 12], [W - 14, boxTop + 12], [W - 8, top - 2]], shade(body, 0.05));
+    poly(c, [[58, top - 3], [62, boxTop + 14], [W - 16, boxTop + 14], [W - 10, top - 3]], '#24394a'); R(c, 62, boxTop + 14, W - 78, 1, '#5a7a90');
+    R(c, 56, top, 1, 14, dark); R(c, 60, top + 5, 3, 1, light); R(c, W - 11, top - 4, 3, 3, shade(body, -0.2));
+    R(c, W - 5, top + 8, 4, 4, HEAD); R(c, 0, base - 7, 3, 8, BUMP); R(c, W - 6, base - 8, 6, 9, '#2a2d30'); R(c, W - 6, base - 8, 6, 1, '#6a6e72'); R(c, 1, top + 8, 2, 4, TAIL);
+    [16, W - 20].forEach((wx) => R(c, wx - 9, base - 8, 18, 10, '#1c1e22')); [16, W - 20].forEach((wx) => wheel(c, wx, base + 1, 7));
+  },
+  fbExtra: () => (c, g) => {
+    R(c, 3, g.top - 14, g.W - 6, 14, '#1b1f27'); R(c, 3, g.top - 14, g.W - 6, 2, '#4a505c');
+    R(c, g.W / 2 - 10, g.top - 18, 20, 3, '#222'); R(c, g.W / 2 - 9, g.top - 17, 8, 1, '#e03030'); R(c, g.W / 2 + 1, g.top - 17, 8, 1, '#3060e0');
+    if (!g.front) { R(c, g.W / 2, g.top - 12, 1, 12, '#05060a'); font(c, 6, '#f2f2f2'); c.fillText('SWAT', g.W / 2, g.top - 7); R(c, 6, g.top - 2, g.W - 12, 2, '#e8e8e8'); }
+    else { R(c, 7, g.base - 8, g.W - 14, 3, '#2a2d30'); }
+  }
+};
+FAMILIES.armyjeep = {
+  ...FAMILIES.jeep, colors: ['#4a5a36', '#a89868'],
+  sideExtra: (i) => (c, g) => {
+    FAMILIES.jeep.sideExtra(i)(c, g);
+    R(c, 23, g.top - 14, 3, 4, '#2a3022'); R(c, 23, g.top - 17, 17, 2, '#15171a'); R(c, 38, g.top - 18, 6, 1, '#15171a'); R(c, 24, g.top - 15, 5, 2, '#3a4228');      // roof-mounted machine gun
+    R(c, 4, g.top + 4, 8, 2, '#f0f0dc');                                                                                                                               // ARMY marking
+  },
+  fbExtra: (i) => (c, g) => { FAMILIES.jeep.fbExtra(i)(c, g); R(c, g.W / 2 - 1, g.top - 15, 2, 7, '#15171a'); R(c, g.W / 2 - 3, g.top - 9, 6, 2, '#3a4228'); }
+};
+FAMILIES.armytruck = {
+  side: [84, 52], fb: [46, 64], colors: ['#3f4d2f', '#7e7350'],
+  shape: [{}],
+  bh: 24, wheels: (W) => [18, W - 28, W - 14], wr: 7, fbo: { bh: 26, ch: 10, taper: 2, tw: 8, lightW: 6 },
+  custom: (c, W, H, col, i) => {
+    const body = col, dark = shade(body, -0.35), light = shade(body, 0.25), base = H - 9, top = base - 24;
+    const canvas = i === 1 ? '#6e6444' : '#323c24';
+    ellipse(c, W / 2, base + 5, W / 2 - 4, 5, 'rgba(0,0,0,0.4)');
+    R(c, 48, top + 2, W - 50, 22, body); R(c, 48, top + 2, W - 50, 2, light);
+    poly(c, [[52, top + 2], [56, top - 8], [W - 14, top - 8], [W - 8, top + 2]], shade(body, -0.1));
+    poly(c, [[54, top + 1], [58, top - 6], [W - 16, top - 6], [W - 10, top + 1]], '#3d5464');
+    R(c, 2, top - 12, 48, 34, canvas); R(c, 2, top - 12, 48, 2, shade(canvas, 0.3)); R(c, 2, base - 6, 48, 4, shade(canvas, -0.3));
+    for (let x = 10; x < 48; x += 10) { R(c, x, top - 12, 2, 34, shade(canvas, -0.2)); R(c, x + 1, top - 12, 1, 34, shade(canvas, 0.2)); }
+    R(c, 3, top - 6, 4, 24, '#1b2214');
+    R(c, 58, top + 8, 8, 8, '#f0f0dc'); R(c, 60, top + 6, 4, 12, '#f0f0dc'); R(c, 56, top + 10, 12, 4, '#f0f0dc');
+    R(c, W - 6, base - 8, 6, 9, '#1a1d18'); R(c, 0, base - 6, 4, 7, '#1a1d18');
+    [18, W - 28, W - 14].forEach((wx) => { disc(c, wx, base + 1, 8, '#14161a'); disc(c, wx, base + 1, 4, '#555e4c'); disc(c, wx, base + 1, 1, '#14161a'); });
+    R(c, W - 4, top + 12, 4, 4, '#f4e19a'); R(c, 1, top + 14, 2, 4, '#c0392b');
+  },
+  fbExtra: (i) => (c, g) => {
+    const canvas = i === 1 ? '#6e6444' : '#323c24';
+    R(c, 4, g.top - 12, g.W - 8, 14, canvas); R(c, 4, g.top - 12, g.W - 8, 2, shade(canvas, 0.3));
+    if (g.front) {
+      R(c, g.W / 2 - 3, g.top + 4, 6, 6, '#f0f0dc');
+      R(c, 6, g.base - 8, g.W - 12, 4, '#1a1d18');
+    } else {
+      R(c, g.W / 2 - 8, g.top - 6, 16, 20, '#151b10');
+      R(c, 6, g.base - 6, g.W - 12, 3, '#1a1d18');
+    }
+  }
+};
+FAMILIES.armyapc = {
+  ...FAMILIES.apc, colors: ['#38452c'],
+  custom: (c, W, H, col, i) => { FAMILIES.apc.custom(c, W, H, col, i); const base = H - 9; R(c, 8, base - 9, W - 16, 3, shade(col, -0.35)); R(c, W - 34, base - 17, 12, 2, '#f0f0dc'); R(c, 14, base - 17, 12, 2, '#f0f0dc'); }
 };
 
 // extra (smaller / different) motorcycle: a scooter, drawn into moto variant 2

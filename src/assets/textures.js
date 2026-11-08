@@ -32,9 +32,50 @@ Object.assign(T, { facPharm: 86, facGrocery: 87, facHardware: 88, facClothing: 8
   milBunk: 125, weaponRack: 126, ammoCrate: 127, workbench: 128, jersey: 129, milConsole: 130, milFacade: 131, milWall: 132, milGate: 133, milGateOpen: 134, milBoom: 135, milBoomOpen: 136, milDoor: 137, milDoorOpen: 138 });
 // FIRE DEPARTMENT: exterior facade, bay-front window, interior wall paint, interior steel door (closed / open) and the glass entrance door (closed / open)
 Object.assign(T, { facFire: 139, winFire: 140, fireWallIn: 141, fireDoor: 142, fireDoorOpen: 143, fireGlass: 144, fireGlassOpen: 145 });
-export const NTILES = 146;
-export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145];
-export const SHOP_WINDOWS = [96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108];
+// REYES HOLDINGS TOWER: corporate architectural wall, wall cap, executive wood paneling, glass doors, luxury marble & corporate carpet
+Object.assign(T, {
+  reyesWall: 146,
+  reyesWallCap: 147,
+  reyesWallWood: 148,
+  reyesDoorGlass: 149,
+  reyesDoorGlassOpen: 150,
+  reyesFloorMarble: 151,
+  reyesFloorCarpet: 152
+});
+// ST. MARY HOSPITAL: clinical white wall, wall cap, glass entrance doors, sanitary seamless floor & sterile surgical teal floor
+Object.assign(T, {
+  hospWall: 153,
+  hospWallCap: 154,
+  hospDoorGlass: 155,
+  hospDoorGlassOpen: 156,
+  hospFloor: 157,
+  hospFloorICU: 158,
+  hospCab: 159,
+  pwdParking: 160,
+  hospDoor: 161,
+  hospDoorOpen: 162
+});
+// CITY HALL ANNEX: exterior municipal limestone facade and civic window
+Object.assign(T, {
+  facCityHall: 163,
+  winCityHall: 164,
+  tile: 13,
+  checkTile: 13,
+  paving: 56,
+  lamp: 28
+});
+// LINCOLN HIGH SCHOOL: collegiate school wall (navy wainscot & gold chair rail), executive mahogany administrator wall, and exterior red brick school wall & windows
+Object.assign(T, {
+  schoolWall: 165,
+  schoolWallCap: 166,
+  schoolWallWood: 167,
+  schoolBrick: 168,
+  schoolBrickCap: 169,
+  schoolWin: 170
+});
+export const NTILES = 171;
+export const FACADE_TILES = [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 107, 114, 115, 116, 117, 118, 119, 120, 121, 122, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 155, 156, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170];
+export const SHOP_WINDOWS = [96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, 164, 170];
 export const STORE_FIX = [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85];
 
 // Anything in this set stops movement.
@@ -43,20 +84,30 @@ export const SOLID = new Set([
   T.doorClosed, T.window, T.windowBroken, T.prop, T.propHigh, T.tree,
   T.bedHead, T.bedFoot, T.table, T.cabinet, T.fridge, T.shelf, T.sofa, T.toilet, T.sink, T.dresser, T.locker, T.stove,
   T.counter, T.hospBed, T.bars, T.desk, T.pump, T.bench, T.glass, T.glassCap, T.shopShelf, T.graf1, T.graf2, T.graf3,
+  T.reyesWall, T.reyesWallCap, T.reyesWallWood, T.reyesDoorGlass,
+  T.hospWall, T.hospWallCap, T.hospDoorGlass, T.hospCab, T.hospDoor,
+  T.facCityHall, T.winCityHall,
+  T.schoolWall, T.schoolWallCap, T.schoolWallWood, T.schoolBrick, T.schoolBrickCap, T.schoolWin,
   64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 127, 128, 129, 130, 140
 ]);
 // Blocks vision (and bullets).
 export const LOS_BLOCK = new Set([
   T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.tree, T.barricade, T.sandbag, T.doorClosed,
-  T.fridge, T.shelf, T.locker, T.cabinet, T.propHigh, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3, 127, 129
+  T.fridge, T.shelf, T.locker, T.cabinet, T.propHigh, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3,
+  T.reyesWall, T.reyesWallCap, T.reyesWallWood,
+  T.hospWall, T.hospWallCap, T.hospCab,
+  T.facCityHall,
+  T.schoolWall, T.schoolWallCap, T.schoolWallWood, T.schoolBrick, T.schoolBrickCap,
+  127, 129
 ]);
 // Solid for walking but bullets (and sight) go through.
 export const BULLET_PASS = new Set([
   T.fence, T.water, T.window, T.windowBroken, T.table, T.bedHead, T.bedFoot, T.sofa, T.toilet, T.sink, T.stove, T.dresser,
-  T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf,
+  T.counter, T.hospBed, T.bars, T.desk, T.bench, T.shopShelf, T.reyesDoorGlass, T.hospDoorGlass, T.hospDoor,
+  T.winCityHall, T.schoolWin,
   64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 108, 109, 110, 111, 112, 113, 123, 125, 126, 128, 130, 140
 ]);
-export const WALL_FAMILY = new Set([96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, 140, T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3]);
+export const WALL_FAMILY = new Set([96, 97, 98, 99, 100, 101, 102, 103, 104, 106, 108, 140, T.wall, T.wall2, T.tent, T.wallCap, T.wall2Cap, T.tentCap, T.window, T.windowBroken, T.doorClosed, T.doorOpen, T.glass, T.glassCap, T.graf1, T.graf2, T.graf3, T.reyesWall, T.reyesWallCap, T.reyesWallWood, T.reyesDoorGlass, T.reyesDoorGlassOpen, T.hospWall, T.hospWallCap, T.hospDoorGlass, T.hospDoorGlassOpen, T.hospDoor, T.hospDoorOpen, T.facCityHall, T.winCityHall, T.schoolWall, T.schoolWallCap, T.schoolWallWood, T.schoolBrick, T.schoolBrickCap, T.schoolWin]);
 
 export const R = (c, x, y, w, h, col) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
 
@@ -70,6 +121,7 @@ export function shade(hex, f) {
 }
 
 export function disc(c, cx, cy, r, col, step = 2) {
+  if (!step || step <= 0) step = 2;
   c.fillStyle = col;
   for (let y = -r; y <= r; y += step) {
     for (let x = -r; x <= r; x += step) {
@@ -455,8 +507,9 @@ function drawChar(c, ox, oy, dir, f, a) {
   const packC = CLOTH_COLORS[a.backpackColor];
   const shirtS = SHIRT_BASE[a.shirt] ?? a.shirt;      // styles 4+ start from a base look and add their own details (wearArt.js)
   const pantsS = PANTS_BASE[a.pants] ?? a.pants;
-  const bob = f === 2 || f === 4 || f === 5 || f === 6 || f === 8 ? 1 : 0;
-  const liftL = f === 1 ? -2 : f === 6 ? -4 : 0, liftR = f === 3 ? -2 : f === 8 ? -4 : 0;
+  const bob = (f === 2 || f === 4 || f === 5 || f === 7 || f === 9) ? 1 : 0;
+  const liftL = (f === 1) ? -2 : (f === 6) ? -2 : 0;
+  const liftR = (f === 3) ? -2 : (f === 8) ? -2 : 0;
   const P = (x, y, w, h, col) => R(c, ox + x, oy + y, w, h, col);
   const longSleeves = shirtS !== 0;
   const camo = (x, y, w, h, base) => {
@@ -485,21 +538,30 @@ function drawChar(c, ox, oy, dir, f, a) {
     shoesFront(P, a, legBot, liftL, liftR, shoeC, skin, pantsC);
     // backpack (behind torso when seen from front)
     if (!back && a.backpack > 0) {
-      const w = a.backpack === 1 ? 2 : 3;
-      P(10 - w, 17 + bob, w + 1, 9, shade(packC, -0.2)); P(21, 17 + bob, w + 1, 9, shade(packC, -0.2));
+      const w = a.backpack >= 2 ? 3 : 2;
+      P(10 - w, 18 + bob, w, 8, shade(packC, -0.28)); P(22, 18 + bob, w, 8, shade(packC, -0.28));
     }
     // torso
     const ty = 15 + bob;
     if (shirtS === 3) camo(10, ty, 12, 14, shirtC); else P(10, ty, 12, 14, shirtC);
     P(10, ty, 12, 1, shade(shirtC, 0.25)); P(10, ty, 2, 14, shade(shirtC, -0.15)); P(20, ty, 2, 14, shade(shirtC, -0.25));
+    // backpack shoulder straps & sternum buckle on front of torso
+    if (!back && a.backpack > 0) {
+      P(11, 16 + bob, 2, 9, shade(packC, -0.35)); P(19, 16 + bob, 2, 9, shade(packC, -0.35));
+      P(13, 20 + bob, 6, 1, '#181a1f'); P(15, 20 + bob, 2, 1, '#d8dce2');
+    }
     // belt
     P(10, ty + 12, 12, 2, pantsS === 2 ? '#2a2a22' : '#3a2a1a'); P(15, ty + 12, 2, 2, '#c9b050');
-    // arms
+    // arms: dynamic pumping swing matching walk/run stride
     const sleeveEnd = longSleeves ? 11 : 6;
     const armL = (shirtS === 3) ? shade(shirtC, -0.1) : shirtC;
-    P(7, 16 + bob, 3, sleeveEnd, armL); P(22, 16 + bob, 3, sleeveEnd, armL);
-    P(7, 16 + bob + sleeveEnd, 3, 12 - sleeveEnd, skin); P(22, 16 + bob + sleeveEnd, 3, 12 - sleeveEnd, skin);
-    if (a.armband && !back) P(7, 20 + bob, 3, 3, a.armband);
+    const armSwingL = (f >= 6 && f <= 9) ? [+2, 0, -2, 0][f - 6] : (f >= 1 && f <= 4) ? [+1, 0, -1, 0][f - 1] : 0;
+    const armSwingR = (f >= 6 && f <= 9) ? [-2, 0, +2, 0][f - 6] : (f >= 1 && f <= 4) ? [-1, 0, +1, 0][f - 1] : 0;
+    const armXL = 7 + (armSwingL < 0 ? 1 : 0);
+    const armXR = 22 + (armSwingR < 0 ? -1 : 0);
+    P(armXL, 16 + bob + armSwingL, 3, sleeveEnd, armL); P(armXR, 16 + bob + armSwingR, 3, sleeveEnd, armL);
+    P(armXL, 16 + bob + sleeveEnd + armSwingL, 3, 12 - sleeveEnd, skin); P(armXR, 16 + bob + sleeveEnd + armSwingR, 3, 12 - sleeveEnd, skin);
+    if (a.armband && !back) P(armXL, 20 + bob + armSwingL, 3, 3, a.armband);
     // shirt details
     if (!back) {
       if (shirtS === 1) { P(15, ty, 2, 14, shade(shirtC, -0.4)); P(13, ty, 6, 2, shade(shirtC, -0.3)); }
@@ -544,25 +606,73 @@ function drawChar(c, ox, oy, dir, f, a) {
     // back view backpack
     if (back && a.backpack > 0) {
       const big = a.backpack >= 2;
-      const bx = big ? 8 : 11, bw = big ? 16 : 10, by = big ? 14 : 16, bh = big ? 17 : 11;
-      P(bx, by + bob, bw, bh, packC); P(bx, by + bob, bw, 2, shade(packC, 0.25)); P(bx, by + bob + bh - 2, bw, 2, shade(packC, -0.3));
-      P(bx + 1, by + bob + 3, 2, bh - 5, shade(packC, -0.2)); P(bx + bw - 3, by + bob + 3, 2, bh - 5, shade(packC, -0.2));
-      if (big) { P(bx + 3, by + bob + 8, bw - 6, 6, shade(packC, -0.18)); P(bx + 4, by + bob + 9, bw - 8, 1, shade(packC, 0.3)); }
-      if (a.backpack === 3) P(bx + 5, by + bob + 4, 6, 2, '#c9b050');
-    } else if (!back && a.backpack > 0) {
-      P(11, 16 + bob, 2, 9, shade(packC, -0.35)); P(19, 16 + bob, 2, 9, shade(packC, -0.35));
+      const bx = big ? 9 : 10, bw = big ? 14 : 12, by = big ? 14 : 15, bh = big ? 16 : 13;
+      // Top webbing grab handle
+      P(14, by + bob - 2, 4, 2, '#181a1f');
+      P(15, by + bob - 1, 2, 1, '#2c2e36');
+      // Main pack body - rounded top corners
+      P(bx + 1, by + bob, bw - 2, 2, shade(packC, 0.22));
+      P(bx, by + bob + 2, bw, bh - 4, packC);
+      // Dark abrasion-resistant bottom boot
+      P(bx + 1, by + bob + bh - 2, bw - 2, 2, '#181a1f');
+      P(bx + 2, by + bob + bh, bw - 4, 1, '#121418');
+      // Padded shoulder straps visible looping at top onto shoulders
+      P(bx - 1, by + bob + 1, 2, 4, shade(packC, -0.35));
+      P(bx + bw - 1, by + bob + 1, 2, 4, shade(packC, -0.35));
+      // Outer accessory compartment
+      P(bx + 2, by + bob + 5, bw - 4, bh - 8, shade(packC, -0.15));
+      // Contrast zipper seams & pull tabs
+      P(bx + 2, by + bob + 3, bw - 4, 1, '#20222a');
+      P(bx + 2, by + bob + 5, bw - 4, 1, '#20222a');
+      P(bx + 3, by + bob + 6, 1, 1, '#d8dce2');
+      // Webbing straps / patch
+      P(bx + Math.floor(bw / 2) - 1, by + bob + 8, 3, 2, a.backpack === 3 ? '#c9b050' : '#1e222a');
     }
   } else {
     // ---------- side view, facing right ----------
-    const s = [0, 2, 0, -2, 0, 0, 4, 0, -4, 0][f] || 0;
-    legsSide(P, a, s, pantsC, skin);
-    shoesSide(P, a, s, shoeC, skin);
+    const s = [0, 2, 0, -2, 0, 0, 3, 0, -3, 0][f] || 0;
+    const liftNear = (f === 1 || f === 3) ? -1 : (f === 8) ? -2 : 0;
+    const liftFar = (f === 1 || f === 3) ? -1 : (f === 6) ? -2 : 0;
+
+    // far arm (behind torso)
+    const farSleeveEnd = longSleeves ? 11 : 6;
+    const farArmL = (shirtS === 3) ? shade(shirtC, -0.3) : shade(shirtC, -0.22);
+    const farSkin = shade(skin, -0.2);
+    const armSwing = (f >= 6 && f <= 9) ? [-2, 0, 2, 0][f - 6] : (f >= 1 && f <= 4) ? [-1, 0, 1, 0][f - 1] : 0;
+    const farArmSwing = -armSwing;
+    P(14 + farArmSwing, 16 + bob, 3, farSleeveEnd, farArmL);
+    P(14 + farArmSwing, 16 + bob + farSleeveEnd, 3, 12 - farSleeveEnd, farSkin);
+
+    legsSide(P, a, s, pantsC, skin, liftNear, liftFar);
+    shoesSide(P, a, s, shoeC, skin, liftNear, liftFar);
     // backpack (on the back = left side)
     if (a.backpack > 0) {
       const big = a.backpack >= 2;
-      const bw = big ? 7 : 5, by = big ? 14 : 16, bh = big ? 17 : 11;
-      P(12 - bw + 1, by + bob, bw, bh, packC); P(12 - bw + 1, by + bob, bw, 2, shade(packC, 0.25)); P(12 - bw + 1, by + bob + bh - 2, bw, 2, shade(packC, -0.3));
-      if (big) P(12 - bw + 2, by + bob + 7, bw - 2, 5, shade(packC, -0.2));
+      const bDepth = big ? 6 : 5;
+      const startX = 12 - bDepth;
+      // Top grab handle loop
+      P(10, 13 + bob, 2, 2, '#181b20');
+      // Ergonomic contoured profile (curves naturally to the spine)
+      P(10, 14 + bob, 2, 1, shade(packC, -0.15));
+      P(9, 15 + bob, 3, 1, shade(packC, 0.22));
+      P(8, 16 + bob, 4, 1, shade(packC, 0.12));
+      // Main pack volume
+      P(startX, 17 + bob, bDepth, big ? 8 : 7, packC);
+      // Inner shadow seam where pack meets back
+      P(11, 15 + bob, 1, 11, shade(packC, -0.38));
+      // Front accessory pouch (outer layer)
+      P(startX, 18 + bob, 2, 6, shade(packC, -0.18));
+      // Top and front zipper seams
+      P(startX + 1, 16 + bob, bDepth - 2, 1, '#20222a');
+      P(startX + 1, 18 + bob, 1, 6, '#20222a');
+      // Horizontal compression strap with silver buckle
+      P(startX, 21 + bob, bDepth, 1, '#181a1f');
+      P(startX + 1, 21 + bob, 1, 1, '#d8dce2');
+      // Lumbar inward taper with dark abrasion-resistant boot
+      P(startX + 1, 25 + bob, bDepth - 1, 1, '#1a1b20');
+      P(startX + 2, 26 + bob, bDepth - 2, 1, '#14151a');
+      // Padded shoulder strap curve on shoulder
+      P(12, 15 + bob, 2, 3, shade(packC, -0.32));
     }
     // torso
     const ty = 15 + bob;
@@ -572,9 +682,10 @@ function drawChar(c, ox, oy, dir, f, a) {
     if (shirtS === 2) { P(18, ty - 1, 3, 3, shade(shirtC, -0.2)); }
     // near arm
     const armL = (shirtS === 3) ? shade(shirtC, -0.1) : shirtC;
-    P(14, 16 + bob, 4, longSleeves ? 11 : 6, armL); P(14, 16 + bob + (longSleeves ? 11 : 6), 4, 12 - (longSleeves ? 11 : 6), skin);
-    P(14, 16 + bob, 1, longSleeves ? 11 : 6, shade(armL, -0.2));
-    if (a.armband) P(14, 20 + bob, 4, 3, a.armband);
+    P(14 + armSwing, 16 + bob, 4, longSleeves ? 11 : 6, armL);
+    P(14 + armSwing, 16 + bob + (longSleeves ? 11 : 6), 4, 12 - (longSleeves ? 11 : 6), skin);
+    P(14 + armSwing, 16 + bob, 1, longSleeves ? 11 : 6, shade(armL, -0.2));
+    if (a.armband) P(14 + armSwing, 20 + bob, 4, 3, a.armband);
     topSide(P, a, ty, bob, shirtC, skin);
     // head
     P(14, 13 + bob, 3, 2, skinD);
@@ -952,22 +1063,393 @@ function drawObjects(scene) {
     R(c, 0, 0, 28, 10, '#4a5a34'); R(c, 0, 0, 28, 1, '#6a7c4a');
   });
 
-  // item icons
-  makeCanvas(scene, 'it_ammo', 20, 20, (c) => {
-    R(c, 2, 5, 16, 12, '#3a3a2a'); R(c, 3, 6, 14, 10, '#6b6a3a'); R(c, 3, 6, 14, 2, '#8b8a50');
-    for (let i = 0; i < 4; i++) { R(c, 5 + i * 3, 9, 2, 5, '#d9a82a'); R(c, 5 + i * 3, 8, 2, 2, '#b66a2a'); }
+  // item icons: distinct ammo designs based on gun caliber and cartridge styling
+  // 1. 9mm: Commercial navy-blue & white box with compact round-nose brass/copper 9mm Luger cartridges
+  makeCanvas(scene, 'it_ammo_pistol', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 6, 20, 12, '#14223d');
+    R(c, 3, 7, 18, 10, '#1c3156');
+    R(c, 2, 6, 20, 3, '#e8eef8');
+    R(c, 3, 7, 18, 1, '#ffffff');
+    R(c, 2, 9, 20, 1, '#d8aa28');
+    // "9" label on box front
+    R(c, 16, 11, 4, 1, '#e8eef8');
+    R(c, 16, 12, 1, 2, '#e8eef8');
+    R(c, 16, 13, 4, 1, '#e8eef8');
+    R(c, 19, 11, 1, 4, '#e8eef8');
+    R(c, 16, 15, 4, 1, '#e8eef8');
+    // 3 compact 9mm cartridges standing from tray
+    for (let i = 0; i < 3; i++) {
+      const bx = 4 + i * 4;
+      R(c, bx, 6, 3, 6, '#d4a228');
+      R(c, bx, 6, 1, 6, '#fae060');
+      R(c, bx + 2, 6, 1, 6, '#9a7010');
+      R(c, bx, 11, 3, 1, '#785608');
+      R(c, bx, 3, 3, 3, '#c86430');
+      R(c, bx, 3, 1, 3, '#ea8c55');
+      R(c, bx + 1, 2, 1, 1, '#ea8c55');
+    }
   });
-  makeCanvas(scene, 'it_medkit', 20, 20, (c) => {
-    R(c, 1, 4, 18, 13, '#8a8a8a'); R(c, 2, 5, 16, 11, '#f2f2f2'); R(c, 8, 7, 4, 7, '#d02020'); R(c, 6, 9, 8, 3, '#d02020');
-    R(c, 7, 2, 6, 3, '#8a8a8a');
+
+  // 2. .357 Magnum: Luxury black & gold magnum box with tall rimmed revolver cartridges & flat lead soft-points
+  makeCanvas(scene, 'it_ammo_mag357', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 3, 7, 19, 11, '#111114');
+    R(c, 4, 8, 17, 9, '#1a1b20');
+    R(c, 3, 7, 19, 1, '#f0c830');
+    R(c, 3, 17, 19, 1, '#c89e18');
+    R(c, 14, 10, 6, 5, '#282930');
+    R(c, 15, 11, 4, 1, '#f0c830');
+    R(c, 15, 13, 4, 1, '#f0c830');
+    for (let i = 0; i < 3; i++) {
+      const bx = 3 + i * 4;
+      R(c, bx - 1, 16, 4, 1, '#fadc55');
+      R(c, bx, 5, 2, 11, '#e5b82a');
+      R(c, bx, 5, 1, 11, '#fff280');
+      R(c, bx, 8, 2, 1, '#906e10');
+      R(c, bx, 2, 2, 3, '#8e96a2');
+      R(c, bx, 2, 1, 3, '#c2cacf');
+      R(c, bx, 1, 2, 1, '#c2cacf');
+    }
+  });
+
+  // 3. .50 AE: Desert Eagle hand cannon - massive wide chunky brass rounds with copper hollow/flat point
+  makeCanvas(scene, 'it_ammo_ae50', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 6, 20, 12, '#202228');
+    R(c, 3, 7, 18, 10, '#2a2d36');
+    R(c, 2, 15, 20, 2, '#b82020');
+    R(c, 16, 8, 4, 1, '#f0f0f0');
+    R(c, 16, 9, 1, 2, '#f0f0f0');
+    R(c, 16, 11, 4, 1, '#f0f0f0');
+    R(c, 19, 11, 1, 2, '#f0f0f0');
+    R(c, 16, 13, 4, 1, '#f0f0f0');
+    for (let i = 0; i < 2; i++) {
+      const bx = 4 + i * 6;
+      R(c, bx, 16, 4, 1, '#906810');
+      R(c, bx, 6, 4, 10, '#d8a424');
+      R(c, bx + 1, 6, 1, 10, '#fae870');
+      R(c, bx + 3, 6, 1, 10, '#8e640a');
+      R(c, bx, 2, 4, 4, '#ba5522');
+      R(c, bx + 1, 2, 1, 4, '#e87c44');
+      R(c, bx + 1, 1, 2, 1, '#3a1205');
+    }
+  });
+
+  // 4. .45 ACP: MAC-10 - Kraft brown military carton with stubby fat copper-jacketed rounds
+  makeCanvas(scene, 'it_ammo_acp45', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 6, 20, 12, '#6b5034');
+    R(c, 3, 7, 18, 10, '#856442');
+    R(c, 3, 7, 18, 1, '#a48058');
+    R(c, 14, 10, 6, 5, '#3a4426');
+    R(c, 15, 11, 4, 1, '#627242');
+    R(c, 15, 13, 3, 1, '#627242');
+    for (let i = 0; i < 3; i++) {
+      const bx = 4 + i * 4;
+      R(c, bx, 14, 3, 1, '#7a5408');
+      R(c, bx, 7, 3, 7, '#cca025');
+      R(c, bx, 7, 1, 7, '#f4dc5c');
+      R(c, bx + 2, 7, 1, 7, '#886008');
+      R(c, bx, 4, 3, 3, '#c25826');
+      R(c, bx, 4, 1, 3, '#e5824c');
+      R(c, bx + 1, 3, 1, 1, '#e5824c');
+    }
+  });
+
+  // 5. 7.62x39mm: AK-47 Soviet military lacquered steel-case ammo, bottlenecked with sharp pointed spitzer bullets
+  makeCanvas(scene, 'it_ammo_rifle', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 7, 20, 11, '#2c3620');
+    R(c, 3, 8, 18, 9, '#3c4a2c');
+    R(c, 3, 8, 18, 1, '#566a3e');
+    R(c, 17, 11, 3, 3, '#d02525');
+    R(c, 18, 10, 1, 5, '#f03a3a');
+    R(c, 16, 12, 5, 1, '#f03a3a');
+    for (let i = 0; i < 3; i++) {
+      const bx = 4 + i * 4;
+      R(c, bx, 8, 3, 8, '#52503a');
+      R(c, bx, 8, 1, 8, '#767356');
+      R(c, bx + 2, 8, 1, 8, '#343222');
+      R(c, bx, 7, 3, 1, '#942218');
+      R(c, bx + 1, 5, 1, 2, '#484530');
+      R(c, bx, 3, 3, 2, '#ba5824');
+      R(c, bx + 1, 1, 1, 2, '#e0763a');
+    }
+  });
+
+  // 6. 5.56mm NATO: M4A1 & SCAR-L - Coyote tan tactical box with NATO cross & green-tip M855 penetrator rounds
+  makeCanvas(scene, 'it_ammo_r556', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 7, 20, 11, '#7a684c');
+    R(c, 3, 8, 18, 9, '#947e5c');
+    R(c, 3, 8, 18, 1, '#b59c74');
+    R(c, 17, 11, 3, 3, '#1c1c1c');
+    R(c, 18, 10, 1, 5, '#1c1c1c');
+    R(c, 16, 12, 5, 1, '#1c1c1c');
+    for (let i = 0; i < 3; i++) {
+      const bx = 4 + i * 4;
+      R(c, bx, 8, 2, 8, '#dba824');
+      R(c, bx, 8, 1, 8, '#fae668');
+      R(c, bx, 6, 2, 2, '#967010');
+      R(c, bx, 3, 2, 3, '#c25822');
+      R(c, bx, 1, 2, 2, '#24903e');
+      R(c, bx, 1, 1, 2, '#38b858');
+    }
+  });
+
+  // 7. 12ga Shells: Shotguns - Bright crimson red ribbed plastic hull with shiny gold high-brass base & rim
+  makeCanvas(scene, 'it_ammo_shell', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    // Shell 1
+    R(c, 3, 14, 6, 1, '#fde668');
+    R(c, 4, 10, 4, 4, '#d8a420');
+    R(c, 4, 10, 1, 4, '#fff078');
+    R(c, 4, 3, 4, 7, '#d41818');
+    R(c, 5, 3, 1, 7, '#f44242');
+    R(c, 4, 2, 4, 1, '#8e0c0c');
+    R(c, 5, 2, 2, 1, '#d41818');
+    // Shell 2
+    R(c, 9, 15, 6, 1, '#fde668');
+    R(c, 10, 11, 4, 4, '#d8a420');
+    R(c, 10, 11, 1, 4, '#fff078');
+    R(c, 10, 4, 4, 7, '#d41818');
+    R(c, 11, 4, 1, 7, '#f44242');
+    R(c, 10, 3, 4, 1, '#8e0c0c');
+    R(c, 11, 3, 2, 1, '#d41818');
+    // Shell 3
+    R(c, 16, 14, 6, 1, '#fde668');
+    R(c, 17, 10, 4, 4, '#d8a420');
+    R(c, 17, 10, 1, 4, '#fff078');
+    R(c, 17, 3, 4, 7, '#d41818');
+    R(c, 18, 3, 1, 7, '#f44242');
+    R(c, 17, 2, 4, 1, '#8e0c0c');
+    // "12" badge in yellow
+    R(c, 11, 17, 1, 3, '#fadc55');
+    R(c, 13, 17, 3, 1, '#fadc55');
+    R(c, 15, 18, 1, 1, '#fadc55');
+    R(c, 13, 19, 3, 1, '#fadc55');
+  });
+
+  // 8. 7.62x54mm Match: Hunting Rifle & Dragunov SVD - Long sniper match cartridges with silver tips & crosshair box
+  makeCanvas(scene, 'it_ammo_sniper', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 8, 20, 10, '#1c1f26');
+    R(c, 3, 9, 18, 8, '#262b34');
+    R(c, 2, 8, 20, 1, '#3a4250');
+    R(c, 17, 11, 3, 3, '#29b6f6');
+    R(c, 18, 9, 1, 7, '#29b6f6');
+    R(c, 15, 12, 7, 1, '#29b6f6');
+    for (let i = 0; i < 3; i++) {
+      const bx = 4 + i * 4;
+      R(c, bx - 1, 16, 3, 1, '#c89e18');
+      R(c, bx, 7, 2, 9, '#dba824');
+      R(c, bx, 7, 1, 9, '#fff078');
+      R(c, bx, 5, 2, 2, '#8e6c0c');
+      R(c, bx, 2, 2, 3, '#a0abb8');
+      R(c, bx, 2, 1, 3, '#e0e8f0');
+      R(c, bx, 0, 1, 2, '#ffffff');
+    }
+  });
+
+  // 9. 7.62 Belt: M249 SAW / LMG - Olive steel ammo can with linked metallic disintegrating machine gun belt
+  makeCanvas(scene, 'it_ammo_belt', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 8, 20, 10, '#2e3b22');
+    R(c, 3, 9, 18, 8, '#3d4d2e');
+    R(c, 2, 8, 20, 2, '#4d603a');
+    R(c, 10, 8, 4, 1, '#1b2214');
+    R(c, 13, 13, 6, 1, '#dcd050');
+    R(c, 13, 15, 4, 1, '#dcd050');
+    R(c, 2, 6, 12, 3, '#1c1c1e');
+    R(c, 3, 7, 10, 1, '#3a3a40');
+    for (let i = 0; i < 3; i++) {
+      const bx = 3 + i * 4;
+      R(c, bx, 6, 2, 7, '#d8a420');
+      R(c, bx, 6, 1, 7, '#fae668');
+      R(c, bx - 1, 7, 4, 2, '#202024');
+      R(c, bx, 7, 2, 1, '#4e4e56');
+      R(c, bx, 3, 2, 3, '#ba5520');
+      R(c, bx, 1, 1, 2, '#e0763a');
+    }
+  });
+
+  // 10. Rockets: RPG-7 - PG-7V High Explosive Anti-Tank (HEAT) rocket warhead with conical fuze & motor fins
+  makeCanvas(scene, 'it_ammo_rocket', 24, 20, (c) => {
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    R(c, 2, 11, 20, 7, '#422c16');
+    R(c, 3, 12, 18, 5, '#563a1e');
+    R(c, 2, 11, 20, 1, '#78522c');
+    R(c, 11, 1, 2, 3, '#ccd4dc');
+    R(c, 11, 1, 1, 3, '#ffffff');
+    R(c, 10, 4, 4, 2, '#485e34');
+    R(c, 9, 6, 6, 4, '#55703d');
+    R(c, 9, 6, 2, 4, '#769854');
+    R(c, 13, 6, 2, 4, '#384828');
+    R(c, 9, 10, 6, 1, '#c86828');
+    R(c, 10, 11, 4, 2, '#3c4e2b');
+    R(c, 11, 13, 2, 5, '#2e3a22');
+    R(c, 11, 13, 1, 5, '#4a5c36');
+    R(c, 8, 16, 3, 2, '#1e2417');
+    R(c, 13, 16, 3, 2, '#1e2417');
+  });
+
+  // Fallback generic ammo box
+  makeCanvas(scene, 'it_ammo', 24, 20, (c) => {
+    R(c, 2, 5, 20, 13, '#3a3a2a'); R(c, 3, 6, 18, 11, '#6b6a3a'); R(c, 3, 6, 18, 2, '#8b8a50');
+    for (let i = 0; i < 4; i++) { R(c, 5 + i * 4, 9, 2, 6, '#d9a82a'); R(c, 5 + i * 4, 8, 2, 2, '#b66a2a'); }
+  });
+  // Professional paramedic trauma kit hard-case
+  makeCanvas(scene, 'it_medkit', 24, 20, (c) => {
+    // shadow
+    R(c, 2, 18, 20, 2, 'rgba(0,0,0,0.3)');
+    // molded top handle
+    R(c, 7, 2, 2, 3, '#1c1c1c'); R(c, 15, 2, 2, 3, '#1c1c1c');
+    R(c, 7, 1, 10, 2, '#2c2c2c'); R(c, 8, 1, 8, 1, '#4e4e4e');
+    // main red trauma case body
+    R(c, 2, 4, 20, 14, '#8a1212');
+    R(c, 3, 5, 18, 12, '#cf2222');
+    R(c, 3, 5, 18, 1, '#f85454');
+    R(c, 3, 16, 18, 1, '#821212');
+    // reinforced rubber corner bumpers
+    R(c, 2, 4, 3, 3, '#1c1c1c'); R(c, 3, 5, 1, 1, '#3a3a3a');
+    R(c, 19, 4, 3, 3, '#1c1c1c'); R(c, 20, 5, 1, 1, '#3a3a3a');
+    R(c, 2, 15, 3, 3, '#1c1c1c'); R(c, 3, 16, 1, 1, '#3a3a3a');
+    R(c, 19, 15, 3, 3, '#1c1c1c'); R(c, 20, 16, 1, 1, '#3a3a3a');
+    // dual chrome/steel latches
+    R(c, 6, 9, 2, 4, '#d0d4dc'); R(c, 6, 9, 2, 1, '#ffffff'); R(c, 6, 12, 2, 1, '#7a808a');
+    R(c, 16, 9, 2, 4, '#d0d4dc'); R(c, 16, 9, 2, 1, '#ffffff'); R(c, 16, 12, 2, 1, '#7a808a');
+    // center white medical emblem badge
+    R(c, 9, 7, 6, 8, '#f4f6fa');
+    R(c, 10, 6, 4, 10, '#f4f6fa');
+    // vivid red medical cross
+    R(c, 11, 7, 2, 8, '#d01818');
+    R(c, 9, 10, 6, 2, '#d01818');
+    R(c, 11, 7, 1, 8, '#ee3838'); R(c, 9, 10, 6, 1, '#ee3838');
+  });
+
+  // Cash / money stack pickup
+  makeCanvas(scene, 'it_cash', 24, 20, (c) => {
+    // shadow
+    R(c, 3, 17, 18, 2, 'rgba(0,0,0,0.3)');
+    // back stack of bills
+    R(c, 4, 8, 14, 6, '#287542');
+    R(c, 4, 7, 14, 2, '#4ea668');
+    R(c, 10, 7, 3, 7, '#eae6c2');
+    // front stack of bills
+    R(c, 6, 11, 14, 6, '#328b4c');
+    R(c, 6, 16, 14, 1, '#1b502c');
+    R(c, 6, 10, 14, 2, '#5ac57a');
+    R(c, 6, 11, 1, 5, '#286f3e'); R(c, 19, 11, 1, 5, '#286f3e');
+    // white/cream paper band
+    R(c, 12, 10, 3, 7, '#f6f2d6');
+    R(c, 12, 10, 1, 7, '#d2cc9e'); R(c, 14, 10, 1, 7, '#d2cc9e');
+    R(c, 13, 12, 1, 3, '#2a7840');
+    // sparkle glint
+    R(c, 18, 5, 2, 2, '#fff490');
+    R(c, 19, 4, 1, 4, '#fff490');
+    R(c, 17, 5, 4, 1, '#fff490');
   });
   makeCanvas(scene, 'it_armor', 20, 20, (c) => {
     R(c, 3, 2, 14, 16, '#2c3a52'); R(c, 4, 3, 12, 14, '#4a6288'); R(c, 8, 2, 4, 4, '#0b0f0b');
     R(c, 5, 9, 10, 2, '#7a98c0'); R(c, 5, 13, 10, 2, '#7a98c0');
   });
-  makeCanvas(scene, 'it_backpack', 20, 20, (c) => {
-    R(c, 3, 3, 14, 16, '#2e3a1c'); R(c, 4, 4, 12, 14, '#5a6e34'); R(c, 6, 1, 8, 3, '#2e3a1c');
-    R(c, 5, 10, 10, 6, '#44562a'); R(c, 9, 11, 2, 3, '#c9b050');
+  // Tier 1: Concealable Kevlar Vest
+  makeCanvas(scene, 'it_armor_light', 24, 24, (c) => {
+    R(c, 3, 21, 18, 2, 'rgba(0,0,0,0.3)');
+    R(c, 4, 3, 16, 17, '#18202c');
+    R(c, 5, 4, 14, 15, '#253346');
+    R(c, 9, 3, 6, 4, '#0e141c'); // Neck scoop
+    R(c, 4, 7, 2, 5, '#3b4e68'); // Left shoulder strap
+    R(c, 18, 7, 2, 5, '#3b4e68'); // Right shoulder strap
+    R(c, 7, 10, 10, 8, '#2f4058'); // Center trauma pad
+    R(c, 8, 11, 8, 2, '#486184');
+    R(c, 8, 14, 8, 2, '#486184');
+    R(c, 4, 14, 3, 3, '#7aff9a'); // Tier 1 green status badge
+  });
+  // Tier 2: Tactical Plate Carrier
+  makeCanvas(scene, 'it_armor_tac', 24, 24, (c) => {
+    R(c, 3, 21, 18, 2, 'rgba(0,0,0,0.3)');
+    R(c, 4, 2, 16, 18, '#22281e');
+    R(c, 5, 3, 14, 16, '#384232');
+    R(c, 9, 2, 6, 3, '#141812'); // Neck scoop
+    // MOLLE webbing strips across chest
+    for (let my = 7; my <= 15; my += 3) {
+      R(c, 6, my, 12, 1.5, '#4f5c46');
+      for (let mx = 6; mx <= 16; mx += 3) R(c, mx, my, 1, 1.5, '#22281e');
+    }
+    // Hard ceramic trauma plate bevel
+    R(c, 7, 6, 10, 11, '#2c3528');
+    R(c, 8, 7, 8, 9, '#3e4a38');
+    // Tier 2 cyan indicator
+    R(c, 4, 15, 3, 3, '#3ad0e0');
+  });
+  // Tier 3: Heavy Assault Juggernaut
+  makeCanvas(scene, 'it_armor_heavy', 24, 24, (c) => {
+    R(c, 2, 21, 20, 2, 'rgba(0,0,0,0.35)');
+    // Heavy shoulder pauldrons
+    R(c, 2, 4, 5, 6, '#2a2d32'); R(c, 17, 4, 5, 6, '#2a2d32');
+    R(c, 3, 5, 3, 4, '#42464e'); R(c, 18, 5, 3, 4, '#42464e');
+    // Ballistic neck gorget collar
+    R(c, 8, 2, 8, 4, '#1c1e22');
+    R(c, 9, 3, 6, 2, '#4a4f58');
+    // Main titanium composite body
+    R(c, 4, 5, 16, 15, '#1e2024');
+    R(c, 5, 6, 14, 13, '#32363e');
+    // Ribbed armor shock plates
+    for (let ry = 8; ry <= 16; ry += 3) {
+      R(c, 6, ry, 12, 2, '#484d58');
+      R(c, 7, ry, 10, 1, '#656c7a');
+    }
+    // Gold rivets & Tier 3 Gold badge
+    R(c, 6, 7, 1, 1, '#ffd070'); R(c, 17, 7, 1, 1, '#ffd070');
+    R(c, 4, 15, 3, 3, '#ffd070');
+  });
+  // Ceramic Trauma Plate (Armor Repair Plate)
+  makeCanvas(scene, 'it_armor_plate', 20, 20, (c) => {
+    R(c, 2, 17, 16, 2, 'rgba(0,0,0,0.3)');
+    R(c, 4, 2, 12, 15, '#1a1f26');
+    R(c, 5, 3, 10, 13, '#363f4c');
+    R(c, 6, 4, 8, 11, '#4e5b6e');
+    R(c, 7, 5, 6, 4, '#6a7a92');
+    // Cross reinforcement embossing
+    R(c, 9, 7, 2, 6, '#28303a');
+    R(c, 7, 9, 6, 2, '#28303a');
+  });
+  // High-tier tactical expedition backpack item icon
+  makeCanvas(scene, 'it_backpack', 24, 24, (c) => {
+    // Soft ground shadow
+    R(c, 3, 21, 18, 2, 'rgba(0,0,0,0.3)');
+    // Molded carry handle on top
+    R(c, 9, 2, 6, 2, '#181b20');
+    R(c, 10, 3, 4, 1, '#343840');
+    // Main backpack body - contoured durable nylon
+    R(c, 6, 5, 12, 16, '#28331e');
+    R(c, 5, 7, 14, 13, '#354427');
+    R(c, 6, 6, 12, 14, '#485c35');
+    // Top flap highlight
+    R(c, 7, 5, 10, 2, '#5e7745');
+    // Top zipper
+    R(c, 6, 8, 12, 1, '#1e2417');
+    R(c, 15, 8, 2, 1, '#c8cdd4'); // zipper pull
+    // Front secondary compartment
+    R(c, 6, 10, 12, 8, '#324024');
+    R(c, 7, 11, 10, 6, '#3c4d2c');
+    R(c, 6, 10, 12, 1, '#1e2417'); // pocket zipper
+    R(c, 8, 10, 2, 1, '#c8cdd4');
+    // Dual compression straps with buckles
+    R(c, 4, 12, 16, 1, '#181b20');
+    R(c, 4, 15, 16, 1, '#181b20');
+    R(c, 8, 12, 2, 1, '#d4af37'); // gold/brass buckle
+    R(c, 14, 12, 2, 1, '#d4af37');
+    R(c, 8, 15, 2, 1, '#d4af37');
+    R(c, 14, 15, 2, 1, '#d4af37');
+    // Dark abrasion-resistant bottom boot
+    R(c, 5, 18, 14, 3, '#181a16');
+    R(c, 6, 19, 12, 1, '#252922');
+    // Side elastic mesh pockets
+    R(c, 4, 11, 2, 6, '#1e2417');
+    R(c, 18, 11, 2, 6, '#1e2417');
   });
   makeCanvas(scene, 'glow', 32, 32, (c) => {
     disc(c, 16, 16, 15, 'rgba(255,230,120,0.16)'); disc(c, 16, 16, 11, 'rgba(255,230,120,0.16)');

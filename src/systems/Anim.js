@@ -9,9 +9,9 @@ export function poseFrame(s) {
   if (s.lean && !s.moving) return F.pickup;
   if (s.talk && !s.moving) return (Math.floor((s.now || 0) / 230) % 3) === 1 ? F.breath : F.idle;
   if (s.panic) return s.moving ? F.run + (Math.floor(s.t / 85) % 4) : F.panic;
-  if (s.moving) {
+  if (s.moving || (s.moveBlend && s.moveBlend > 0.08)) {
     if (s.crouch) return F.walk + (Math.floor(s.t / 150) % 4);
-    if (s.sprint) return F.run + (Math.floor(s.t / 85) % 4);
+    if (s.sprint || (s.moveBlend && s.moveBlend > 1.35)) return F.run + (Math.floor(s.t / 85) % 4);
     return F.walk + (Math.floor(s.t / 120) % 4);
   }
   if (s.crouch) return F.crouch;

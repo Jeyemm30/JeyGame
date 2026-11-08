@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, WEAPON_CATS, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
+import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, WEAPON_CATS, MELEE, MELEE_ORDER, AMMO_TYPES, ARMOR_TIERS, ARMOR_ORDER } from '../config.js';
 import { label, button, fs, uiK } from '../ui/widgets.js';
 import { settings } from '../systems/Settings.js';
 import { sfx } from '../systems/Audio.js';
@@ -47,26 +47,62 @@ export default class UIScene extends Phaser.Scene {
     this.vignette = this.add.rectangle(640, 360, 1280, 720, 0xff0000, 0).setDepth(0);
 
     // bottom-left stats
+    this.armLabel = label(this, 20, 592 + bo, 'AP', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
+    this.armText = label(this, 70, 592 + bo, '', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
     this.hpText = label(this, 70, 618 + bo, '', 16, '#ffffff', 0, 0.5).setDepth(3);
     label(this, 20, 618 + bo, 'HP', 16, '#ff7a7a', 0, 0.5).setDepth(3);
-    this.arText = label(this, 70, 646 + bo, '', 16, '#ffffff', 0, 0.5).setDepth(3);
-    label(this, 20, 646 + bo, 'AR', 16, '#8ab4ff', 0, 0.5).setDepth(3);
-    label(this, 20, 676 + bo, 'ST', 14, '#e8d56a', 0, 0.5).setDepth(3);
+    label(this, 20, 646 + bo, 'ST', 14, '#e8d56a', 0, 0.5).setDepth(3);
 
     // weapon block (bottom-right on desktop)
     this.wName = label(this, wx, 560 + wy, '', 22, '#f2e08a', 1, 0.5).setDepth(3);
     this.wAmmo = label(this, wx, 604 + wy, '', 46, '#ffffff', 1, 0.5).setDepth(3);
     this.wSub = label(this, wx, 646 + wy, '', 16, '#bcd0b0', 1, 0.5).setDepth(3);
-    this.slotIcons = [];
-    this.slotKeys = [];
-    ['Z', '1', '2', '3', '4', '5', '6'].forEach((k, i) => {
-      const x = wx - (6 - i) * 58 - 26;
-      const ic = this.add.image(x, 692 + wy, 'm_fist').setDepth(3);
-      const kt = label(this, x - 26, 674 + wy, k, 12, '#ffffff', 0, 0).setDepth(3);
-      this.slotIcons.push(ic);
-      this.slotKeys.push(kt);
-    });
-    this.supplyText = label(this, 20, 520, '', 16, '#e8f2e0', 0, 0.5).setDepth(3);
+    // 4-slot customizable equipment inventory bar (Keys 1-4)
+    this.hudSlots = [];
+    const slotLabels = ['PRI', 'BACK', 'FOOD', 'MED'];
+    const totalW = 4 * 70 + 3 * 6; // 298px
+    const startX = wx - totalW;
+    for (let i = 0; i < 4; i++) {
+      const sx = startX + i * 76;
+      const bg = this.add.rectangle(sx + 35, 692 + wy, 70, 42, 0x141f12, 0.85).setStrokeStyle(2, 0x44603c).setDepth(3).setInteractive({ useHandCursor: true });
+      const keyT = label(this, sx + 4, 674 + wy, String(i + 1), 11, '#ffffff', 0, 0).setDepth(4);
+      const tagT = label(this, sx + 66, 674 + wy, slotLabels[i], 9, '#7aff9a', 1, 0).setDepth(4);
+      const icon = this.add.image(sx + 35, 691 + wy, 'm_stick').setDepth(4);
+      const badge = label(this, sx + 35, 703 + wy, '', 10, '#ffffff', 0.5, 0).setDepth(4);
+
+      bg.on('pointerup', () => {
+        const p = this.p;
+        if (!p || p.dead) return;
+        if (i === 0) {
+          if (p.slots[1] && p.weapons[p.slots[1]]) p.equip(p.slots[1]);
+        } else if (i === 1) {
+          if (p.slots[2] && p.weapons[p.slots[2]]) {
+            if (p.current === p.slots[2] && p.slots[1] && p.weapons[p.slots[1]]) p.equip(p.slots[1]);
+            else p.equip(p.slots[2]);
+          } else {
+            this.toast('No secondary weapon (assign in Tab)');
+          }
+        } else if (i === 2) {
+          const sId = p.slots[3];
+          if (sId && (p.supplies[sId] || 0) > 0) {
+            p.startSupply(sId);
+          } else if (sId) {
+            this.toast(`No ${SUPPLIES[sId]?.label || 'food'} remaining`);
+          } else {
+            this.toast('No food assigned to Slot 3 (Tab)');
+          }
+        } else if (i === 3) {
+          const mId = p.slots[4] || 'medkit';
+          if (mId === 'medkit') {
+            p.startMedkit();
+          } else if (SUPPLIES[mId]) {
+            p.startSupply(mId);
+          }
+        }
+      });
+
+      this.hudSlots.push({ bg, keyT, tagT, icon, badge });
+    }
 
     // top-left
     this.killText = label(this, 20, 18, '', 26, '#ffd070', 0, 0).setDepth(3);
@@ -183,7 +219,7 @@ export default class UIScene extends Phaser.Scene {
   /* ----------------------------------------------------------- state toggles */
   modalActive() {
     if (this.game_.cine) return true;                  // opening cutscene: no pause / map / inventory until it ends or is skipped
-    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'Store', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
+    return ['Pause', 'GameOver', 'Settings', 'Map', 'Missions', 'Shop', 'Store', 'SaveLoad', 'Dialogue', 'Ending', 'Credits', 'Vault', 'Atm', 'Lockpick'].some((k) => this.scene.isActive(k)) || this.scene.isPaused('Pause');
   }
 
   onEsc() {
@@ -231,6 +267,8 @@ export default class UIScene extends Phaser.Scene {
     this.inv.setVisible(this.invOpen);
     sfx.click();
     if (this.invOpen) {
+      this.lastInvHash = null;
+      this.refreshInventory();
       this.scene.pause('Game');
       this.input.setDefaultCursor('default');
     } else {
@@ -248,81 +286,424 @@ export default class UIScene extends Phaser.Scene {
   buildInventory() {
     const c = this.add.container(0, 0).setDepth(50).setVisible(false);
     this.inv = c;
-    const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.65).setInteractive();
+    const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.68).setInteractive();
     const panel = this.add.rectangle(640, 360, 1140, 590, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
-    c.add([dim, panel, label(this, 640, 98, 'INVENTORY', 32, '#f2e08a', 0.5, 0.5)]);
-    c.add(label(this, 90, 134, 'FIREARMS  (keys 1-6 pick a class, press again to cycle)', 16, '#9db890'));
-    c.add(label(this, 90, 452, 'MELEE WEAPONS', 16, '#9db890'));
-    c.add(label(this, 840, 134, 'AMMO RESERVE', 16, '#9db890'));
-    c.add(label(this, 840, 392, 'SUPPLIES', 16, '#9db890'));
+    c.add([
+      dim,
+      panel,
+      label(this, 640, 92, 'EQUIPMENT LOADOUT & INVENTORY', 24, '#f2e08a', 0.5, 0.5),
+      label(this, 640, 640, this.touchMode ? 'Tap slots or items to customize loadout - Tap X to close' : 'Keys 1-4: [1] Primary (Hand)  [2] Secondary (Back)  [3] Food  [4] Medical - TAB / ESC to close', 13, '#7f9a72', 0.5, 0.5),
+      button(this, 1150, 92, 'X', () => this.toggleInventory(), { w: 46, h: 36, size: 20 })
+    ]);
 
-    const mkRow = (id, isMelee, x, y, w, h) => {
-      const def = isMelee ? MELEE[id] : WEAPONS[id];
-      const bg = this.add.rectangle(x, y, w, h, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
-      bg.on('pointerup', () => { if (this.p.weapons[id]) this.p.equip(id); });
-      const icon = this.add.image(x + 6, y + h / 2, isMelee ? def.tex : def.gun).setOrigin(0, 0.5);
-      icon.setScale(Math.min(1.3, 50 / icon.width));
-      const name = label(this, x + 62, y + 4, def.name, 14, '#ffffff');
-      const info = label(this, x + 62, y + h - 19, '', 11, '#bcd0b0');
-      c.add([bg, icon, name, info]);
-      return { id, isMelee, bg, icon, name, info };
-    };
-    this.invRows = [];
-    WEAPON_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, false, 90 + (i % 3) * 236, 158 + Math.floor(i / 3) * 48, 230, 44)));
-    MELEE_ORDER.forEach((id, i) => this.invRows.push(mkRow(id, true, 90 + (i % 4) * 178, 476 + Math.floor(i / 4) * 48, 172, 44)));
+    // ---- 4 customizable equipment loadout cards across the top ----
+    this.equipCards = [];
+    const cardDefs = [
+      { key: '1', title: '[1] PRIMARY (HAND)', subDef: 'Held in hands' },
+      { key: '2', title: '[2] SECONDARY (BACK)', subDef: 'Carried on back' },
+      { key: '3', title: '[3] FOOD / CONSUMABLE', subDef: 'Quick-use food' },
+      { key: '4', title: '[4] MEDKIT', subDef: 'Quick-use medkit' }
+    ];
 
-    this.invAmmo = Object.keys(AMMO_TYPES).map((k, i) => {
-      const t = label(this, 840, 158 + i * 22, '', 14, '#e8f2e0');
-      c.add(t);
-      return { k, t };
-    });
-    this.medText = label(this, 840, 418, '', 16, '#e8f2e0');
-    this.plateText = label(this, 840, 458, '', 16, '#e8f2e0');
-    this.packText = label(this, 840, 498, '', 16, '#e8f2e0');
-    this.statText = label(this, 90, 606, '', 16, '#ffffff');
-    this.questText = label(this, 840, 532, '', 14, '#7aff9a');
-    const useMed = button(this, 1160, 426, 'USE', () => { if (this.p.useMedkit()) this.toast('Used medkit (+50 HP)'); }, { w: 80, h: 34, size: 15 });
-    const usePlate = button(this, 1160, 466, 'USE', () => { if (this.p.useArmor()) this.toast('Armor plate applied (+40)'); }, { w: 80, h: 34, size: 15 });
-    c.add([this.medText, this.plateText, this.packText, this.statText, this.questText, useMed, usePlate]);
-    // everyday supplies bought in stores: one clickable chip per owned type (click = use one); B uses the most sensible one
-    c.add(label(this, 840, 560, 'EVERYDAY SUPPLIES  (click to use, B = best)', 13, '#9db890'));
-    this.supChips = SUPPLY_IDS.map((id) => {
-      const t = label(this, 840, 580, '', 13, '#ffe9a0').setInteractive({ useHandCursor: true }).setVisible(false);
-      t.on('pointerup', () => { const m = useSupply(this.p, id); this.toast(m || (SUPPLIES[id].heal && !SUPPLIES[id].stamina ? 'Your health is full' : 'You do not need that right now')); });
-      c.add(t);
-      return { id, t };
-    });
-    c.add(label(this, 640, 642, this.touchMode ? 'Tap X to close - tap a weapon to equip it' : 'TAB / ESC to close - click a weapon to equip it (Z cycles melee, Q cycles all)', 14, '#7f9a72', 0.5, 0.5));
-    c.add(button(this, 1150, 98, 'X', () => this.toggleInventory(), { w: 50, h: 44, size: 22 }));
+    for (let i = 0; i < 4; i++) {
+      const cx = 90 + i * 276;
+      const cy = 114;
+      const bg = this.add.rectangle(cx, cy, 266, 68, 0x1a2618).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
+      const tag = label(this, cx + 8, cy + 6, cardDefs[i].title, 11, '#9db890');
+      const badge = label(this, cx + 258, cy + 6, '', 10, '#ffd070', 1, 0);
+      const icon = this.add.image(cx + 8, cy + 44, 'm_stick').setOrigin(0, 0.5);
+      const name = label(this, cx + 50, cy + 24, 'Empty', 13, '#ffffff');
+      const info = label(this, cx + 50, cy + 44, cardDefs[i].subDef, 11, '#bcd0b0');
+
+      bg.on('pointerup', () => {
+        const p = this.p;
+        if (!p || p.dead) return;
+        if (i === 0) {
+          if (p.slots[1] && p.weapons[p.slots[1]]) {
+            p.equip(p.slots[1]);
+            this.toast(`Equipped ${p.weapon.name} in hand`);
+            this.refreshInventory();
+          } else {
+            this.toast('Assign a primary weapon below using [1]');
+          }
+        } else if (i === 1) {
+          if (p.slots[2] && p.weapons[p.slots[2]]) {
+            if (p.current === p.slots[2] && p.slots[1]) p.equip(p.slots[1]);
+            else p.equip(p.slots[2]);
+            this.toast(`Swapped weapon: ${p.weapon.name}`);
+            this.refreshInventory();
+          } else {
+            this.toast('Assign a secondary weapon below using [2]');
+          }
+        } else if (i === 2) {
+          const sId = p.slots[3];
+          if (sId && (p.supplies[sId] || 0) > 0) {
+            this.toggleInventory();
+            p.startSupply(sId);
+          } else {
+            this.toast('Click a food item below to assign to Slot 3');
+          }
+        } else if (i === 3) {
+          const mId = p.slots[4] || 'medkit';
+          if (mId === 'medkit') {
+            if (p.medkits > 0) {
+              this.toggleInventory();
+              p.startMedkit();
+            } else {
+              this.toast('No medkits remaining');
+            }
+          } else if (SUPPLIES[mId]) {
+            if ((p.supplies[mId] || 0) > 0) {
+              this.toggleInventory();
+              p.startSupply(mId);
+            }
+          }
+        }
+      });
+
+      c.add([bg, tag, badge, icon, name, info]);
+      this.equipCards.push({ bg, tag, badge, icon, name, info });
+    }
+
+    // Dynamic body container that only displays currently owned items
+    this.invBody = this.add.container(0, 0);
+    c.add(this.invBody);
+    this.lastInvHash = null;
   }
 
   refreshInventory() {
     const p = this.p;
-    this.invRows.forEach((r) => {
-      const own = p.weapons[r.id];
-      r.icon.setAlpha(own ? 1 : 0.25);
-      r.name.setAlpha(own ? 1 : 0.4);
-      r.name.setText((r.isMelee ? MELEE[r.id].name : WEAPONS[r.id].name) + (p.current === r.id ? '  *' : ''));
-      if (r.isMelee) {
-        const w = MELEE[r.id];
-        r.info.setText(own ? `Dmg ${w.dmg}  ${(1000 / w.cd).toFixed(1)}/s` : 'Not found yet');
+    if (!p) return;
+    p.validateSlots();
+
+    // 1. Refresh 4 top equipment loadout cards
+    if (this.equipCards && this.equipCards.length === 4) {
+      // Slot 1: Primary Weapon
+      const c1 = this.equipCards[0];
+      const w1 = p.slots[1];
+      if (w1 && p.weapons[w1]) {
+        const isM = !!MELEE[w1];
+        const def = isM ? MELEE[w1] : WEAPONS[w1];
+        c1.icon.setTexture(isM ? def.tex : def.gun).setVisible(true);
+        c1.icon.setScale(Math.min(1.2, 42 / Math.max(c1.icon.width, 16)));
+        c1.name.setText(def.name);
+        c1.info.setText(isM ? `Dmg ${def.dmg}` : `Mag ${p.weapons[w1].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`);
+        const act = (p.current === w1);
+        c1.badge.setText(act ? 'IN HAND' : 'READY');
+        c1.badge.setColor(act ? '#f2e08a' : '#7aff9a');
+        c1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
       } else {
-        const w = WEAPONS[r.id];
-        r.info.setText(own ? `Dmg ${w.damage}${w.pellets > 1 ? 'x' + w.pellets : ''}  ${own.mag}/${w.mag}  Res ${p.ammo[w.ammo]}` : 'Not found yet');
+        c1.icon.setVisible(false);
+        c1.name.setText('Bare Hands (Fists)');
+        c1.info.setText('Dmg 8 (Punch)');
+        const act = (p.current === 'fists');
+        c1.badge.setText(act ? 'IN HAND' : 'UNARMED');
+        c1.badge.setColor(act ? '#f2e08a' : '#889980');
+        c1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x2c3a28);
       }
-      r.bg.setStrokeStyle(2, own ? (p.current === r.id ? 0xf2e08a : 0x44603c) : 0x2c3a28);
-    });
-    this.invAmmo.forEach((a) => {
-      a.t.setText(`${AMMO_TYPES[a.k].name.padEnd(13)} ${String(p.ammo[a.k]).padStart(3)} / ${p.ammoCap(a.k)}`);
-    });
-    this.medText.setText(`Medkits  ${p.medkits}/${p.medCap()}`);
-    this.plateText.setText(`Plates   ${p.plates}/${p.plateCap()}`);
-    this.packText.setText(`Backpack Lv ${p.backpack}/2`);
-    let ci = 0;
-    this.supChips.forEach((s) => { const n = p.supplies[s.id] || 0; if (!n || ci >= 12) { s.t.setVisible(false); return; } s.t.setText(`${SUPPLIES[s.id].label} x${n}`).setPosition(840 + (ci % 2) * 190, 580 + Math.floor(ci / 2) * 16).setVisible(true); ci++; });
-    const qi = (profile.flags.qitems || []);
-    this.questText.setText(qi.length ? 'QUEST ITEMS: ' + qi.join(', ').replace(/q_/g, '') : '');
-    this.statText.setText(`HP ${Math.ceil(p.hp)}/${p.maxHp}    Armor ${Math.ceil(p.armor)}/${p.maxArmor}    Wanted ${'*'.repeat(this.game_.wanted.level) || 'none'}`);
+
+      // Slot 2: Secondary Weapon (Back)
+      const c2 = this.equipCards[1];
+      const w2 = p.slots[2];
+      if (w2 && p.weapons[w2]) {
+        const isM = !!MELEE[w2];
+        const def = isM ? MELEE[w2] : WEAPONS[w2];
+        c2.icon.setTexture(isM ? def.tex : def.gun).setVisible(true);
+        c2.icon.setScale(Math.min(1.2, 42 / Math.max(c2.icon.width, 16)));
+        c2.name.setText(def.name);
+        c2.info.setText(isM ? `Dmg ${def.dmg}` : `Mag ${p.weapons[w2].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`);
+        const act = (p.current === w2);
+        c2.badge.setText(act ? 'IN HAND' : 'ON BACK');
+        c2.badge.setColor(act ? '#f2e08a' : '#7aff9a');
+        c2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+      } else {
+        c2.icon.setVisible(false);
+        c2.name.setText('Empty (Back)');
+        c2.info.setText('Click [2] on weapon below');
+        c2.badge.setText('NONE');
+        c2.badge.setColor('#777777');
+        c2.bg.setStrokeStyle(1.5, 0x2c3a28);
+      }
+
+      // Slot 3: Food / Consumable
+      const c3 = this.equipCards[2];
+      const s3 = p.slots[3];
+      if (s3 && SUPPLIES[s3] && (p.supplies[s3] || 0) > 0) {
+        const count = p.supplies[s3] || 0;
+        c3.icon.setTexture('sp_' + s3).setVisible(true);
+        c3.icon.setScale(Math.min(1.2, 36 / Math.max(c3.icon.width, 16)));
+        c3.name.setText(SUPPLIES[s3].label);
+        c3.info.setText(`Owned: x${count}  (${SUPPLIES[s3].heal ? '+' + SUPPLIES[s3].heal + ' HP' : ''} ${SUPPLIES[s3].stamina ? '+' + SUPPLIES[s3].stamina + ' ST' : ''})`);
+        c3.badge.setText('READY');
+        c3.badge.setColor('#ffe9a0');
+        c3.bg.setStrokeStyle(2, 0x5a7e4e);
+      } else if (s3 && SUPPLIES[s3]) {
+        c3.icon.setTexture('sp_' + s3).setVisible(true);
+        c3.icon.setScale(Math.min(1.2, 36 / Math.max(c3.icon.width, 16)));
+        c3.name.setText(SUPPLIES[s3].label);
+        c3.info.setText('Owned: 0 (Depleted)');
+        c3.badge.setText('DEPLETED');
+        c3.badge.setColor('#ff6a5a');
+        c3.bg.setStrokeStyle(1.5, 0x2c3a28);
+      } else {
+        c3.icon.setVisible(false);
+        c3.name.setText('Empty');
+        c3.info.setText('Click a food item below');
+        c3.badge.setText('NONE');
+        c3.badge.setColor('#777777');
+        c3.bg.setStrokeStyle(1.5, 0x2c3a28);
+      }
+
+      // Slot 4: Medkit / Medical Items
+      const c4 = this.equipCards[3];
+      const s4 = p.slots[4] || 'medkit';
+      if (s4 === 'medkit') {
+        const count = p.medkits;
+        c4.icon.setTexture('it_medkit').setVisible(true);
+        c4.icon.setScale(Math.min(1.2, 36 / Math.max(c4.icon.width, 16)));
+        c4.name.setText('Medkits');
+        c4.info.setText(`Owned: ${count} / ${p.medCap()} (+50 HP)`);
+        c4.badge.setText(count > 0 ? 'READY' : 'DEPLETED');
+        c4.badge.setColor(count > 0 ? '#ff7a7a' : '#ff6a5a');
+        c4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x2c3a28);
+      } else if (SUPPLIES[s4]) {
+        const count = p.supplies[s4] || 0;
+        c4.icon.setTexture('sp_' + s4).setVisible(true);
+        c4.icon.setScale(Math.min(1.2, 36 / Math.max(c4.icon.width, 16)));
+        c4.name.setText(SUPPLIES[s4].label);
+        c4.info.setText(`Owned: x${count} (+${SUPPLIES[s4].heal || 0} HP)`);
+        c4.badge.setText(count > 0 ? 'READY' : 'DEPLETED');
+        c4.badge.setColor(count > 0 ? '#ffe9a0' : '#ff6a5a');
+        c4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
+      }
+    }
+
+    // 2. Only rebuild owned items body when inventory state has changed
+    const ownedGuns = WEAPON_ORDER.filter((id) => !!p.weapons[id]);
+    const ownedMelee = MELEE_ORDER.filter((id) => id !== 'fists' && !!p.weapons[id]);
+    const ownedSupplies = SUPPLY_IDS.filter((id) => (p.supplies[id] || 0) > 0);
+    const ownedAmmo = Object.keys(AMMO_TYPES).filter((k) => (p.ammo[k] || 0) > 0 || ownedGuns.some((g) => WEAPONS[g].ammo === k));
+
+    const hash = [
+      p.current, p.slots[1], p.slots[2], p.slots[3], p.slots[4],
+      ownedGuns.map((g) => `${g}:${p.weapons[g].mag}:${p.ammo[WEAPONS[g].ammo]}`).join(','),
+      ownedMelee.join(','),
+      ownedSupplies.map((s) => `${s}:${p.supplies[s]}`).join(','),
+      ownedAmmo.map((a) => `${a}:${p.ammo[a]}`).join(','),
+      p.medkits, p.backpack, p.armorTier, Math.round(p.armor), Math.round(p.maxArmor), p.plates,
+      Object.keys(p.armors || {}).sort().join(','),
+      Math.ceil(p.hp), Math.ceil(p.stamina),
+      this.game_.wanted ? this.game_.wanted.level : 0,
+      (profile.flags.qitems || []).join(',')
+    ].join('|');
+
+    if (this.lastInvHash === hash) return;
+    this.lastInvHash = hash;
+
+    // Clear and rebuild owned items inside invBody
+    this.invBody.removeAll(true);
+
+    // ==========================================
+    // LEFT SIDE: OWNED WEAPONS (x: 90 .. 770)
+    // ==========================================
+    // FIREARMS (only owned guns)
+    this.invBody.add(label(this, 90, 196, `OWNED FIREARMS (${ownedGuns.length})`, 14, '#9db890'));
+    let nextY = 220;
+    if (ownedGuns.length === 0) {
+      this.invBody.add(label(this, 90, 222, 'No firearms in inventory. (Find weapons or visit arms dealers)', 12, '#7a9270'));
+      nextY = 252;
+    } else {
+      ownedGuns.forEach((id, idx) => {
+        const col = idx % 3, row = Math.floor(idx / 3);
+        const gx = 90 + col * 230, gy = 216 + row * 46;
+        const def = WEAPONS[id];
+        const isS1 = (p.slots[1] === id);
+        const isS2 = (p.slots[2] === id);
+        const isActive = (p.current === id);
+
+        const bg = this.add.rectangle(gx, gy, 224, 42, 0x1f2c1b).setOrigin(0, 0)
+          .setStrokeStyle(2, isActive ? 0xf2e08a : (isS1 || isS2 ? 0x6b8f5a : 0x44603c))
+          .setInteractive({ useHandCursor: true });
+        bg.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Equipped ${def.name} in hand`); this.refreshInventory(); });
+
+        const icon = this.add.image(gx + 6, gy + 21, def.gun).setOrigin(0, 0.5);
+        icon.setScale(Math.min(1.2, 40 / Math.max(icon.width, 16)));
+        const name = label(this, gx + 48, gy + 4, def.name, 12, '#ffffff');
+        const info = label(this, gx + 48, gy + 25, `${p.weapons[id].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`, 10, '#bcd0b0');
+
+        // Button [1] (Primary)
+        const btn1 = this.add.rectangle(gx + 172, gy + 21, 22, 26, isS1 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
+        const txt1 = label(this, gx + 172, gy + 21, isS1 ? '1*' : '1', 11, isS1 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        btn1.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Assigned ${def.name} to Primary (Key 1)`); this.refreshInventory(); });
+
+        // Button [2] (Secondary / Back)
+        const btn2 = this.add.rectangle(gx + 200, gy + 21, 22, 26, isS2 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
+        const txt2 = label(this, gx + 200, gy + 21, isS2 ? '2*' : '2', 11, isS2 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        btn2.on('pointerup', () => { p.assignSlot(2, id); this.toast(`Assigned ${def.name} to Secondary (Key 2, on back)`); this.refreshInventory(); });
+
+        this.invBody.add([bg, icon, name, info, btn1, txt1, btn2, txt2]);
+      });
+      nextY = 216 + Math.ceil(ownedGuns.length / 3) * 46 + 14;
+    }
+
+    // MELEE WEAPONS (only owned melee)
+    this.invBody.add(label(this, 90, nextY, `OWNED MELEE WEAPONS (${ownedMelee.length})`, 14, '#9db890'));
+    if (ownedMelee.length === 0) {
+      this.invBody.add(label(this, 90, nextY + 24, 'No melee weapons in inventory.', 12, '#7a9270'));
+    } else {
+      ownedMelee.forEach((id, idx) => {
+        const col = idx % 3, row = Math.floor(idx / 3);
+        const mx = 90 + col * 230, my = nextY + 22 + row * 46;
+        const def = MELEE[id];
+        const isS1 = (p.slots[1] === id);
+        const isS2 = (p.slots[2] === id);
+        const isActive = (p.current === id);
+
+        const bg = this.add.rectangle(mx, my, 224, 42, 0x1f2c1b).setOrigin(0, 0)
+          .setStrokeStyle(2, isActive ? 0xf2e08a : (isS1 || isS2 ? 0x6b8f5a : 0x44603c))
+          .setInteractive({ useHandCursor: true });
+        bg.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Equipped ${def.name} in hand`); this.refreshInventory(); });
+
+        const icon = this.add.image(mx + 6, my + 21, def.tex).setOrigin(0, 0.5);
+        icon.setScale(Math.min(1.2, 40 / Math.max(icon.width, 16)));
+        const name = label(this, mx + 48, my + 4, def.name, 12, '#ffffff');
+        const info = label(this, mx + 48, my + 25, `Dmg ${def.dmg}  (${(1000 / def.cd).toFixed(1)}/s)`, 10, '#bcd0b0');
+
+        // Button [1] (Primary)
+        const btn1 = this.add.rectangle(mx + 172, my + 21, 22, 26, isS1 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
+        const txt1 = label(this, mx + 172, my + 21, isS1 ? '1*' : '1', 11, isS1 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        btn1.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Assigned ${def.name} to Primary (Key 1)`); this.refreshInventory(); });
+
+        // Button [2] (Secondary / Back)
+        const btn2 = this.add.rectangle(mx + 200, my + 21, 22, 26, isS2 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
+        const txt2 = label(this, mx + 200, my + 21, isS2 ? '2*' : '2', 11, isS2 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        btn2.on('pointerup', () => { p.assignSlot(2, id); this.toast(`Assigned ${def.name} to Secondary (Key 2, on back)`); this.refreshInventory(); });
+
+        this.invBody.add([bg, icon, name, info, btn1, txt1, btn2, txt2]);
+      });
+    }
+
+    // Player Status Line
+    const wStars = this.game_.wanted ? '*'.repeat(this.game_.wanted.level) : '';
+    this.invBody.add(label(this, 90, 588, `HP ${Math.ceil(p.hp)}/${p.maxHp}    Stamina ${Math.ceil(p.stamina)}%    Wanted ${wStars || 'None'}`, 14, '#ffffff'));
+
+    // ==========================================
+    // RIGHT SIDE: AMMO, MEDICAL, SUPPLIES (x: 815 .. 1170)
+    // ==========================================
+    // AMMO RESERVE (only ammo types currently owned or matching owned firearms)
+    this.invBody.add(label(this, 815, 196, 'AMMO RESERVE', 14, '#9db890'));
+    let curRightY = 218;
+    if (ownedAmmo.length === 0) {
+      this.invBody.add(label(this, 815, 218, 'No ammo in reserve.', 12, '#7a9270'));
+      curRightY = 244;
+    } else {
+      ownedAmmo.forEach((k, idx) => {
+        const ay = 216 + idx * 21;
+        const iconTex = AMMO_TYPES[k].tex || 'it_ammo';
+        const ic = this.add.image(815, ay + 6, iconTex).setOrigin(0, 0.5).setScale(0.75);
+        const lbl = label(this, 838, ay, `${AMMO_TYPES[k].name.padEnd(12)} ${String(p.ammo[k]).padStart(3)} / ${p.ammoCap(k)}`, 12, p.ammo[k] > 0 ? '#e8f2e0' : '#889980');
+        this.invBody.add([ic, lbl]);
+      });
+      curRightY = 216 + ownedAmmo.length * 21 + 12;
+    }
+
+    // MEDICAL & GEAR (only shows owned items)
+    const medHeaderY = Math.max(curRightY, 260);
+    this.invBody.add(label(this, 815, medHeaderY, 'BODY ARMOR & MEDICAL GEAR', 14, '#9db890'));
+    let medItemY = medHeaderY + 22;
+
+    // Body Armor Card
+    const armDef = ARMOR_TIERS[p.armorTier];
+    if (p.armorTier && p.armorTier !== 'none' && armDef) {
+      const aTex = armDef.tex || 'it_armor_light';
+      const aImg = this.add.image(826, medItemY + 12, aTex).setOrigin(0.5).setScale(0.85);
+      const aName = label(this, 846, medItemY + 2, armDef.name + ' (' + Math.round(armDef.defense * 100) + '% Def)', 12, '#38bdf8');
+      const aPts = label(this, 846, medItemY + 18, 'Armor: ' + Math.ceil(p.armor) + ' / ' + p.maxArmor + ' AP', 11, '#e8f2e0');
+      this.invBody.add([aImg, aName, aPts]);
+      if ((p.plates || 0) > 0 && p.armor < p.maxArmor) {
+        const repBtn = button(this, 1115, medItemY + 12, 'REPAIR [G]', () => {
+          if (p.useArmor()) this.refreshInventory();
+        }, { w: 82, h: 24, size: 11, fill: 0x1e3a5f, stroke: 0x38bdf8 });
+        this.invBody.add(repBtn);
+      }
+      medItemY += 38;
+    }
+
+    // Trauma Plates
+    if ((p.plates || 0) > 0) {
+      const plImg = this.add.image(826, medItemY + 8, 'it_armor_plate').setOrigin(0.5).setScale(0.85);
+      const plTxt = label(this, 846, medItemY + 2, 'Trauma Plates: ' + p.plates + '/5  (+40 AP on repair)', 12, '#bcd0b0');
+      this.invBody.add([plImg, plTxt]);
+      medItemY += 26;
+    }
+
+    // Owned alternate armor tiers
+    const otherOwned = Object.keys(p.armors || {}).filter((t) => t !== 'none' && t !== p.armorTier && ARMOR_TIERS[t]);
+    if (otherOwned.length > 0) {
+      otherOwned.forEach((tId) => {
+        const oDef = ARMOR_TIERS[tId];
+        const oTxt = label(this, 846, medItemY + 2, 'Owned: ' + oDef.name, 11, '#94a3b8');
+        const eqBtn = button(this, 1120, medItemY + 8, 'EQUIP', () => {
+          p.equipArmor(tId, false);
+          this.toast('Equipped ' + oDef.name);
+          this.refreshInventory();
+        }, { w: 68, h: 22, size: 10, fill: 0x243820, stroke: 0x5a7e4e });
+        this.invBody.add([oTxt, eqBtn]);
+        medItemY += 26;
+      });
+    }
+
+    let hasMedItem = false;
+    if (p.medkits > 0) {
+      hasMedItem = true;
+      const isS4 = ((p.slots[4] || 'medkit') === 'medkit');
+      const t = label(this, 815, medItemY + 5, `Medkits   ${p.medkits}/${p.medCap()}  (+50 HP)`, 13, '#e8f2e0');
+      const useBtn = button(this, 1055, medItemY + 8, 'USE', () => {
+        this.toggleInventory();
+        p.startMedkit();
+      }, { w: 58, h: 26, size: 12 });
+      const setBtn = button(this, 1130, medItemY + 8, isS4 ? 'SET [4]*' : 'SET [4]', () => { p.assignSlot(4, 'medkit'); this.toast('Assigned Medkit to Slot 4 (Key 4)'); this.refreshInventory(); }, { w: 72, h: 26, size: 12, fill: isS4 ? 0xf2e08a : 0x243820, stroke: isS4 ? 0xf2e08a : 0x6b8f5a });
+      this.invBody.add([t, useBtn, setBtn]);
+      medItemY += 34;
+    }
+
+    if (!hasMedItem) {
+      this.invBody.add(label(this, 815, medItemY + 4, 'No medical items in inventory.', 12, '#7a9270'));
+      medItemY += 24;
+    }
+
+    if (p.backpack > 0) {
+      this.invBody.add(label(this, 815, medItemY + 2, `Backpack  Lv ${p.backpack}/2 (+carrying capacity)`, 13, '#bcd0b0'));
+      medItemY += 24;
+    }
+
+    // EVERYDAY SUPPLIES (only shows owned supplies)
+    const supHeaderY = Math.max(medItemY + 8, 430);
+    this.invBody.add(label(this, 815, supHeaderY, `EVERYDAY SUPPLIES (${ownedSupplies.length})`, 13, '#9db890'));
+    if (ownedSupplies.length === 0) {
+      this.invBody.add(label(this, 815, supHeaderY + 20, 'No food or drinks in inventory.', 12, '#7a9270'));
+    } else {
+      ownedSupplies.forEach((id, idx) => {
+        const col = idx % 2, row = Math.floor(idx / 2);
+        const sx = 815 + col * 180, sy = supHeaderY + 20 + row * 22;
+        const isS3 = (p.slots[3] === id);
+        const icon = this.add.image(sx + 6, sy + 7, 'sp_' + id).setOrigin(0, 0.5);
+        icon.setScale(Math.min(1.2, 20 / Math.max(icon.width, 14)));
+        const t = label(this, sx + 24, sy, `${isS3 ? '[3] ' : ''}${SUPPLIES[id].label} x${p.supplies[id]}`, 12, isS3 ? '#f2e08a' : '#ffe9a0').setInteractive({ useHandCursor: true });
+        t.on('pointerup', () => {
+          p.assignSlot(3, id);
+          this.toast(`Assigned ${SUPPLIES[id].label} to Slot 3 (Key 3)`);
+          this.refreshInventory();
+        });
+        this.invBody.add([icon, t]);
+      });
+    }
+
+    // QUEST ITEMS
+    const qitems = (profile.flags.qitems || []);
+    if (qitems.length > 0) {
+      this.invBody.add(label(this, 815, 616, 'QUEST ITEMS: ' + qitems.join(', ').replace(/q_/g, ''), 13, '#7aff9a'));
+    }
   }
 
   /* ----------------------------------------------------------- touch controls */
@@ -345,8 +726,8 @@ export default class UIScene extends Phaser.Scene {
     mk(1225, 476, 'CROUCH', 36, act('crouch'));
     mk(1225, 553, 'RELOAD', 36, act('reload'));
     mk(1225, 630, 'SWAP', 36, act('cycle'));
-    mk(1140, 668, 'MED', 30, act('medkit'));
-    mk(1060, 668, 'ARMOR', 30, act('armor'));
+    mk(1140, 668, 'FOOD', 30, act('slot3'));
+    mk(1060, 668, 'MED', 30, act('slot4'));
     mk(1140, 590, 'HORN', 30, act('horn'));
     mk(1140, 510, 'MELEE', 30, act('melee-swap'));
     mk(1060, 590, 'FUEL', 30, () => { touch.refuel = true; }, () => { touch.refuel = false; });
@@ -436,48 +817,102 @@ export default class UIScene extends Phaser.Scene {
       h.fillStyle(0x2a2a2a, 1).fillRect(x, y, w, hgt);
       h.fillStyle(col, 1).fillRect(x, y, w * Phaser.Math.Clamp(frac, 0, 1), hgt);
     };
-    bar(60, 608 + this.bo, 260, 20, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
-    bar(60, 636 + this.bo, 260, 20, p.armor / p.maxArmor, 0x4a7ee0);
-    bar(60, 672 + this.bo, 260, 8, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
-    this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
-    this.arText.setText(String(Math.ceil(p.armor)));
-    this.supplyText.setText(`[H] Medkits ${p.medkits}/${p.medCap()}   [G] Plates ${p.plates}/${p.plateCap()}   [B] Supplies ${supplyCount(p)}`);
-    this.supplyText.setY(588 + this.bo).setX(20);
-
-    // weapon block
-    const w = p.weapon;
-    this.wName.setText(w.name);
-    if (p.isMelee) {
-      this.wAmmo.setText(`DMG ${w.dmg}`).setColor('#ffffff').setFontSize(34);
-      this.wSub.setText(this.touchMode ? 'MELEE - tap HIT' : 'MELEE - click / SPACE to swing');
+    if (p.maxArmor > 0) {
+      const armCol = p.armorTier === 'military' ? 0xa855f7 : p.armorTier === 'tactical' ? 0x3b82f6 : 0x06b6d4;
+      bar(60, 584 + this.bo, 260, 16, Math.min(1, p.armor / p.maxArmor), armCol);
+      this.armLabel.setVisible(true);
+      this.armText.setText(String(Math.ceil(p.armor)) + ' / ' + p.maxArmor).setVisible(true).setX(70);
     } else {
-      const st = p.ws;
-      this.wAmmo.setText(`${st.mag} / ${p.ammo[w.ammo]}`).setColor(st.mag === 0 ? '#ff6060' : '#ffffff').setFontSize(46);
-      this.wSub.setText(p.reloading ? 'RELOADING...' : AMMO_TYPES[w.ammo].name + (w.auto ? '  AUTO' : '  SEMI'));
+      this.armLabel.setVisible(false);
+      this.armText.setVisible(false);
     }
-    const lastMelee = p.ownedList(MELEE_ORDER).slice(-1)[0] || 'fists';
-    const meleeIcon = p.isMelee ? MELEE[p.current].tex : MELEE[lastMelee].tex;
-    this.slotIcons[0].setTexture(meleeIcon).setAlpha(1).setTint(p.isMelee ? 0xf2e08a : 0xffffff);
-    this.slotKeys[0].setColor(p.isMelee ? '#f2e08a' : '#ffffff');
-    // one slot per weapon class (keys 1-6): shows the gun you carry / last used in that class
-    this.slotIds = [null];
-    WEAPON_CATS.forEach((cat, i) => {
-      const owned = WEAPON_ORDER.filter((id) => WEAPONS[id].cat === cat.id && p.weapons[id]);
-      const showing = owned.includes(p.current) ? p.current : owned.includes(p.catLast[cat.id]) ? p.catLast[cat.id] : owned[0];
-      const first = WEAPON_ORDER.find((id) => WEAPONS[id].cat === cat.id);
-      const ic = this.slotIcons[i + 1];
-      ic.setTexture(WEAPONS[showing || first].gun).setAlpha(showing ? 1 : 0.2).setTint(p.current === showing ? 0xf2e08a : 0xffffff);
-      ic.setScale(Math.min(1, 40 / ic.width));
-      this.slotKeys[i + 1].setColor(p.current === showing ? '#f2e08a' : '#ffffff');
-      this.slotIds.push(showing || null);
-    });
-    for (let i = 0; i < 7; i++) {
-      const x = this.wx - (6 - i) * 58 - 26;
-      const on = i === 0 ? p.isMelee : p.current === this.slotIds[i];
-      h.lineStyle(2, on ? 0xf2e08a : 0x6b8f5a, on ? 1 : 0.8).strokeRect(x - 26, 674 + this.wy, 52, 36);
+    bar(60, 608 + this.bo, 260, 20, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
+    bar(60, 642 + this.bo, 260, 12, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
+    this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
+    // 4-slot equipment inventory bar HUD update (Keys 1-4)
+    if (this.hudSlots) {
+      // Slot 1: Primary Weapon (in hand)
+      const s1 = this.hudSlots[0];
+      const w1 = p.slots[1];
+      if (w1 && p.weapons[w1]) {
+        const isM = !!MELEE[w1];
+        const tex = isM ? MELEE[w1].tex : WEAPONS[w1].gun;
+        s1.icon.setTexture(tex).setVisible(true).setAlpha(1);
+        s1.icon.setScale(Math.min(1.2, 40 / Math.max(s1.icon.width, 16)));
+        const act = (p.current === w1);
+        s1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+        s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+        const st = isM ? `DMG ${MELEE[w1].dmg}` : `${p.weapons[w1].mag}/${p.ammo[WEAPONS[w1].ammo]}`;
+        s1.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+      } else {
+        s1.icon.setVisible(false);
+        const act = (p.current === 'fists');
+        s1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x2c3a28);
+        s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+        s1.badge.setText('Fists').setColor(act ? '#f2e08a' : '#777777');
+      }
+
+      // Slot 2: Secondary Weapon (on back)
+      const s2 = this.hudSlots[1];
+      const w2 = p.slots[2];
+      if (w2 && p.weapons[w2]) {
+        const isM = !!MELEE[w2];
+        const tex = isM ? MELEE[w2].tex : WEAPONS[w2].gun;
+        s2.icon.setTexture(tex).setVisible(true).setAlpha(1);
+        s2.icon.setScale(Math.min(1.2, 40 / Math.max(s2.icon.width, 16)));
+        const act = (p.current === w2);
+        s2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+        s2.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+        const st = isM ? `DMG ${MELEE[w2].dmg}` : `${p.weapons[w2].mag}/${p.ammo[WEAPONS[w2].ammo]}`;
+        s2.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+      } else {
+        s2.icon.setVisible(false);
+        s2.bg.setStrokeStyle(1.5, 0x2c3a28);
+        s2.badge.setText('Empty').setColor('#777777');
+      }
+
+      // Slot 3: Food / Consumables
+      const s3 = this.hudSlots[2];
+      const fId = p.slots[3];
+      if (fId && SUPPLIES[fId]) {
+        const count = p.supplies[fId] || 0;
+        s3.icon.setTexture('sp_' + fId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+        s3.icon.setScale(Math.min(1.2, 32 / Math.max(s3.icon.width, 16)));
+        s3.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
+        s3.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#777777');
+      } else {
+        s3.icon.setVisible(false);
+        s3.bg.setStrokeStyle(1.5, 0x2c3a28);
+        s3.badge.setText('Empty').setColor('#777777');
+      }
+
+      // Slot 4: Medkit / Medical Items
+      const s4 = this.hudSlots[3];
+      const mId = p.slots[4] || 'medkit';
+      if (mId === 'medkit') {
+        const count = p.medkits;
+        s4.icon.setTexture('it_medkit').setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+        s4.icon.setScale(Math.min(1.2, 32 / Math.max(s4.icon.width, 16)));
+        s4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x2c3a28);
+        s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ff7a7a' : '#777777');
+      } else if (SUPPLIES[mId]) {
+        const count = p.supplies[mId] || 0;
+        s4.icon.setTexture('sp_' + mId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
+        s4.icon.setScale(Math.min(1.2, 32 / Math.max(s4.icon.width, 16)));
+        s4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
+        s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#777777');
+      } else {
+        s4.icon.setVisible(false);
+        s4.bg.setStrokeStyle(1.5, 0x2c3a28);
+        s4.badge.setText('Empty').setColor('#777777');
+      }
     }
 
-    if (p.reloading) {
+    if (p.usingItem) {
+      const frac = Phaser.Math.Clamp((g.gt - p.usingItem.start) / p.usingItem.dur, 0, 1);
+      bar(540, 420, 200, 10, frac, 0x60d070);
+      this.reloadLabel.setText(p.usingItem.label.toUpperCase()).setPosition(640, 406);
+    } else if (p.reloading) {
       const frac = Phaser.Math.Clamp((g.gt - p.reloadStart) / (p.reloadEnd - p.reloadStart), 0, 1);
       bar(540, 420, 200, 10, frac, 0xf2e08a);
       this.reloadLabel.setText('RELOADING').setPosition(640, 406);

@@ -10,8 +10,9 @@ import { SKIN_TONES, CLOTH_COLORS, SHOE_COLORS, shade } from './textures.js';
      glasses 1 Glasses 2 Sunglasses 3 Thick Round Glasses       watch 1 silver 2 gold 3 black band
      necklace 1 gold chain 2 silver chain                       mask 1 surgical 2 black 3 red bandana
    Casino additions: shirt 8 Long Coat 9 Tuxedo | pierceBrow / pierceNose / pierceLip (bool) | earring 1 stud 2 hoop 3 dangling | rings 1 silver 2 gold + gems | hair 6 swept quiff
+   School additions: shirt 16 Administrator / Teacher Blazer with necktie
 */
-export const SHIRT_BASE = { 4: 0, 5: 1, 6: 0, 7: 0, 8: 1, 9: 1, 10: 1, 11: 1 };      // styles that start from an existing look
+export const SHIRT_BASE = { 4: 0, 5: 1, 6: 0, 7: 0, 8: 1, 9: 1, 10: 1, 11: 1, 12: 0, 13: 3, 14: 3, 15: 1, 16: 1 };      // styles that start from an existing look
 export const PANTS_BASE = { 3: 0, 4: 0, 5: 0, 6: 1, 7: 1 };
 
 export const shoeAccent = (a) => SHOE_COLORS[a.shoeAccent ?? 1] || '#e8e8e8';
@@ -44,20 +45,20 @@ export function legsFront(P, a, pantsC, legBot, liftL, liftR, skin) {
   }
 }
 
-export function legsSide(P, a, s, pantsC, skin) {
+export function legsSide(P, a, s, pantsC, skin, liftNear = 0, liftFar = 0) {
   const lw = a.pants === 5 ? 7 : 5, lo = a.pants === 5 ? 1 : 0;
-  P(13 - s - lo, 29, lw, 11, shade(pantsC, -0.25));
-  P(14 + s - lo, 29, lw, 11, pantsC);
+  P(13 - s - lo, 29, lw, 11 + liftFar, shade(pantsC, -0.25));
+  P(14 + s - lo, 29, lw, 11 + liftNear, pantsC);
   const dk = shade(pantsC, -0.3);
-  if (a.pants === 1) P(15 + s, 33, 3, 4, dk);
-  if (a.pants === 2) P(14 + s, 31, 3, 2, shade(pantsC, -0.35));
-  if (a.pants === 3) { P(13 - s, 35, 5, 5, shade(skin, -0.15)); P(14 + s, 35, 5, 5, skin); P(13 - s, 34, 5, 1, dk); P(14 + s, 34, 5, 1, dk); }
-  if (a.pants === 4) { P(14 + s, 29, 5, 1, '#f0f0f0'); P(14 + s, 37, 5, 3, shade(pantsC, 0.18)); P(13 - s, 37, 5, 3, shade(pantsC, -0.1)); P(15 + s, 30, 1, 7, '#f0f0f0'); }
-  if (a.pants === 5) { P(15 + s, 31, 1, 7, shade(pantsC, -0.22)); P(14 + s - lo, 39, lw, 1, dk); }
-  if (a.pants === 6) { P(15 + s, 31, 3, 4, dk); P(15 + s, 36, 4, 3, '#26262a'); P(15 + s, 36, 4, 1, '#4a4a52'); }
+  if (a.pants === 1) P(15 + s, 33 + liftNear, 3, 4, dk);
+  if (a.pants === 2) P(14 + s, 31 + liftNear, 3, 2, shade(pantsC, -0.35));
+  if (a.pants === 3) { P(13 - s, 35, 5, 5 + liftFar, shade(skin, -0.15)); P(14 + s, 35, 5, 5 + liftNear, skin); P(13 - s, 34, 5, 1, dk); P(14 + s, 34, 5, 1, dk); }
+  if (a.pants === 4) { P(14 + s, 29, 5, 1, '#f0f0f0'); P(14 + s, 37 + liftNear, 5, 3, shade(pantsC, 0.18)); P(13 - s, 37 + liftFar, 5, 3, shade(pantsC, -0.1)); P(15 + s, 30, 1, 7, '#f0f0f0'); }
+  if (a.pants === 5) { P(15 + s, 31 + liftNear, 1, 7, shade(pantsC, -0.22)); P(14 + s - lo, 39 + liftNear, lw, 1, dk); }
+  if (a.pants === 6) { P(15 + s, 31 + liftNear, 3, 4, dk); P(15 + s, 36 + liftNear, 4, 3, '#26262a'); P(15 + s, 36 + liftNear, 4, 1, '#4a4a52'); }
   if (a.pants === 7) {
-    P(15 + s, 32, 3, 3, '#22242a');
-    P(13 - s, 35, 5, 2, shade('#f2e04a', -0.18)); P(14 + s, 35, 5, 2, '#f2e04a'); P(14 + s, 36, 5, 1, '#e8eef4');
+    P(15 + s, 32 + liftNear, 3, 3, '#22242a');
+    P(13 - s, 35 + liftFar, 5, 2, shade('#f2e04a', -0.18)); P(14 + s, 35 + liftNear, 5, 2, '#f2e04a'); P(14 + s, 36 + liftNear, 5, 1, '#e8eef4');
   }
 }
 
@@ -80,20 +81,20 @@ export function shoesFront(P, a, legBot, liftL, liftR, shoeC, skin, pantsC) {
   });
 }
 
-export function shoesSide(P, a, s, shoeC, skin) {
+export function shoesSide(P, a, s, shoeC, skin, liftNear = 0, liftFar = 0) {
   const acc = shoeAccent(a), st = a.shoes | 0;
-  [[13 - s, -0.15], [14 + s, 0]].forEach(([x, sh]) => {
+  [[13 - s, -0.15, liftFar], [14 + s, 0, liftNear]].forEach(([x, sh, ly]) => {
     const c0 = sh ? shade(shoeC, sh) : shoeC;
     switch (st) {
-      case 1: P(x, 37, 7, 7, c0); P(x, 37, 4, 1, a.pants === 7 ? '#f2e04a' : shade(c0, 0.25)); P(x, 43, 8, 1, shade(c0, -0.4)); P(x + 6, 41, 1, 2, a.pants === 7 ? '#d4af37' : shade(c0, -0.2)); break;
-      case 2: P(x, 37, 7, 7, c0); P(x + 4, 41, 3, 3, acc); P(x, 37, 4, 1, acc); P(x + 2, 38, 2, 1, '#f4f4f4'); P(x - 1, 43, 9, 1, '#f4f4f4'); break;
-      case 3: P(x, 39, 7, 4, c0); P(x + 1, 40, 5, 1, acc); P(x + 5, 39, 2, 1, shade(c0, 0.3)); P(x - 1, 43, 9, 1, '#f4f4f4'); P(x - 1, 44, 9, 1, acc); break;
-      case 4: P(x, 36, 7, 8, c0); P(x + 1, 39, 4, 3, acc); P(x, 36, 4, 1, acc); P(x + 2, 37, 2, 1, '#f4f4f4'); P(x - 1, 43, 9, 1, '#f4f4f4'); P(x - 1, 44, 9, 1, shade(acc, -0.2)); break;
-      case 5: P(x, 39, 8, 4, c0); P(x + 1, 40, 6, 1, shade(c0, 0.3)); P(x + 4, 39, 3, 1, acc); P(x - 1, 43, 10, 1, '#c8a064'); break;
-      case 6: P(x, 36, 7, 8, '#1c1c20'); P(x, 36, 4, 1, '#3a3a40'); for (let i = 0; i < 3; i++) P(x + 4, 37 + i * 2, 1, 1, '#c9c9c9'); P(x - 1, 43, 9, 1, '#0c0c0e'); P(x - 1, 44, 9, 1, '#0c0c0e'); P(x + 3, 40, 4, 2, shoeC); break;
-      case 7: P(x, 40, 7, 3, c0); P(x + 1, 40, 3, 1, shade(c0, 0.4)); P(x, 43, 8, 1, shade(c0, -0.5)); break;
-      case 8: P(x, 41, 7, 2, skin); P(x + 1, 40, 2, 1, acc); P(x + 4, 40, 2, 1, acc); P(x, 43, 8, 1, c0); P(x + 6, 41, 2, 2, skin); break;
-      default: P(x, 40, 7, 4, c0); P(x, 43, 7, 1, shade(shoeC, 0.6));
+      case 1: P(x, 37 + ly, 7, 7, c0); P(x, 37 + ly, 4, 1, a.pants === 7 ? '#f2e04a' : shade(c0, 0.25)); P(x, 43 + ly, 8, 1, shade(c0, -0.4)); P(x + 6, 41 + ly, 1, 2, a.pants === 7 ? '#d4af37' : shade(c0, -0.2)); break;
+      case 2: P(x, 37 + ly, 7, 7, c0); P(x + 4, 41 + ly, 3, 3, acc); P(x, 37 + ly, 4, 1, acc); P(x + 2, 38 + ly, 2, 1, '#f4f4f4'); P(x - 1, 43 + ly, 9, 1, '#f4f4f4'); break;
+      case 3: P(x, 39 + ly, 7, 4, c0); P(x + 1, 40 + ly, 5, 1, acc); P(x + 5, 39 + ly, 2, 1, shade(c0, 0.3)); P(x - 1, 43 + ly, 9, 1, '#f4f4f4'); P(x - 1, 44 + ly, 9, 1, acc); break;
+      case 4: P(x, 36 + ly, 7, 8, c0); P(x + 1, 39 + ly, 4, 3, acc); P(x, 36 + ly, 4, 1, acc); P(x + 2, 37 + ly, 2, 1, '#f4f4f4'); P(x - 1, 43 + ly, 9, 1, '#f4f4f4'); P(x - 1, 44 + ly, 9, 1, shade(acc, -0.2)); break;
+      case 5: P(x, 39 + ly, 8, 4, c0); P(x + 1, 40 + ly, 6, 1, shade(c0, 0.3)); P(x + 4, 39 + ly, 3, 1, acc); P(x - 1, 43 + ly, 10, 1, '#c8a064'); break;
+      case 6: P(x, 36 + ly, 7, 8, '#1c1c20'); P(x, 36 + ly, 4, 1, '#3a3a40'); for (let i = 0; i < 3; i++) P(x + 4, 37 + i * 2 + ly, 1, 1, '#c9c9c9'); P(x - 1, 43 + ly, 9, 1, '#0c0c0e'); P(x - 1, 44 + ly, 9, 1, '#0c0c0e'); P(x + 3, 40 + ly, 4, 2, shoeC); break;
+      case 7: P(x, 40 + ly, 7, 3, c0); P(x + 1, 40 + ly, 3, 1, shade(c0, 0.4)); P(x, 43 + ly, 8, 1, shade(c0, -0.5)); break;
+      case 8: P(x, 41 + ly, 7, 2, skin); P(x + 1, 40 + ly, 2, 1, acc); P(x + 4, 40 + ly, 2, 1, acc); P(x, 43 + ly, 8, 1, c0); P(x + 6, 41 + ly, 2, 2, skin); break;
+      default: P(x, 40 + ly, 7, 4, c0); P(x, 43 + ly, 7, 1, shade(shoeC, 0.6));
     }
   });
 }
@@ -162,6 +163,30 @@ export function topFront(P, a, ty, bob, shirtC, skin, back) {
         P(12, ty + 6, 8, 3, '#e63946'); P(13, ty + 7, 6, 1, '#ffffff');
       }
       break;
+    case 12: vestFront(P, ty, '#1c222c', back, { badge: '#d4af37', radio: true, strip: '#e8ecf2' }); break;                                   // police ballistic vest, short sleeves
+    case 13: vestFront(P, ty, '#14161b', back, { badge: '#c9ccd2', radio: true, pouches: true, strip: '#e8e8e8' }); break;                     // SWAT plate carrier
+    case 14: vestFront(P, ty, shade(shirtC, -0.18), back, { pouches: true, strip: shade(shirtC, 0.05) }); break;                              // army flak vest
+    case 15:  // long-sleeve duty shirt: collar, tie, chest pockets, badge, epaulettes
+      P(10, ty, 12, 1, shade(shirtC, 0.3)); P(10, ty, 2, 1, '#d4af37'); P(20, ty, 2, 1, '#d4af37');
+      if (!back) { P(12, ty, 8, 2, shade(shirtC, 0.45)); P(15, ty + 1, 2, 8, '#15171c'); P(11, ty + 5, 3, 3, dk); P(11, ty + 5, 3, 1, lt); P(18, ty + 5, 3, 3, dk); P(18, ty + 5, 3, 1, lt); P(18, ty + 2, 2, 2, '#d4af37'); }
+      else P(12, ty, 8, 2, shade(shirtC, 0.4));
+      break;
+    case 16:  // professional educator / administrator blazer: tailored suit jacket, collared dress shirt, classic necktie, lapels, pen
+      if (!back) {
+        P(13, ty, 6, 12, '#f4f4f4'); // crisp white dress shirt
+        P(11, ty, 3, 10, lt); P(18, ty, 3, 10, lt); // jacket lapels
+        P(11, ty, 1, 10, shade(shirtC, 0.4)); P(20, ty, 1, 10, shade(shirtC, 0.4));
+        P(12, ty - 1, 3, 2, '#ffffff'); P(17, ty - 1, 3, 2, '#ffffff'); // shirt collar tips
+        P(15, ty, 2, 9, '#8a2a2a'); // classic burgundy necktie
+        P(15, ty + 2, 2, 1, '#d4af37'); P(15, ty + 5, 2, 1, '#d4af37'); // golden diagonal tie stripes
+        P(15, ty + 9, 2, 2, '#8a2a2a');
+        P(11, ty + 5, 3, 1, dk); P(12, ty + 4, 1, 2, '#c9b050'); // breast pocket with gold pen clip
+        P(15, ty + 11, 2, 2, '#1a1a24'); // jacket button
+      } else {
+        P(10, ty, 12, 1, lt);
+        P(15, ty, 2, 14, shade(shirtC, -0.3));
+      }
+      break;
     default: break;
   }
 }
@@ -194,8 +219,34 @@ export function topSide(P, a, ty, bob, shirtC, skin) {
       P(14, 16 + bob + 4, 4, 1, '#e63946'); P(14, 16 + bob + 5, 4, 1, '#2ec4ff');
       P(14, 16 + bob + 9, 4, 3, '#181c24');
       break;
+    case 12: vestSide(P, ty, '#1c222c', { badge: '#d4af37' }); break;
+    case 13: vestSide(P, ty, '#14161b', { badge: '#c9ccd2', pouches: true }); break;
+    case 14: vestSide(P, ty, shade(shirtC, -0.18), { pouches: true }); break;
+    case 15: P(18, ty, 3, 2, shade(shirtC, 0.45)); P(15, ty + 2, 2, 7, '#15171c'); P(18, ty + 5, 3, 3, dk); P(12, ty, 2, 1, '#d4af37'); break;
+    case 16: P(18, ty, 3, 2, shade(shirtC, 0.45)); P(15, ty + 2, 2, 7, '#8a2a2a'); P(18, ty + 5, 3, 3, dk); P(12, ty, 2, 1, '#c9b050'); break;
     default: break;
   }
+}
+
+/* police / SWAT / army vests: a chest panel in the vest colour over the shirt (belt row stays visible), shoulder straps, optional badge / radio / mag pouches */
+function vestFront(P, ty, vest, back, o) {
+  const dk = shade(vest, -0.3), lt = shade(vest, 0.22);
+  P(10, ty, 12, 12, vest); P(10, ty, 12, 1, lt); P(10, ty, 1, 12, lt); P(21, ty, 1, 12, dk); P(11, ty, 3, 2, dk); P(18, ty, 3, 2, dk); P(10, ty + 11, 12, 1, dk);
+  if (!back) {
+    P(15, ty + 1, 2, 11, dk);
+    if (o.badge) { P(18, ty + 3, 2, 2, o.badge); P(18, ty + 3, 1, 1, '#fff2b0'); }
+    if (o.radio) { P(12, ty + 2, 2, 1, '#2a2e36'); P(12, ty + 1, 1, 1, '#c0392b'); }
+    if (o.pouches) { P(11, ty + 6, 4, 4, dk); P(11, ty + 6, 4, 1, lt); P(17, ty + 6, 4, 4, dk); P(17, ty + 6, 4, 1, lt); P(12, ty + 8, 1, 1, '#6a6e76'); P(18, ty + 8, 1, 1, '#6a6e76'); }
+  } else {
+    P(11, ty + 2, 10, 1, o.strip || lt); P(12, ty + 4, 8, 3, o.strip || lt);
+    for (const x of [13, 15, 17, 19]) P(x, ty + 5, 1, 1, vest);                                         // the lettering on the back, as dark dots
+  }
+}
+function vestSide(P, ty, vest, o) {
+  const dk = shade(vest, -0.3), lt = shade(vest, 0.22);
+  P(12, ty, 9, 12, vest); P(12, ty, 2, 12, shade(vest, -0.2)); P(12, ty, 9, 1, lt); P(12, ty + 11, 9, 1, dk);
+  if (o.pouches) { P(18, ty + 6, 3, 4, dk); P(18, ty + 6, 3, 1, lt); }
+  if (o.badge) P(20, ty + 3, 1, 2, o.badge);
 }
 
 /* ------------------------------------------------------------- accessories */
@@ -262,5 +313,73 @@ export function accessories(P, a, dir, bob) {
     const band = a.watch === 3 ? '#1c1c20' : a.watch === 2 ? '#d4af37' : '#b8bec6', face = a.watch === 3 ? '#4aa0ff' : a.watch === 2 ? '#fff4c0' : '#2a6ae0';
     if (!side) { P(7, 25 + bob, 3, 2, band); P(8, 25 + bob, 1, 1, face); }
     else { P(14, 25 + bob, 4, 2, band); P(15, 25 + bob, 2, 1, face); }
+  }
+  if (a.chains) {
+    const steel = '#d8dce2', hi = '#ffffff', shadow = '#889098', dark = '#5a626a';
+    if (!side) {
+      if (!back) {
+        // --- Rockstar Torso / Jacket Chains ---
+        // Upper collar silver chain
+        P(12, 15 + bob, 8, 1, steel);
+        P(13, 16 + bob, 6, 1, shadow);
+        P(15, 16 + bob, 2, 1, hi);
+        // Hanging mid-chest chain with rockstar pendant
+        P(12, 17 + bob, 1, 2, steel);
+        P(19, 17 + bob, 1, 2, steel);
+        P(13, 19 + bob, 1, 2, shadow);
+        P(18, 19 + bob, 1, 2, shadow);
+        P(14, 21 + bob, 4, 1, steel);
+        P(15, 21 + bob, 2, 1, hi);
+        // Heavy silver cross/padlock pendant
+        P(15, 22 + bob, 2, 3, hi);
+        P(14, 23 + bob, 4, 1, steel);
+        // Diagonal jacket lapel clip chain
+        P(18, 16 + bob, 1, 1, hi);
+        P(19, 17 + bob, 1, 2, steel);
+        P(18, 19 + bob, 1, 2, shadow);
+        P(17, 21 + bob, 1, 2, steel);
+        P(16, 23 + bob, 1, 1, hi);
+
+        // --- Rockstar Hip / Wallet Chains (hanging down over jeans) ---
+        // Upper loop
+        P(10, 26 + bob, 2, 1, hi);      // belt clip
+        P(9, 27 + bob, 1, 3, steel);
+        P(9, 30 + bob, 2, 1, hi);
+        P(11, 31 + bob, 2, 1, steel);
+        P(13, 30 + bob, 1, 2, shadow);
+        P(14, 28 + bob, 1, 2, steel);
+        P(14, 27 + bob, 1, 1, hi);      // pocket clip
+        // Lower hanging heavy loop (droops down thigh)
+        P(9, 29 + bob, 1, 3, shadow);
+        P(10, 32 + bob, 1, 3, steel);
+        P(11, 35 + bob, 3, 1, hi);
+        P(14, 34 + bob, 1, 2, steel);
+        P(15, 31 + bob, 1, 3, shadow);
+        P(15, 28 + bob, 1, 2, dark);
+      } else {
+        // Back view: chain looping to back pocket
+        P(10, 26 + bob, 1, 3, steel);
+        P(11, 29 + bob, 1, 2, hi);
+        P(12, 31 + bob, 3, 1, steel);
+        P(15, 30 + bob, 1, 2, shadow);
+        P(15, 27 + bob, 1, 2, steel);
+      }
+    } else {
+      // --- Side view ---
+      // Chest chain glint
+      P(18, 16 + bob, 2, 1, steel);
+      P(19, 17 + bob, 2, 2, hi);
+      P(20, 19 + bob, 1, 3, shadow);
+      P(19, 22 + bob, 2, 2, hi);
+
+      // Side hip / wallet chain drooping along outer thigh
+      P(13, 26 + bob, 2, 1, hi);      // belt clip
+      P(12, 27 + bob, 1, 3, steel);
+      P(12, 30 + bob, 1, 3, hi);
+      P(13, 33 + bob, 3, 1, steel);
+      P(16, 32 + bob, 2, 2, shadow);
+      P(18, 29 + bob, 1, 3, steel);
+      P(18, 27 + bob, 1, 2, hi);      // back clip
+    }
   }
 }

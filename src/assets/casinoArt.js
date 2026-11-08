@@ -282,7 +282,7 @@ export function drawCasinoArt(scene) {
   mk('casino_sign_vip', 200, 56, (c) => {                              // the sign on the VIP tower
     R(c, 0, 0, 200, 56, '#0a0710'); R(c, 3, 3, 194, 50, '#1a0c24'); R(c, 6, 6, 188, 44, '#12081a');
     bulbs(c, 6, 6, 194, 6, 8, ['#ffe27a', '#ff4a8a', '#3ad8ff']); bulbs(c, 6, 50, 194, 50, 8, ['#3ad8ff', '#ffe27a', '#ff4a8a']);
-    font(c, 28, '#3a0f5a'); c.fillText('VIP TOWER', 102, 28); font(c, 28, '#d8b0ff'); c.fillText('VIP TOWER', 100, 26); font(c, 9, '#ffd24a'); c.fillText('★ MEMBERS ONLY - USE THE CASINO STAIRS ★', 100, 43);
+    font(c, 28, '#3a0f5a'); c.fillText('VIP TOWER', 102, 28); font(c, 28, '#d8b0ff'); c.fillText('VIP TOWER', 100, 26); font(c, 9, '#ffd24a'); c.fillText('★ VIP SALON  •  HIGH STAKES SUITES ★', 100, 43);
   });
 
   /* ---------------------------------------------------------------- exterior redesign: big marquee sign, canopy, columns, neon strips, window glimpses */

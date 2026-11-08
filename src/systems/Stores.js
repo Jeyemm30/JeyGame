@@ -37,7 +37,7 @@ export const STORES = {
     cats: [
       { name: 'Hand Tools', items: [['m_stick', 12], ['m_pipe', 40], ['m_crowbar', 45], ['m_bat', 55]] },
       { name: 'Cutting', items: [['m_knife', 30], ['m_machete', 90]] },
-      { name: 'Safety', items: [['armor', 65], ['medkit', 45]] }
+      { name: 'Safety', items: [['s_bandage', 10], ['medkit', 45]] }
     ]
   },
   supply: {
@@ -45,7 +45,7 @@ export const STORES = {
     greet: ['Supply Depot. Racks are by category.', 'Need equipment? Everything is on the racks.', 'Welcome. Counter is right here if you need a hand.'],
     cats: [
       { name: 'Tools', items: [['m_crowbar', 45], ['m_pipe', 40], ['m_bat', 55], ['m_machete', 90], ['m_knife', 30]] },
-      { name: 'Equipment', items: [['armor', 70], ['backpack', 140]] },
+      { name: 'Equipment', items: [['s_painkillers', 16], ['backpack', 140]] },
       { name: 'Supplies', items: [['medkit', 45], ['s_bandage', 9], ['s_water', 2], ['s_energy', 6]] }
     ]
   },
@@ -70,7 +70,7 @@ export const STORES = {
     cats: [
       { name: 'Food and Drink', items: [['s_sandwich', 7], ['s_snack', 4], ['s_water', 2], ['s_soda', 3], ['s_coffee', 5]] },
       { name: 'Health', items: [['s_bandage', 10], ['s_painkillers', 16], ['medkit', 45]] },
-      { name: 'General', items: [['backpack', 150], ['armor', 75]] }
+      { name: 'General', items: [['backpack', 150], ['s_adrenaline', 25]] }
     ]
   }
 };
@@ -81,16 +81,19 @@ export const SHOP_KIND = {
   Cafe: 'cafe', Diner: 'diner', Pizza: 'pizza', 'Shopping Center': 'mall', Clothing: 'clothing'
 };
 
-export const itemIcon = (id) => (ITEMS[id] && ITEMS[id].kind === 'melee' ? MELEE[ITEMS[id].weapon].tex : ITEMS[id] ? ITEMS[id].tex : 'it_medkit');
+export const itemIcon = (id) => (
+  ITEMS[id] && ITEMS[id].kind === 'melee' ? MELEE[ITEMS[id].weapon].tex :
+  ITEMS[id] && ITEMS[id].kind === 'ammo' ? (AMMO_TYPES[ITEMS[id].ammo]?.tex || ITEMS[id].tex) :
+  ITEMS[id] ? ITEMS[id].tex : 'it_medkit'
+);
 
 export function itemDesc(id) {
   const it = ITEMS[id];
   if (!it) return '';
   if (it.kind === 'supply') return SUPPLIES[it.supply].desc;
   if (it.kind === 'melee') { const w = MELEE[it.weapon]; return `${w.desc} Damage ${w.dmg}.`; }
-  if (id === 'medkit') return 'Restores 50 HP. Use with H.';
-  if (id === 'armor') return 'Armor plate: +40 armor. Use with G.';
-  if (id === 'backpack') return 'Carry more medkits and plates.';
+  if (id === 'medkit') return 'Restores 50 HP. Use from Slot 4 (Key 4) or Inventory.';
+  if (id === 'backpack') return 'Increases medical and supplies carrying capacity.';
   return '';
 }
 

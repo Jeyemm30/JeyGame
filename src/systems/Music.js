@@ -31,7 +31,9 @@ function hitNoise(K, out, t, dur, vol, type, freq, q = 1) {
   const { c, noiseBuf } = K, s = c.createBufferSource(), f = c.createBiquadFilter();
   s.buffer = noiseBuf; f.type = type; f.frequency.value = freq; f.Q.value = q;
   const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f); f.connect(g); g.connect(out); s.start(t, Math.random() * 1.5, dur + 0.05);
+  s.connect(f); f.connect(g); g.connect(out);
+  s.start(t, Math.random() * 0.5);
+  s.stop(t + dur + 0.05);
 }
 const kick = (K, out, t, v = 0.5) => { const { c } = K, o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(135, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.13); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.25); };
 const snare = (K, out, t, v = 0.25) => { hitNoise(K, out, t, 0.16, v, 'bandpass', 1900, 0.8); note(K, out, 'triangle', 54, t, 0.1, v * 0.6, { slide: -10 }); };
@@ -151,6 +153,86 @@ const MODES = {
       if (st === 8 && beat === 2) hat(K, p.out, t, 0.04);
       if (st % 2 === 0 && p.rng() < 0.28) note(K, p.out, 'sine', pick(p.rng, this.scale), t, spb * 1.6, 0.07, { att: 0.004 });
     }
+  },
+  // THE NEON CHORD LIVE MUSIC BAR - 124 bpm: melodic hard rock & electric blues-rock, overdriven guitar riffs, palm-muted chugs, live rock drums & guitar solos
+  music_bar: {
+    bpm: 124, vol: 0.72,
+    // Classic hard-rock power chord progression: E5 | G5 | A5 | D5
+    prog: [
+      chord(40, 0, 7, 12), // E5 power chord
+      chord(43, 0, 7, 12), // G5 power chord
+      chord(45, 0, 7, 12), // A5 power chord
+      chord(38, 0, 7, 12)  // D5 power chord
+    ],
+    bluesScale: [64, 67, 69, 70, 71, 74, 76, 79, 81, 83], // E minor pentatonic / blues scale
+    play(K, p, s, t, spb) {
+      const bar = s >> 4, st = s & 15, ch = this.prog[bar % 4], r = ch[0];
+
+      // 1. Live Rock Drums & Cymbals
+      // Crash cymbal on downbeat of odd bars
+      if (st === 0 && bar % 2 === 0) hitNoise(K, p.out, t, 0.45, 0.14, 'highpass', 4500, 0.8);
+      // Sizzling rock hi-hats on offbeats
+      if (st % 2 === 1) hitNoise(K, p.out, t, 0.08, 0.06, 'highpass', 6500, 1.2);
+      // Rock kick
+      if (st === 0 || st === 6 || st === 8 || st === 10 || st === 14) {
+        kick(K, p.out, t, (st === 0 || st === 8) ? 0.38 : 0.28);
+      }
+      // Gated rock snare on beats 2 & 4
+      if (st === 4 || st === 12) {
+        snare(K, p.out, t, 0.28);
+        hitNoise(K, p.out, t, 0.16, 0.12, 'highpass', 3500, 1.1);
+      }
+      // Live tom fill at turnaround of every 4th bar
+      if (bar % 4 === 3 && st >= 12) {
+        tom(K, p.out, t, 52 - (st - 12) * 3, 0.26);
+      }
+      // Crowd cheers & whistles every 8 bars
+      if (bar % 8 === 7 && st === 12) {
+        hitNoise(K, p.out, t, 0.8, 0.08, 'bandpass', 1200, 1.4);
+        note(K, p.out, 'sine', 78, t, 0.3, 0.02, { att: 0.05, slide: 8 });
+      }
+
+      // 2. Overdriven Rock Bass
+      if (st % 2 === 0) {
+        const noteIdx = [0, 0, 1, 0, 2, 2, 1, 2][(st >> 1) % 8];
+        const bassPitch = r - 12 + (noteIdx === 1 ? 7 : noteIdx === 2 ? 12 : 0);
+        // Overdriven saw with growl
+        note(K, p.out, 'sawtooth', bassPitch, t, spb * 0.48, 0.14, { att: 0.004, lp: 850, det: -6 });
+        // Square wave harmonic clipping
+        note(K, p.out, 'square', bassPitch, t, spb * 0.38, 0.08, { att: 0.003, lp: 640 });
+        // Deep sub sine
+        note(K, p.out, 'triangle', bassPitch - 12, t, spb * 0.48, 0.16, { att: 0.006 });
+      }
+
+      // 3. Rhythm Electric Guitar
+      const openHit = (st === 0 || st === 3 || st === 6 || st === 8 || st === 11);
+      if (openHit) {
+        const chordVol = st === 0 ? 0.05 : 0.04;
+        const dur = st === 0 || st === 8 ? spb * 0.95 : spb * 0.46;
+        ch.forEach((m, i) => {
+          note(K, p.out, 'sawtooth', m, t, dur, chordVol, { att: 0.004, lp: 3200 + i * 250, det: -8 });
+          note(K, p.out, 'sawtooth', m, t, dur, chordVol * 0.95, { att: 0.004, lp: 3200 + i * 250, det: +8 });
+          note(K, p.out, 'square', m, t, dur * 0.85, chordVol * 0.7, { att: 0.003, lp: 2500 });
+        });
+      } else {
+        const chugVol = 0.035;
+        const dur = spb * 0.24;
+        [r, r + 7].forEach((m, i) => {
+          note(K, p.out, 'sawtooth', m, t, dur, chugVol, { att: 0.003, lp: 1600 + i * 150, det: i ? 7 : -7 });
+          note(K, p.out, 'square', m, t, dur * 0.75, chugVol * 0.65, { att: 0.002, lp: 1250 });
+        });
+      }
+
+      // 4. Jansenn's Rock Lead Solos (Blues Bends & Vibrato)
+      if ((bar % 2 === 1 && (st === 2 || st === 7 || st === 10 || st === 14)) || (st % 4 === 2 && p.rng() < 0.42)) {
+        const leadPitch = pick(p.rng, this.bluesScale);
+        const bend = p.rng() < 0.45 ? (p.rng() < 0.5 ? 2 : 3) : (p.rng() < 0.2 ? -2 : 0);
+        const vibratoDet = Math.sin(s * 1.8) * 12;
+        note(K, p.out, 'sawtooth', leadPitch, t, spb * 0.88, 0.06, { att: 0.004, lp: 3800, slide: bend, det: vibratoDet - 6 });
+        note(K, p.out, 'sawtooth', leadPitch, t, spb * 0.88, 0.05, { att: 0.004, lp: 3800, slide: bend, det: vibratoDet + 6 });
+        note(K, p.out, 'square', leadPitch + 12, t, spb * 0.55, 0.025, { att: 0.003, lp: 3200, slide: bend });
+      }
+    }
   }
 };
 
@@ -160,9 +242,10 @@ let K = null, cur = null, old = [], timer = null;
 function start(name) {
   const mode = MODES[name];
   const c = K.c, out = c.createGain(), t0 = c.currentTime;
-  out.gain.setValueAtTime(0.0001, t0); out.gain.linearRampToValueAtTime(mode.vol, t0 + FADE);
+  const fade = name === 'music_bar' ? 0.45 : FADE;
+  out.gain.setValueAtTime(0.0001, t0); out.gain.linearRampToValueAtTime(mode.vol, t0 + fade);
   out.connect(K.bus.music);
-  return { name, mode, out, step: 0, next: t0 + 0.12, spb: 60 / mode.bpm, rng: mkRng((Math.random() * 1e9) | 0), fadeEnd: 0 };
+  return { name, mode, out, step: 0, next: t0 + 0.08, spb: 60 / mode.bpm, rng: mkRng((Math.random() * 1e9) | 0), fadeEnd: 0 };
 }
 function pump() {
   if (!K) return;
@@ -186,8 +269,9 @@ export const music = {
     if (!K) return;
     const t = K.c.currentTime;
     if (cur) {
-      cur.out.gain.cancelScheduledValues(t); cur.out.gain.setValueAtTime(cur.out.gain.value, t); cur.out.gain.linearRampToValueAtTime(0.0001, t + FADE);
-      cur.fadeEnd = t + FADE + 0.4; old.push(cur);
+      const fadeOut = (cur.name === 'music_bar' || name === 'music_bar') ? 0.45 : FADE;
+      cur.out.gain.cancelScheduledValues(t); cur.out.gain.setValueAtTime(cur.out.gain.value, t); cur.out.gain.linearRampToValueAtTime(0.0001, t + fadeOut);
+      cur.fadeEnd = t + fadeOut + 0.4; old.push(cur);
       while (old.length > 2) { const d = old.shift(); try { d.out.disconnect(); } catch (e) { /* ignore */ } }
     }
     cur = name ? start(name) : null;

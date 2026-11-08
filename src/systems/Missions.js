@@ -1,6 +1,7 @@
 // Mission engine: runs story chapters and side jobs. Mission data lives in story/*.js.
 import { STORY, STORY_BY_ID } from '../story/missions.js';
 import { SIDE_TEMPLATES } from '../story/side.js';
+import { WEAPONS, MELEE, ARMOR_TIERS } from '../config.js';
 import { profile, flag } from './Profile.js';
 import { sfx } from './Audio.js';
 
@@ -8,12 +9,27 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // one-shot scripted beats referenced by objectives of type "script"
 const SCRIPTS = {
+  m6_chase(gs) {
+    const lot = gs.places.dealer || gs.places.gas;
+    gs.spawnQuestVehicle({ type: 'sports', variant: 1, x: lot.x + 80, y: lot.y + 40, heading: 0, tag: 'm6_courier' });
+    gs.events.emit('toast', 'Courier spotted! Pursue the vehicle to the loading docks!');
+  },
   m7_chase(gs) {
     const gas = gs.places.gas;
     gs.spawnQuestVehicle({ type: 'van', variant: 0, x: gas.x + 60, y: gas.y + 40, heading: 0, tag: 'm7van' });
-    gs.wanted.add(65, { x: gs.player.x, y: gs.player.y }, 'Hale tracked the package');
+    gs.wanted.add(100, { x: gs.player.x, y: gs.player.y }, 'Hale tracked the package');
     gs.spawnPoliceCar({ x: gs.player.x, y: gs.player.y });
     gs.spawnPoliceFoot({ x: gs.player.x, y: gs.player.y }, 3);
+  },
+  m10_ambush(gs) {
+    gs.events.emit('banner', { title: 'AMBUSH!', sub: 'HARBOR MERCENARIES HAVE SURROUNDED THE YARD', color: '#ff4a3a' });
+    if (sfx.crash) sfx.crash();
+  },
+  m11_chase(gs) {
+    gs.wanted.add(150, { x: gs.player.x, y: gs.player.y }, 'Corrupt lieutenants called in PCPD tactical units');
+    gs.spawnPoliceCar({ x: gs.player.x, y: gs.player.y });
+    gs.spawnPoliceFoot({ x: gs.player.x, y: gs.player.y }, 4);
+    gs.events.emit('toast', 'Police sirens! Break line of sight and lose your wanted level!');
   }
 };
 
@@ -107,7 +123,7 @@ export default class MissionManager {
   }
 
   complete() {
-    const def = this.def, gs = this.gs;
+    const def = this.def, gs = this.gs, p = gs.player;
     const reward = def.reward || { money: 0, rep: 0 };
     const k = this.replay ? 0.5 : 1;
     const money = Math.round((reward.money || 0) * k + (this.data.bonus || 0));
@@ -115,6 +131,36 @@ export default class MissionManager {
     const first = !this.isDone(def.id);
     if (money) gs.addMoney(money);
     if (rep) gs.addRep(rep);
+
+    // Progressive equipment rewards (weapons, armor, ammo, plates, medkits)
+    if (first && p) {
+      if (reward.armor) {
+        p.acquireArmor(reward.armor, true);
+      }
+      if (reward.weapon) {
+        const wId = reward.weapon;
+        p.weapons[wId] = p.weapons[wId] || (WEAPONS[wId] ? { mag: WEAPONS[wId].mag } : {});
+        if (!p.slots[1] || p.slots[1] === 'fists') {
+          p.assignSlot(1, wId);
+          p.equip(wId);
+        } else if (!p.slots[2]) {
+          p.assignSlot(2, wId);
+        }
+      }
+      if (reward.ammo) {
+        Object.entries(reward.ammo).forEach(([ammoType, count]) => {
+          p.ammo[ammoType] = Math.min(p.ammoCap(ammoType), (p.ammo[ammoType] || 0) + count);
+        });
+      }
+      if (reward.plates) {
+        p.plates = (p.plates || 0) + reward.plates;
+        p.repairArmor();
+      }
+      if (reward.medkits) {
+        p.medkits = Math.min(p.medCap(), p.medkits + reward.medkits);
+      }
+    }
+
     if (!def.side) {
       profile.missions.completed[def.id] = (profile.missions.completed[def.id] || 0) + 1;
       delete profile.missions.failed[def.id];
@@ -123,8 +169,28 @@ export default class MissionManager {
       profile.flags.sideDone = (profile.flags.sideDone || 0) + 1;
       if (def.onComplete) def.onComplete(gs);
     }
-    gs.events.emit('banner', { title: 'MISSION PASSED', sub: `${def.title.toUpperCase()}   +$${money}${rep ? '   +' + rep + ' REP' : ''}`, color: '#7aff9a' });
+
+    let sub = `${def.title.toUpperCase()}   +$${money}${rep ? '   +' + rep + ' REP' : ''}`;
+    if (first && reward.armor) sub += `   +${ARMOR_TIERS[reward.armor]?.name || 'Armor'}`;
+    if (first && reward.weapon) sub += `   +${WEAPONS[reward.weapon]?.name || MELEE[reward.weapon]?.name || reward.weapon}`;
+    gs.events.emit('banner', { title: 'MISSION PASSED', sub, color: '#7aff9a' });
     sfx.missionDone();
+
+    // Check for new black-market weapon/armor unlocks at Kenny's
+    if (first && !def.side) {
+      const newlyUnlocked = [
+        ...Object.values(WEAPONS).filter((w) => w.unlockMission === def.id).map((w) => w.name),
+        ...Object.values(MELEE).filter((m) => m.unlockMission === def.id).map((m) => m.name),
+        ...Object.values(ARMOR_TIERS).filter((a) => a.unlockMission === def.id).map((a) => a.name)
+      ];
+      if (newlyUnlocked.length > 0) {
+        gs.time.delayedCall(4500, () => {
+          gs.events.emit('banner', { title: 'BLACK MARKET UNLOCKED', sub: `Kenny now sells: ${newlyUnlocked.join(', ')}`, color: '#ffd070' });
+          if (sfx.item) sfx.item();
+        });
+      }
+    }
+
     this.cleanup();
     const next = def.autoNext;
     this.def = null; this.id = null; this.obj = null; this.step = 0;

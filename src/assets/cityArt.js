@@ -14,13 +14,33 @@ import { drawBankArt } from './bankArt.js';
 import { drawFireArt } from './fireArt.js';
 import { drawTotoyaArt } from './totoyaArt.js';
 import { drawReyesArt } from './reyesArt.js';
+import { drawHospitalArt } from './hospitalArt.js';
+import { drawCityHallArt } from './cityHallArt.js';
+import { drawSchoolArt } from './schoolArt.js';
 import { drawNewVehicles } from './vehicleArt.js';
+import { drawMusicBarArt } from './musicBarArt.js';
 
 /* ------------------------------------------------------------- outfits */
 // indexes into the option / colour lists in textures.js
 export const ROLE_LOOKS = {
   police: { skin: 1, hair: 2, hairColor: 1, hat: 1, hatColor: 0, shirt: 1, shirtColor: 0, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 0, backpackColor: 4, armband: '#d4a017' },
-  swat: { skin: 1, hair: 0, hairColor: 0, hat: 3, hatColor: 4, shirt: 3, shirtColor: 4, pants: 2, pantsColor: 4, shoes: 1, shoeColor: 0, backpack: 1, backpackColor: 4, armband: '#e8e8e8' },
+  // ---- police response, one distinct uniform family per wanted tier (each tier has varied, authentic looks)
+  police: { skin: 1, hair: 2, hairColor: 1, hat: 1, hatColor: 0, shirt: 15, shirtColor: 0, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, armband: '#d4a017' },                // 1-2 stars: classic long-sleeve duty shirt, tie, gold badge
+  police2: { skin: 2, hair: 1, hairColor: 0, hat: 1, hatColor: 15, shirt: 6, shirtColor: 0, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, armband: '#d4a017' },               // 1-2 stars: summer short-sleeve polo
+  police3: { skin: 3, hair: 2, hairColor: 1, hat: 1, hatColor: 0, shirt: 12, shirtColor: 12, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, armband: '#d4a017' },               // 1-2 stars: high-vis ballistic vest over cyan shirt
+  police4: { skin: 0, hair: 3, hairColor: 2, hat: 1, hatColor: 7, shirt: 15, shirtColor: 18, pants: 1, pantsColor: 7, shoes: 1, shoeColor: 2, armband: '#d4af37' },               // 1-2 stars: state trooper / sheriff tan uniform
+  police5: { skin: 2, hair: 0, hairColor: 0, hat: 1, hatColor: 4, shirt: 12, shirtColor: 4, pants: 1, pantsColor: 4, shoes: 1, shoeColor: 10, armband: '#e8e8e8' },               // 1-2 stars: metro patrol in black with tactical vest
+  copcmd: { skin: 1, hair: 2, hairColor: 4, hat: 1, hatColor: 4, shirt: 15, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, watch: 2, armband: '#d4af37' }, // 3 stars: chief in white command shirt & gold braid
+  copcmd2: { skin: 3, hair: 0, hairColor: 0, hat: 1, hatColor: 19, shirt: 1, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, watch: 2, armband: '#d4af37' },        // 3 stars: senior lieutenant in navy command jacket
+  copcmd3: { skin: 2, hair: 1, hairColor: 2, hat: 0, hatColor: 4, shirt: 12, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, watch: 2, armband: '#d4af37' }, // 3 stars: tactical supervisor in vest with gold shield
+  swat: { skin: 1, hair: 0, hairColor: 0, hat: 3, hatColor: 4, shirt: 13, shirtColor: 4, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, glasses: 2, mask: 2, backpack: 3, backpackColor: 4, armband: '#e8e8e8' },       // 4 stars: black tactical assault operator
+  swat2: { skin: 2, hair: 0, hairColor: 0, hat: 3, hatColor: 3, shirt: 13, shirtColor: 3, pants: 6, pantsColor: 3, shoes: 6, shoeColor: 10, glasses: 2, mask: 2, backpack: 1, backpackColor: 4, armband: '#e8e8e8' },       // 4 stars: urban grey breacher
+  swat3: { skin: 3, hair: 0, hairColor: 0, hat: 3, hatColor: 15, shirt: 13, shirtColor: 15, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, mask: 2, backpack: 2, backpackColor: 4, armband: '#f2e04a' },              // 4 stars: navy HRT tactical rifleman
+  swat4: { skin: 0, hair: 0, hairColor: 0, hat: 3, hatColor: 8, shirt: 13, shirtColor: 8, pants: 6, pantsColor: 8, shoes: 6, shoeColor: 10, mask: 2, glasses: 2, backpack: 3, backpackColor: 8, armband: '#e8e8e8' },       // 4 stars: OD green tactical operator
+  army: { skin: 1, hair: 2, hairColor: 0, hat: 3, hatColor: 8, shirt: 14, shirtColor: 8, pants: 2, pantsColor: 8, shoes: 6, shoeColor: 5, glasses: 2, backpack: 3, backpackColor: 8, armband: '#b02a2a' },                // 5 stars: woodland / OD flak vest infantry
+  army2: { skin: 2, hair: 0, hairColor: 0, hat: 3, hatColor: 18, shirt: 14, shirtColor: 18, pants: 2, pantsColor: 18, shoes: 6, shoeColor: 2, backpack: 3, backpackColor: 18, glasses: 2, armband: '#b02a2a' },          // 5 stars: desert-tan taskforce soldier
+  army3: { skin: 3, hair: 0, hairColor: 0, hat: 3, hatColor: 4, shirt: 14, shirtColor: 4, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, mask: 2, glasses: 2, backpack: 3, backpackColor: 4, armband: '#d83030' },      // 5 stars: urban night-assault soldier
+  army4: { skin: 4, hair: 2, hairColor: 1, hat: 3, hatColor: 7, shirt: 14, shirtColor: 7, pants: 2, pantsColor: 7, shoes: 6, shoeColor: 0, backpack: 3, backpackColor: 4, armband: '#d83030' },                         // 5 stars: camo special forces commando
   dealer: { skin: 1, hair: 6, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
   bartender: { skin: 3, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 6, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4, necklace: 0 },
   cashier: { skin: 0, hair: 4, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, backpack: 0, backpackColor: 4 },
@@ -52,7 +72,30 @@ export const ROLE_LOOKS = {
   reyes_guard: { skin: 2, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, backpack: 0, backpackColor: 4, armband: '#d4a82a' },
   reyes_receptionist: { skin: 0, hair: 3, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, necklace: 1, backpack: 0, backpackColor: 4 },
   reyes_worker: { skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, watch: 2, backpack: 0, backpackColor: 4 },
-  reyes_exec: { skin: 2, hair: 2, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 3, watch: 1, backpack: 0, backpackColor: 4 }
+  reyes_exec: { skin: 2, hair: 2, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 3, watch: 1, backpack: 0, backpackColor: 4 },
+  hosp_doctor: { skin: 1, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, backpack: 0, backpackColor: 4, armband: '#2b8ac4' },
+  hosp_doctor2: { skin: 2, hair: 3, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 5, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 1, watch: 2, backpack: 0, backpackColor: 4, armband: '#2b8ac4' },
+  hosp_nurse: { skin: 0, hair: 4, hairColor: 1, hat: 0, hatColor: 4, shirt: 0, shirtColor: 12, pants: 1, pantsColor: 12, shoes: 1, shoeColor: 1, backpack: 0, backpackColor: 4 },
+  hosp_nurse2: { skin: 3, hair: 1, hairColor: 0, hat: 0, hatColor: 4, shirt: 0, shirtColor: 12, pants: 1, pantsColor: 12, shoes: 1, shoeColor: 1, watch: 1, backpack: 0, backpackColor: 4 },
+  hosp_surgeon: { skin: 2, hair: 1, hairColor: 0, hat: 0, hatColor: 4, shirt: 0, shirtColor: 2, pants: 1, pantsColor: 2, shoes: 1, shoeColor: 1, backpack: 0, backpackColor: 4, armband: '#2ec464' },
+  hosp_paramedic: { skin: 1, hair: 1, hairColor: 1, hat: 1, hatColor: 15, shirt: 1, shirtColor: 15, pants: 1, pantsColor: 15, shoes: 1, shoeColor: 0, backpack: 1, backpackColor: 15, armband: '#ff3b30' },
+  hosp_receptionist: { skin: 1, hair: 3, hairColor: 3, hat: 0, hatColor: 4, shirt: 9, shirtColor: 12, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 0, necklace: 1, backpack: 0, backpackColor: 4 },
+  hosp_patient: { skin: 2, hair: 2, hairColor: 2, hat: 0, hatColor: 4, shirt: 0, shirtColor: 12, pants: 0, pantsColor: 12, shoes: 0, shoeColor: 1, backpack: 0, backpackColor: 4 },
+  hosp_guard: { skin: 3, hair: 1, hairColor: 0, hat: 1, hatColor: 15, shirt: 1, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 0, glasses: 2, backpack: 0, backpackColor: 4, armband: '#e8e8e8' },
+  hosp_visitor: { skin: 1, hair: 3, hairColor: 1, hat: 0, hatColor: 4, shirt: 1, shirtColor: 7, pants: 0, pantsColor: 3, shoes: 1, shoeColor: 2, backpack: 0, backpackColor: 4 },
+  // ---- City Hall Annex municipal officials, security & administration
+  cityhall_guard: { skin: 2, hair: 2, hairColor: 0, hat: 1, hatColor: 4, shirt: 1, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, backpack: 0, backpackColor: 4, armband: '#d4af37' },
+  cityhall_chief: { skin: 1, hair: 2, hairColor: 4, hat: 1, hatColor: 4, shirt: 15, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, watch: 2, backpack: 0, backpackColor: 4, armband: '#d4af37' },
+  cityhall_reception: { skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, watch: 1, backpack: 0, backpackColor: 4 },
+  cityhall_official: { skin: 0, hair: 3, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 7, pants: 0, pantsColor: 7, shoes: 1, shoeColor: 10, glasses: 2, necklace: 1, backpack: 0, backpackColor: 4 },
+  cityhall_mayor: { skin: 1, hair: 4, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, necklace: 2, watch: 1, rings: 1, backpack: 0, backpackColor: 4 },
+  cityhall_clerk: { skin: 2, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 5, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 1, backpack: 0, backpackColor: 4 },
+  school_principal: { skin: 1, hair: 2, hairColor: 4, hat: 0, hatColor: 4, shirt: 16, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, watch: 2, backpack: 0, backpackColor: 4 },
+  school_teacher: { skin: 2, hair: 3, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 7, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 1, backpack: 0, backpackColor: 4 },
+  school_teacher2: { skin: 0, hair: 1, hairColor: 0, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 0, watch: 1, backpack: 0, backpackColor: 4 },
+  school_librarian: { skin: 1, hair: 3, hairColor: 5, hat: 0, hatColor: 4, shirt: 9, shirtColor: 12, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, necklace: 1, backpack: 0, backpackColor: 4 },
+  school_student: { skin: 2, hair: 0, hairColor: 1, hat: 0, hatColor: 4, shirt: 6, shirtColor: 3, pants: 0, pantsColor: 4, shoes: 0, shoeColor: 10, backpack: 1, backpackColor: 3 },
+  school_student2: { skin: 1, hair: 2, hairColor: 0, hat: 0, hatColor: 4, shirt: 2, shirtColor: 12, pants: 0, pantsColor: 15, shoes: 0, shoeColor: 1, backpack: 1, backpackColor: 12 }
 };
 export const CIV_VARIANTS = 22;
 
@@ -78,7 +121,16 @@ export const STORY_LOOKS = {
   // Mark Sterling: TOTOYA owner & Tesla master mechanic
   mark: { skin: 1, hair: 6, hairColor: 1, hat: 1, hatColor: 4, shirt: 11, shirtColor: 4, pants: 6, pantsColor: 4, shoes: 6, shoeColor: 10, watch: 1, backpack: 0, backpackColor: 4 },
   // Councilman Aurelio Reyes: CEO of Reyes Holdings & senior Port City Councilman (tailored navy suit, tie, silver-templed hair, gold watch)
-  reyes: { skin: 1, hair: 2, hairColor: 4, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, watch: 1, rings: 1, backpack: 0, backpackColor: 4 }
+  reyes: { skin: 1, hair: 2, hairColor: 4, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, watch: 1, rings: 1, backpack: 0, backpackColor: 4 },
+  // ---- City Hall Annex Named Story Characters
+  salcedo: { skin: 1, hair: 4, hairColor: 2, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 15, shoes: 1, shoeColor: 10, necklace: 2, watch: 1, rings: 1, backpack: 0, backpackColor: 4 },
+  cortez: { skin: 1, hair: 2, hairColor: 4, hat: 1, hatColor: 4, shirt: 15, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, watch: 2, backpack: 0, backpackColor: 4, armband: '#d4af37' },
+  sofia: { skin: 0, hair: 3, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 7, pants: 0, pantsColor: 7, shoes: 1, shoeColor: 10, glasses: 2, necklace: 1, backpack: 0, backpackColor: 4 },
+  adrian: { skin: 1, hair: 1, hairColor: 1, hat: 0, hatColor: 4, shirt: 9, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, watch: 1, backpack: 0, backpackColor: 4 },
+  // Principal Arthur Vance: Distinguished head of Lincoln High School (grey temples, spectacles, administrator blazer & tie, gold watch)
+  principal: { skin: 1, hair: 2, hairColor: 4, hat: 0, hatColor: 4, shirt: 16, shirtColor: 15, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 0, glasses: 2, watch: 2, backpack: 0, backpackColor: 4 },
+  // Jansenn: Lead guitarist & vocalist at The Neon Chord Live Music Bar (barber taper quiff hair, black motorcycle leather, dark jeans, rockstar chains, sunglasses)
+  jansenn: { skin: 1, hair: 6, hairColor: 0, hat: 0, hatColor: 4, shirt: 2, shirtColor: 4, pants: 0, pantsColor: 4, shoes: 1, shoeColor: 10, glasses: 2, watch: 3, necklace: 2, rings: 1, earring: 2, chains: true, backpack: 0, backpackColor: 4, build: 'slim' }
 };
 
 function civilianAppearance(i) {
@@ -122,7 +174,15 @@ function drawExtraTiles(scene) {
   // glass curtain wall (towers)
   [[T.glass, false], [T.glassCap, true]].forEach(([i, cap]) => {
     clearTile(i);
-    if (cap) { R(c, ox(i), 0, 32, 32, '#9aa8b6'); speck(i, ['#8e9cab', '#a8b5c2'], 12); return; }
+    if (cap) {
+      R(c, ox(i), 0, 32, 32, '#1e3044');
+      R(c, ox(i), 0, 32, 2, '#486888');
+      R(c, ox(i), 30, 32, 2, '#101a28');
+      R(c, ox(i), 0, 2, 32, '#486888');
+      R(c, ox(i) + 30, 0, 2, 32, '#101a28');
+      for (let x = 4; x < 28; x += 8) R(c, ox(i) + x, 4, 4, 24, '#283e56');
+      return;
+    }
     R(c, ox(i), 0, 32, 8, '#9aa8b6'); R(c, ox(i), 0, 32, 1, '#c3ced8'); R(c, ox(i), 7, 32, 1, '#5d6975');
     R(c, ox(i), 8, 32, 24, '#3f6e96');
     for (let gy = 0; gy < 2; gy++) for (let gx = 0; gx < 2; gx++) {
@@ -397,6 +457,537 @@ function drawExtraTiles(scene) {
     R(c, o + 5, 14, 22, 5, '#1f3a74'); R(c, o + 5, 14, 22, 1, '#3a5ca8'); for (let g = 0; g < 3; g++) R(c, o + 7 + g * 7, 15, 4, 3, '#14264e');
     R(c, o + 5, 21, 8, 4, '#14161a'); R(c, o + 15, 21, 12, 4, '#2a2d34'); R(c, o + 16, 22, 10, 1, '#c8a02a');
   });
+
+  /* ---- Reyes Holdings Tower: Corporate architectural wall, wall cap, wood paneling, glass doors, luxury marble & corporate carpet ---- */
+  const baseReyesWall = (o) => {
+    R(c, o, 0, 32, 32, '#e8ecf2');
+    // Top architectural bronze cap (y=0..7)
+    R(c, o, 0, 32, 8, '#1e242e');
+    R(c, o, 0, 32, 2, '#384252');
+    R(c, o, 7, 32, 1, '#10141a');
+    // Main wall face (y=8..31): architectural warm cream/off-white with fine vertical panel seams
+    R(c, o, 8, 32, 24, '#e8ecf2');
+    R(c, o, 8, 32, 1, '#ffffff');
+    // Vertical architectural panel seams at x=15 and x=31
+    R(c, o + 15, 8, 1, 20, '#d2d8e4');
+    R(c, o + 16, 8, 1, 20, '#ffffff');
+    R(c, o + 31, 8, 1, 20, '#d2d8e4');
+    // Brushed gold / brass dado rail at y=18
+    R(c, o, 18, 32, 2, '#d4a82a');
+    R(c, o, 18, 32, 1, '#f6e088');
+    R(c, o, 20, 32, 1, '#8a6818');
+    // Dark polished walnut baseboard at y=28..31
+    R(c, o, 28, 32, 4, '#241a14');
+    R(c, o, 28, 32, 1, '#d4a82a');
+    R(c, o, 31, 32, 1, 'rgba(0,0,0,0.3)');
+  };
+  clearTile(T.reyesWall); baseReyesWall(ox(T.reyesWall));
+
+  clearTile(T.reyesWallCap); {
+    const o = ox(T.reyesWallCap);
+    R(c, o, 0, 32, 32, '#1e242e');
+    R(c, o, 0, 32, 2, '#384252');
+    R(c, o, 30, 32, 2, '#10141a');
+    R(c, o, 0, 2, 32, '#384252');
+    R(c, o + 30, 0, 2, 32, '#10141a');
+    for (let x = 4; x < 28; x += 8) R(c, o + x, 4, 4, 24, '#262e3a');
+  }
+
+  const baseReyesWood = (o) => {
+    R(c, o, 0, 32, 32, '#3a2216');
+    // Top mahogany cap
+    R(c, o, 0, 32, 8, '#26140c');
+    R(c, o, 0, 32, 2, '#4a2c1e');
+    R(c, o, 7, 32, 1, '#d4a82a');
+    // Executive walnut raised paneling
+    R(c, o, 8, 32, 24, '#3a2216');
+    // Raised bevel panel
+    R(c, o + 3, 10, 26, 17, '#482a1c');
+    R(c, o + 3, 10, 26, 1, '#5e3826');
+    R(c, o + 3, 10, 1, 17, '#5e3826');
+    R(c, o + 28, 10, 1, 17, '#22120a');
+    R(c, o + 3, 26, 26, 1, '#22120a');
+    // Gold molding at y=18
+    R(c, o, 18, 32, 1, '#d4a82a');
+    // Mahogany baseboard
+    R(c, o, 28, 32, 4, '#1a0e08');
+    R(c, o, 28, 32, 1, '#8a5a2a');
+  };
+  clearTile(T.reyesWallWood); baseReyesWood(ox(T.reyesWallWood));
+
+  // Corporate Glass Doors (Closed / Open)
+  polDoor(T.reyesDoorGlass, T.reyesDoorGlassOpen, baseReyesWall, '#d4a82a', '#101c2e', (o) => {
+    // Large tempered glass window in door
+    R(c, o + 6, 4, 20, 22, '#c8e2f4');
+    R(c, o + 8, 6, 3, 18, 'rgba(255,255,255,0.4)');
+    R(c, o + 15, 6, 2, 18, 'rgba(255,255,255,0.25)');
+    // Frosted privacy band at y=14..18
+    R(c, o + 6, 14, 20, 5, 'rgba(240,246,255,0.65)');
+    R(c, o + 6, 16, 20, 1, '#d4a82a');
+    // Vertical architectural pull handle
+    R(c, o + 22, 12, 2, 11, '#ffffff');
+    R(c, o + 23, 12, 1, 11, '#d4a82a');
+  });
+
+  // Calacatta Gold Marble floor tile (T.reyesFloorMarble)
+  clearTile(T.reyesFloorMarble); {
+    const o = ox(T.reyesFloorMarble);
+    R(c, o, 0, 32, 32, '#f3f2ee');
+    // 16x16 grid with fine brass/gold grout lines
+    R(c, o, 0, 32, 1, '#c8bda4');
+    R(c, o, 16, 32, 1, '#d0c6b0');
+    R(c, o, 0, 1, 32, '#c8bda4');
+    R(c, o + 16, 0, 1, 32, '#d0c6b0');
+    // Organic gold and warm grey veining
+    R(c, o + 3, 3, 6, 2, '#e2dcce');
+    R(c, o + 8, 5, 5, 2, '#e8dfc8');
+    R(c, o + 12, 7, 3, 3, '#dad4c6');
+    R(c, o + 19, 4, 8, 2, '#e6dec6');
+    R(c, o + 22, 9, 6, 2, '#ded8cb');
+    R(c, o + 4, 20, 7, 2, '#e4ded0');
+    R(c, o + 9, 22, 5, 2, '#e8e0c8');
+    R(c, o + 20, 19, 4, 2, '#ded7ca');
+    R(c, o + 23, 22, 6, 2, '#e8dfca');
+    // Subtle polish highlights
+    R(c, o + 1, 1, 2, 2, '#ffffff');
+    R(c, o + 17, 1, 2, 2, '#ffffff');
+    R(c, o + 1, 17, 2, 2, '#ffffff');
+    R(c, o + 17, 17, 2, 2, '#ffffff');
+  }
+
+  // Executive Navy Acoustic Broadloom Carpet (T.reyesFloorCarpet)
+  clearTile(T.reyesFloorCarpet); {
+    const o = ox(T.reyesFloorCarpet);
+    R(c, o, 0, 32, 32, '#182434');
+    // Micro-weave acoustic texture
+    for (let y = 1; y < 31; y += 2) {
+      for (let x = 1; x < 31; x += 2) {
+        R(c, o + x, y, 1, 1, ((x + y) % 4 === 0) ? '#223246' : '#141e2c');
+      }
+    }
+    // Fine woven pinstripe grid borders
+    R(c, o + 1, 1, 30, 1, '#2c3e56');
+    R(c, o + 1, 30, 30, 1, '#2c3e56');
+    R(c, o + 1, 1, 1, 30, '#2c3e56');
+    R(c, o + 30, 1, 1, 30, '#2c3e56');
+  }
+
+  /* ---- St. Mary Hospital: Clinical white wall, wall cap, glass entrance doors, seamless sanitary floor, sterile ICU floor ---- */
+  const baseHospWall = (o) => {
+    R(c, o, 0, 32, 32, '#f4f8fb');
+    // Top architectural coping (y=0..7)
+    R(c, o, 0, 32, 8, '#243448');
+    R(c, o, 0, 32, 2, '#486280');
+    R(c, o, 7, 32, 1, '#1b2a3a');
+    // Main wall face (y=8..31): crisp clinical off-white with fine vertical hygiene panel seams
+    R(c, o, 8, 32, 24, '#f4f8fb');
+    R(c, o, 8, 32, 1, '#ffffff');
+    R(c, o + 15, 8, 1, 20, '#d8e4ee');
+    R(c, o + 16, 8, 1, 20, '#ffffff');
+    R(c, o + 31, 8, 1, 20, '#d8e4ee');
+    // Medical blue wainscot protective accent band at y=16..20
+    R(c, o, 16, 32, 5, '#2b8ac4');
+    R(c, o, 16, 32, 1, '#4fa3d1');
+    R(c, o, 20, 32, 1, '#1e6896');
+    // Stainless steel crash / bumper guard rail at y=18
+    R(c, o, 18, 32, 2, '#e0e8f0');
+    R(c, o, 18, 32, 1, '#ffffff');
+    // Hygienic coved vinyl baseboard at y=28..31
+    R(c, o, 28, 32, 4, '#1c2c3e');
+    R(c, o, 28, 32, 1, '#3b587a');
+    R(c, o, 31, 32, 1, 'rgba(0,0,0,0.3)');
+  };
+  clearTile(T.hospWall); baseHospWall(ox(T.hospWall));
+
+  clearTile(T.hospWallCap); {
+    const o = ox(T.hospWallCap);
+    R(c, o, 0, 32, 32, '#243448');
+    R(c, o, 0, 32, 2, '#486280');
+    R(c, o, 30, 32, 2, '#141e2a');
+    R(c, o, 0, 2, 32, '#486280');
+    R(c, o + 30, 0, 2, 32, '#141e2a');
+    for (let x = 4; x < 28; x += 8) R(c, o + x, 4, 4, 24, '#2e425a');
+  }
+
+  // Hospital Automatic Glass Doors (Closed / Open)
+  polDoor(T.hospDoorGlass, T.hospDoorGlassOpen, baseHospWall, '#2b8ac4', '#142436', (o) => {
+    // Large tinted safety glass window in door
+    R(c, o + 5, 4, 22, 22, '#cce6f4');
+    R(c, o + 7, 6, 3, 18, 'rgba(255,255,255,0.4)');
+    R(c, o + 15, 6, 2, 18, 'rgba(255,255,255,0.25)');
+    // Frosted medical cross emblem in center of glass
+    const gcx = o + 16, gcy = 14;
+    ellipse(c, gcx, gcy, 6, 6, 'rgba(40,140,210,0.5)');
+    R(c, gcx - 1, gcy - 4, 2, 8, '#ffffff');
+    R(c, gcx - 4, gcy - 1, 8, 2, '#ffffff');
+    // Stainless steel lower kickplate
+    R(c, o + 4, 22, 24, 4, '#c8d4e0');
+    R(c, o + 4, 22, 24, 1, '#ffffff');
+    // Vertical architectural pull bar
+    R(c, o + 23, 10, 2, 12, '#ffffff');
+    R(c, o + 24, 10, 1, 12, '#2b8ac4');
+  });
+
+  // Seamless Sanitary Epoxy Floor (T.hospFloor)
+  clearTile(T.hospFloor); {
+    const o = ox(T.hospFloor);
+    R(c, o, 0, 32, 32, '#eaf2f8');
+    // Subtle 16x16 sanitary tile seams with polished glossy sheen
+    R(c, o, 0, 32, 1, '#d0e0ec');
+    R(c, o, 16, 32, 1, '#d8e6f0');
+    R(c, o, 0, 1, 32, '#d0e0ec');
+    R(c, o + 16, 0, 1, 32, '#d8e6f0');
+    // Soft high-gloss reflections
+    R(c, o + 1, 1, 4, 2, '#ffffff');
+    R(c, o + 17, 1, 4, 2, '#ffffff');
+    R(c, o + 1, 17, 4, 2, '#ffffff');
+    R(c, o + 17, 17, 4, 2, '#ffffff');
+  }
+
+  // Sterile Surgical ICU / OR Floor (T.hospFloorICU)
+  clearTile(T.hospFloorICU); {
+    const o = ox(T.hospFloorICU);
+    R(c, o, 0, 32, 32, '#2e6b66');
+    // Anti-static conductive grounding grid seams (dark copper / teal)
+    R(c, o, 0, 32, 1, '#1b4a46');
+    R(c, o, 16, 32, 1, '#245a55');
+    R(c, o, 0, 1, 32, '#1b4a46');
+    R(c, o + 16, 0, 1, 32, '#245a55');
+    // Clean sterile sheen highlights
+    R(c, o + 2, 2, 3, 1, '#4aa29a');
+    R(c, o + 18, 2, 3, 1, '#4aa29a');
+  }
+
+  // Medical Casework Supply Cabinet (T.hospCab) - modern clinical white/titanium with tempered glass doors & stainless drawers
+  clearTile(T.hospCab); {
+    const o = ox(T.hospCab);
+    // Outer titanium chassis
+    R(c, o + 2, 2, 28, 28, '#182432');
+    R(c, o + 3, 3, 26, 26, '#f0f5fa');
+    R(c, o + 3, 3, 26, 2, '#ffffff');
+
+    // Upper double glass-door medicine compartment
+    R(c, o + 4, 5, 24, 13, '#1a2c3e');
+    R(c, o + 5, 6, 22, 11, '#cbe4f6');
+    R(c, o + 5, 6, 22, 1, '#ffffff');
+    // Vertical center mullion dividing left and right glass doors
+    R(c, o + 15, 6, 2, 11, '#253e58');
+    // Horizontal glass shelf
+    R(c, o + 5, 11, 22, 1, 'rgba(255,255,255,0.7)');
+
+    // Medicine bottles, vials & sterile packs inside cabinet
+    R(c, o + 7, 7, 3, 4, '#e03838');
+    R(c, o + 11, 8, 3, 3, '#28b878');
+    R(c, o + 18, 7, 4, 4, '#3888d8');
+    R(c, o + 23, 8, 2, 3, '#e6b820');
+    // Lower shelf supplies
+    R(c, o + 7, 13, 4, 3, '#ffffff');
+    R(c, o + 18, 13, 5, 3, '#a0cce8');
+
+    // Stainless steel vertical door pull handles
+    R(c, o + 13, 9, 1, 5, '#ffffff');
+    R(c, o + 18, 9, 1, 5, '#ffffff');
+
+    // Lower hospital stainless steel cabinet doors / drawers
+    R(c, o + 4, 19, 24, 9, '#dbe5ee');
+    R(c, o + 4, 19, 24, 1, '#ffffff');
+    R(c, o + 15, 19, 2, 9, '#243448'); // center divider
+    // Sleek horizontal stainless drawer handles
+    R(c, o + 6, 22, 7, 1, '#486888');
+    R(c, o + 6, 22, 7, 1, '#ffffff');
+    R(c, o + 19, 22, 7, 1, '#486888');
+    R(c, o + 19, 22, 7, 1, '#ffffff');
+
+    // Sanitary recessed base kickplate
+    R(c, o + 3, 28, 26, 2, '#1e2c3c');
+  }
+
+  // PWD / Accessible Parking Space (T.pwdParking) - Asphalt stall with white divider stripes & neat centered ISA blue mark
+  clearTile(T.pwdParking); {
+    const o = ox(T.pwdParking);
+    // Dark asphalt parking pavement
+    R(c, o, 0, 32, 32, '#282b30');
+    speck(T.pwdParking, ['#222428', '#32353a'], 12);
+    // Crisp white parking stall divider stripes
+    R(c, o + 1, 0, 2, 32, '#ffffff');
+    R(c, o + 29, 0, 2, 32, '#ffffff');
+    // Centered ISA Blue painted handicap pavement symbol
+    R(c, o + 7, 7, 18, 18, '#005cb8');
+    R(c, o + 7, 7, 18, 1, '#2588e8');
+    R(c, o + 8, 8, 16, 16, '#0052a4');
+    // White Wheelchair Symbol inside
+    const gcx = o + 16, gcy = 16;
+    disc(c, gcx, gcy - 4, 1.8, '#ffffff');
+    R(c, gcx - 2, gcy - 1, 2, 6, '#ffffff');
+    R(c, gcx - 2, gcy + 3, 5, 2, '#ffffff');
+    c.strokeStyle = '#ffffff'; c.lineWidth = 1.4;
+    c.beginPath(); c.arc(gcx - 1, gcy + 3, 3.2, 0.4, Math.PI * 1.5); c.stroke();
+    R(c, gcx + 1, gcy + 1, 2, 4, '#ffffff');
+    R(c, gcx + 3, gcy + 4, 2, 3, '#ffffff');
+  }
+
+  // Modern Architectural Hospital Room Doors (Closed / Open)
+  clearTile(T.hospDoor); {
+    const o = ox(T.hospDoor);
+    baseHospWall(o);
+
+    // Architectural Door Frame (Heavy steel casing with beveled highlights)
+    R(c, o + 3, 2, 26, 29, '#1a2634');
+    R(c, o + 3, 2, 26, 1, '#475569');
+    R(c, o + 3, 2, 1, 29, '#475569');
+    R(c, o + 28, 2, 1, 29, '#0f1722');
+    R(c, o + 3, 30, 26, 1, '#0f1722');
+
+    // Illuminated Department Room Header Plaque (y = 3..5)
+    R(c, o + 6, 3, 20, 3, '#0369a1');
+    R(c, o + 7, 4, 18, 1, '#e0f2fe');
+
+    // Hospital Door Leaf Surface (Sanitary clinical composite panel)
+    R(c, o + 5, 6, 22, 23, '#eaf2f8');
+    R(c, o + 5, 6, 22, 1, '#ffffff');
+    R(c, o + 5, 6, 1, 23, '#ffffff');
+    R(c, o + 26, 6, 1, 23, '#94a3b8');
+
+    // Medical Vision Glass Window with Bold Red Cross Emblem (y = 7..15)
+    // Frame / Rubber gasket
+    R(c, o + 10, 7, 12, 9, '#1e293b');
+    // Safety glass pane
+    R(c, o + 11, 8, 10, 7, '#7dd3fc');
+    // Glass highlight reflection
+    R(c, o + 11, 8, 10, 1, '#e0f2fe');
+    R(c, o + 11, 9, 2, 5, 'rgba(255,255,255,0.6)');
+
+    // White backing badge for cross
+    R(c, o + 14, 9, 4, 5, '#ffffff');
+    R(c, o + 13, 10, 6, 3, '#ffffff');
+    // Bold Red Medical Cross (+)
+    R(c, o + 15, 9, 2, 5, '#dc2626');
+    R(c, o + 14, 10, 4, 3, '#dc2626');
+    R(c, o + 15, 10, 2, 1, '#ef4444'); // Highlight on cross
+
+    // Stainless Steel Crash Bar / Panic Push Bar (y = 17..20)
+    // Mounting brackets on frame/door
+    R(c, o + 5, 17, 3, 4, '#475569');
+    R(c, o + 24, 17, 3, 4, '#475569');
+    // Heavy tubular stainless bar
+    R(c, o + 6, 17, 20, 3, '#cbd5e1');
+    R(c, o + 6, 17, 20, 1, '#ffffff');
+    R(c, o + 6, 19, 20, 1, '#64748b');
+    // High-visibility Emergency Touch Bar (Red push actuator strip)
+    R(c, o + 9, 18, 14, 1, '#dc2626');
+
+    // Sanitary Heavy-Duty Gurney Protection Armor Kickplate (y = 23..29)
+    R(c, o + 5, 23, 22, 6, '#94a8ba');
+    R(c, o + 5, 23, 22, 1, '#e2e8f0');
+    R(c, o + 5, 28, 22, 1, '#475569');
+    // Fastener rivets on kickplate corners
+    R(c, o + 6, 24, 1, 1, '#ffffff');
+    R(c, o + 25, 24, 1, 1, '#ffffff');
+    R(c, o + 6, 27, 1, 1, '#ffffff');
+    R(c, o + 25, 27, 1, 1, '#ffffff');
+    R(c, o + 15, 24, 2, 1, '#ffffff');
+  }
+
+  clearTile(T.hospDoorOpen); {
+    const o = ox(T.hospDoorOpen);
+    baseHospWall(o);
+
+    // Architectural Door Frame
+    R(c, o + 3, 2, 26, 29, '#1a2634');
+    R(c, o + 3, 2, 26, 1, '#475569');
+    R(c, o + 3, 2, 1, 29, '#475569');
+    R(c, o + 28, 2, 1, 29, '#0f1722');
+    R(c, o + 3, 30, 26, 1, '#0f1722');
+
+    // Deep illuminated interior passage opening
+    R(c, o + 5, 3, 22, 26, '#0c1520');
+    // Back interior floor (Sterile hospital room lighting)
+    R(c, o + 5, 12, 22, 17, '#1b324a');
+    R(c, o + 8, 14, 19, 15, '#254566');
+
+    // Stainless floor transition threshold plate
+    R(c, o + 5, 27, 22, 2, '#475569');
+    R(c, o + 5, 27, 22, 1, '#94a3b8');
+
+    // Open Swung Door Leaf (Visible edge and thickness on left side)
+    R(c, o + 5, 3, 4, 25, '#eaf2f8');
+    R(c, o + 5, 3, 4, 1, '#ffffff');
+    R(c, o + 5, 3, 1, 25, '#ffffff');
+    R(c, o + 8, 3, 1, 25, '#94a3b8');
+    // Heavy hinge brackets on jamb
+    R(c, o + 4, 6, 2, 3, '#cbd5e1');
+    R(c, o + 4, 21, 2, 3, '#cbd5e1');
+    // Swung crash bar profile edge
+    R(c, o + 8, 17, 3, 2, '#dc2626');
+    R(c, o + 8, 17, 2, 1, '#cbd5e1');
+    // Cast shadow from open door onto interior floor
+    R(c, o + 9, 4, 2, 24, 'rgba(0,0,0,0.5)');
+  }
+
+  /* ---- City Hall Annex: Municipal limestone facade & prestigious government windows ---- */
+  FAC.CityHall = (o) => {
+    // Pearl limestone base block
+    R(c, o, 0, 32, 32, '#dce5ef');
+    // Top architectural frieze & gold cornice molding (y = 0..5)
+    R(c, o, 0, 32, 4, '#0c1a2e'); // deep civic navy frieze
+    R(c, o, 3, 32, 2, '#c59b27'); // brushed gold molding
+    R(c, o, 4, 32, 1, '#fadb6a'); // gold highlight
+    // Fluted pearl limestone facade body (y = 5..24)
+    R(c, o, 5, 32, 19, '#e6edf6');
+    // Architectural limestone fluting / masonry joints
+    for (let x = 0; x < 32; x += 8) {
+      R(c, o + x, 5, 1, 19, '#b8c6d8');
+      R(c, o + x + 1, 5, 1, 19, '#f8fafc');
+    }
+    // Civic navy plinth & gold dado course (y = 24..31)
+    R(c, o, 24, 32, 2, '#c59b27');
+    R(c, o, 24, 32, 1, '#fadb6a');
+    R(c, o, 26, 32, 6, '#0e1d32');
+    R(c, o, 26, 32, 1, '#1b3252');
+    R(c, o, 31, 32, 1, 'rgba(0,0,0,0.3)');
+  };
+  clearTile(T.facCityHall); FAC.CityHall(ox(T.facCityHall));
+
+  win(T.winCityHall, 'CityHall', '#c59b27', '#1a365d', (o) => {
+    // Double-pane window with warm civic interior light & diagonal sky reflection
+    R(c, o + 6, 11, 9, 15, '#1e3e68');
+    R(c, o + 17, 11, 9, 15, '#1e3e68');
+    // Warm interior executive illumination
+    R(c, o + 6, 15, 9, 11, '#fae082');
+    R(c, o + 17, 15, 9, 11, '#fae082');
+    // Subtle horizontal blinds
+    for (let y = 13; y < 24; y += 3) {
+      R(c, o + 6, y, 9, 1, 'rgba(30, 62, 104, 0.45)');
+      R(c, o + 17, y, 9, 1, 'rgba(30, 62, 104, 0.45)');
+    }
+    // Diagonal glass highlight reflections
+    R(c, o + 6, 11, 9, 2, 'rgba(255, 255, 255, 0.55)');
+    R(c, o + 17, 11, 9, 2, 'rgba(255, 255, 255, 0.55)');
+    // Central bronze divider / mullion
+    R(c, o + 15, 9, 2, 19, '#c59b27');
+    R(c, o + 15, 9, 1, 19, '#fadb6a');
+  });
+
+  // ---- Lincoln High School: Collegiate School Wall, Wall Cap & Principal Wood Wall
+  const baseSchoolWall = (o) => {
+    // Upper cream educational wall with subtle mortar joint
+    R(c, o, 0, 32, 18, '#ede6d6');
+    R(c, o, 0, 32, 2, '#faf6ec');
+    R(c, o, 5, 32, 1, '#ded5c2');
+    R(c, o, 11, 32, 1, '#ded5c2');
+    // Golden collegiate chair rail trim
+    R(c, o, 17, 32, 2, '#c89c32');
+    R(c, o, 17, 32, 1, '#f0cc66');
+    // Lower collegiate navy wainscoting paneling
+    R(c, o, 19, 32, 9, '#142742');
+    R(c, o + 3, 20, 26, 7, '#1b3354');
+    R(c, o + 3, 20, 26, 1, '#2c4e7c');
+    R(c, o + 3, 20, 1, 7, '#2c4e7c');
+    R(c, o + 28, 20, 1, 7, '#0d1a2c');
+    // Dark slate baseboard
+    R(c, o, 28, 32, 4, '#121720');
+    R(c, o, 28, 32, 1, '#263040');
+    R(c, o, 31, 32, 1, 'rgba(0,0,0,0.35)');
+  };
+  clearTile(T.schoolWall); baseSchoolWall(ox(T.schoolWall));
+
+  clearTile(T.schoolWallCap); {
+    const o = ox(T.schoolWallCap);
+    R(c, o, 0, 32, 32, '#ded8c8');
+    R(c, o, 0, 32, 3, '#f2ece0');
+    R(c, o, 29, 32, 3, '#9c9484');
+    R(c, o, 0, 3, 32, '#f2ece0');
+    R(c, o + 29, 0, 3, 32, '#9c9484');
+    for (let x = 6; x < 26; x += 8) R(c, o + x, 4, 3, 24, '#c8c0b0');
+  }
+
+  const baseSchoolWood = (o) => {
+    // Executive mahogany administrator wall
+    R(c, o, 0, 32, 32, '#381c10');
+    R(c, o, 0, 32, 6, '#26120a');
+    R(c, o, 0, 32, 1, '#502a18');
+    R(c, o, 6, 32, 1, '#c89c32'); // brass molding
+    // Raised bevel panel
+    R(c, o, 7, 32, 21, '#442214');
+    R(c, o + 3, 9, 26, 17, '#502918');
+    R(c, o + 3, 9, 26, 1, '#663622');
+    R(c, o + 3, 9, 1, 17, '#663622');
+    R(c, o + 28, 9, 1, 17, '#241008');
+    R(c, o + 3, 25, 26, 1, '#241008');
+    // Brass accent line
+    R(c, o + 5, 17, 22, 1, '#c89c32');
+    // Dark mahogany baseboard
+    R(c, o, 28, 32, 4, '#180a06');
+    R(c, o, 28, 32, 1, '#502614');
+    R(c, o, 31, 32, 1, 'rgba(0,0,0,0.35)');
+  };
+  clearTile(T.schoolWallWood); baseSchoolWood(ox(T.schoolWallWood));
+
+  // ---- Lincoln High School: Exterior Red Brick Wall, Wall Cap & Multipane Window (Matching Upper Facade)
+  // 1. Exterior Red Brick Wall (32x32)
+  clearTile(T.schoolBrick); {
+    const o = ox(T.schoolBrick);
+    // Warm red brick field
+    R(c, o, 0, 32, 32, '#963828');
+    // Top carved limestone stringcourse trim
+    R(c, o, 0, 32, 3, '#ded8c8');
+    R(c, o, 0, 32, 1, '#f2ece0');
+    R(c, o, 3, 32, 1, '#6a2216');
+    // Horizontal mortar courses
+    for (let my = 7; my <= 28; my += 5) {
+      R(c, o, my, 32, 1, '#5c1f14');
+    }
+    // Staggered vertical brick joints
+    for (let row = 0; row < 5; row++) {
+      const by = 8 + row * 5;
+      const shift = (row % 2) * 8;
+      for (let bx = shift; bx < 32; bx += 16) {
+        R(c, o + bx, by, 1, 4, '#5c1f14');
+        R(c, o + bx + 1, by, 1, 4, '#a84432');
+      }
+    }
+    // Base darker foundation course
+    R(c, o, 29, 32, 3, '#4e1910');
+  }
+
+  // 2. Exterior Red Brick Wall Cap (32x32)
+  clearTile(T.schoolBrickCap); {
+    const o = ox(T.schoolBrickCap);
+    R(c, o, 0, 32, 32, '#ded8c8');
+    R(c, o, 0, 32, 2, '#f2ece0');
+    R(c, o, 30, 32, 2, '#9c9484');
+    R(c, o, 0, 2, 32, '#f2ece0');
+    R(c, o + 30, 0, 2, 32, '#9c9484');
+    for (let x = 7; x < 28; x += 8) R(c, o + x, 2, 2, 28, '#c8c0b0');
+  }
+
+  // 3. Exterior Matching Classroom Window (32x32) with Red Brick Surround & Multipane Glass
+  clearTile(T.schoolWin); {
+    const o = ox(T.schoolWin);
+    // Red brick wall surround
+    R(c, o, 0, 32, 32, '#963828');
+    for (let my = 7; my <= 28; my += 5) {
+      R(c, o, 0, 32, 1, '#5c1f14');
+    }
+    // Top limestone lintel
+    R(c, o + 3, 6, 26, 3, '#ded8c8');
+    R(c, o + 3, 6, 26, 1, '#f2ece0');
+    // Bottom limestone window sill
+    R(c, o + 2, 26, 28, 3, '#ded8c8');
+    R(c, o + 2, 28, 28, 1, '#9c9484');
+    // White window casing / frame
+    R(c, o + 4, 9, 24, 17, '#ded8c8');
+    // Multipane blue reflective glass
+    R(c, o + 6, 11, 20, 13, '#3a7eb8');
+    R(c, o + 6, 11, 20, 4, '#5ca4de');
+    // White window mullion cross
+    R(c, o + 15, 11, 2, 13, '#ded8c8');
+    R(c, o + 6, 17, 20, 2, '#ded8c8');
+    // Diagonal reflections
+    R(c, o + 7, 12, 6, 3, 'rgba(255, 255, 255, 0.45)');
+    R(c, o + 18, 18, 6, 3, 'rgba(255, 255, 255, 0.35)');
+  }
+
   tex.refresh();
 }
 
@@ -411,9 +1002,25 @@ function sedanSide(c, body, police = false) {
   R(c, 17, 9, 12, 8, '#7fb2d3'); R(c, 32, 9, 13, 8, '#7fb2d3'); R(c, 17, 9, 12, 2, '#b5d9ec'); R(c, 32, 9, 13, 2, '#b5d9ec');
   R(c, 3, 22, 58, 1, dark);
   R(c, 58, 22, 4, 4, '#f4e19a'); R(c, 2, 22, 3, 4, '#c0392b');
-  if (police) {
-    R(c, 3, 24, 58, 8, '#f0f0f0'); R(c, 3, 22, 58, 2, '#1f4fa8'); R(c, 20, 25, 24, 3, '#1f4fa8');
-    R(c, 26, 2, 12, 5, '#222'); R(c, 27, 3, 5, 3, '#e03030'); R(c, 33, 3, 4, 3, '#3060e0');
+  if (police !== false) {
+    const pv = typeof police === 'number' ? police : 0;
+    if (pv === 1) {
+      // Classic Black & White cruiser: white doors, white roof, gold star emblem, push bar
+      R(c, 16, 16, 31, 12, '#f4f4f4');
+      R(c, 16, 6, 30, 3, '#f4f4f4');
+      R(c, 28, 20, 6, 6, '#d4af37'); R(c, 29, 21, 4, 4, '#16181d');
+      R(c, 60, 23, 3, 11, '#1c1e22');
+      R(c, 26, 2, 12, 5, '#222'); R(c, 27, 3, 5, 3, '#e03030'); R(c, 33, 3, 4, 3, '#3060e0');
+    } else if (pv === 2) {
+      // Highway Patrol / State Trooper: dark charcoal body, navy roof/deck, gold star emblem, amber/blue lightbar
+      R(c, 14, 6, 34, 14, '#1a2744');
+      R(c, 27, 19, 7, 7, '#d4af37'); R(c, 29, 21, 3, 3, '#1a2744');
+      R(c, 26, 2, 12, 5, '#222'); R(c, 27, 3, 5, 3, '#f2a024'); R(c, 33, 3, 4, 3, '#3060e0');
+    } else {
+      // Standard Navy & White
+      R(c, 3, 24, 58, 8, '#f0f0f0'); R(c, 3, 22, 58, 2, '#1f4fa8'); R(c, 20, 25, 24, 3, '#1f4fa8');
+      R(c, 26, 2, 12, 5, '#222'); R(c, 27, 3, 5, 3, '#e03030'); R(c, 33, 3, 4, 3, '#3060e0');
+    }
   }
   // detail pass: bumpers, door seams + handles, mirror, glass glare, wheel arches, exhaust, trim
   R(c, 1, 26, 3, 8, '#2a2d30'); R(c, 60, 26, 3, 8, '#2a2d30'); R(c, 1, 26, 3, 1, '#6a6e72'); R(c, 60, 26, 3, 1, '#6a6e72');
@@ -482,9 +1089,17 @@ function carFB(c, W, H, body, front, o = {}) {
   else { R(c, W / 2 - 5, H - 9, 10, 3, '#e8e8d0'); }
   if (front) { R(c, 5, H - 16, 6, 4, '#f4e19a'); R(c, W - 11, H - 16, 6, 4, '#f4e19a'); R(c, 12, H - 11, W - 24, 3, '#2a2a2a'); }
   else { R(c, 5, H - 18, 7, 4, '#c0392b'); R(c, W - 12, H - 18, 7, 4, '#c0392b'); R(c, W / 2 - 6, H - 12, 12, 3, '#ddd'); }
-  if (o.police) {
-    R(c, 3, 24, W - 6, 8, '#f0f0f0'); R(c, 3, 22, W - 6, 2, '#1f4fa8');
-    R(c, W / 2 - 9, 1 - tall, 18, 5, '#222'); R(c, W / 2 - 8, 2 - tall, 7, 3, '#e03030'); R(c, W / 2 + 1, 2 - tall, 7, 3, '#3060e0');
+  if (o.police !== undefined) {
+    const pv = typeof o.police === 'number' ? o.police : 0;
+    if (pv === 1) {
+      if (front) { R(c, 7, 4 - tall, W - 14, 3, '#f4f4f4'); R(c, 8, H - 12, W - 16, 4, '#1c1e22'); }
+      else { R(c, 7, 4 - tall, W - 14, 3, '#f4f4f4'); }
+    } else if (pv === 2) {
+      if (front) { R(c, 7, 4 - tall, W - 14, 16 + tall, '#1a2744'); }
+    } else {
+      R(c, 3, 24, W - 6, 8, '#f0f0f0'); R(c, 3, 22, W - 6, 2, '#1f4fa8');
+    }
+    R(c, W / 2 - 9, 1 - tall, 18, 5, '#222'); R(c, W / 2 - 8, 2 - tall, 7, 3, pv === 2 ? '#f2a024' : '#e03030'); R(c, W / 2 + 1, 2 - tall, 7, 3, '#3060e0');
   }
   if (o.fire) {
     R(c, 3, 26, W - 6, 3, '#f4f4f4'); R(c, W / 2 - 10, 1 - tall, 20, 5, '#222'); R(c, W / 2 - 9, 2 - tall, 8, 3, '#e03030'); R(c, W / 2 + 1, 2 - tall, 8, 3, '#e8e8e8');
@@ -527,19 +1142,20 @@ function drawVehicles(scene) {
     mk(`veh_sedan${i}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true));
     mk(`veh_sedan${i}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false));
   });
-  ['#0c0c12', '#d8c8a0', '#5a0f1c'].forEach((col, i) => {     // the casino's valet cars
-    mk(`veh_luxury${i}_s`, 64, 44, (c) => sedanSide(c, col));
-    mk(`veh_luxury${i}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true));
-    mk(`veh_luxury${i}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false));
-  });
   [['#b02a2a', '#f0f0f0'], ['#2a56b8', '#d8dce8'], ['#7a3ab8', '#e8c860'], ['#2a8a4a', '#14141a']].forEach(([col, stripe], i) => {     // gang cars: gang paint + a stripe
     mk(`veh_gangcar${i}_s`, 64, 44, (c) => { sedanSide(c, col); R(c, 3, 23, 58, 2, stripe); R(c, 16, 7, 30, 1, stripe); });
     mk(`veh_gangcar${i}_f`, 36, 52, (c) => { carFB(c, 36, 52, col, true); R(c, 16, 3, 4, 46, stripe); });
     mk(`veh_gangcar${i}_b`, 36, 52, (c) => { carFB(c, 36, 52, col, false); R(c, 16, 3, 4, 46, stripe); });
   });
-  mk('veh_police0_s', 64, 44, (c) => sedanSide(c, '#2a3a5a', true));
-  mk('veh_police0_f', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', true, { police: true }));
-  mk('veh_police0_b', 36, 52, (c) => carFB(c, 36, 52, '#2a3a5a', false, { police: true }));
+  [
+    { col: '#1f2a44', v: 0 },
+    { col: '#16181d', v: 1 },
+    { col: '#374151', v: 2 }
+  ].forEach(({ col, v }) => {
+    mk(`veh_police${v}_s`, 64, 44, (c) => sedanSide(c, col, v));
+    mk(`veh_police${v}_f`, 36, 52, (c) => carFB(c, 36, 52, col, true, { police: v }));
+    mk(`veh_police${v}_b`, 36, 52, (c) => carFB(c, 36, 52, col, false, { police: v }));
+  });
   VAN_COLORS.forEach((col, i) => {
     mk(`veh_van${i}_s`, 70, 48, (c) => vanSide(c, col));
     mk(`veh_van${i}_f`, 40, 58, (c) => carFB(c, 40, 58, col, true, { tall: 4 }));
@@ -603,7 +1219,7 @@ function drawProps(scene) {
   mk('siren_b', 10, 10, (c) => { disc(c, 5, 5, 5, 'rgba(60,110,255,0.8)'); });
 }
 
-export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker', 'bank', 'yosen_q', 'yosen', 'home', 'tesla', 'totoya'];
+export const MAP_ICON_NAMES = ['police', 'hospital', 'shop', 'restaurant', 'gas', 'military', 'park', 'house', 'industrial', 'parking', 'tower', 'kenny', 'wise', 'casino', 'gang_red', 'gang_blue', 'gang_purple', 'gang_green', 'player', 'marker', 'bank', 'yosen_q', 'yosen', 'home', 'tesla', 'totoya', 'music_bar'];
 function drawIcons(scene) {
   const n = MAP_ICON_NAMES.length;
   const tex = makeCanvas(scene, 'mapicons', 18 * n, 18, (c) => {
@@ -639,6 +1255,7 @@ function drawIcons(scene) {
     i = MAP_ICON_NAMES.indexOf('home'); badge(i, '#1f9aa0'); R(c, o(i) + 4, 9, 10, 6, '#ffffff'); c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(o(i) + 2, 9); c.lineTo(o(i) + 9, 3); c.lineTo(o(i) + 16, 9); c.closePath(); c.fill(); R(c, o(i) + 8, 11, 3, 4, '#1f9aa0'); R(c, o(i) + 12, 3, 2, 4, '#ffffff');
     i = MAP_ICON_NAMES.indexOf('tesla'); badge(i, '#2a2d36'); R(c, o(i) + 3, 9, 12, 4, '#f2f4f6'); R(c, o(i) + 5, 6, 8, 4, '#f2f4f6'); R(c, o(i) + 6, 7, 6, 2, '#2a4a5c'); disc(c, o(i) + 6, 13, 2, '#101010'); disc(c, o(i) + 12, 13, 2, '#101010');
     i = MAP_ICON_NAMES.indexOf('totoya'); badge(i, '#e63946'); R(c, o(i) + 4, 5, 10, 2, '#ffffff'); R(c, o(i) + 8, 5, 2, 9, '#ffffff'); R(c, o(i) + 4, 13, 10, 1, '#2ec4ff');
+    i = MAP_ICON_NAMES.indexOf('music_bar'); badge(i, '#a81c6a'); R(c, o(i) + 4, 11, 5, 4, '#ffffff'); R(c, o(i) + 8, 5, 2, 7, '#ffffff'); R(c, o(i) + 10, 4, 4, 2, '#ffffff'); ellipse(c, o(i) + 6, 13, 3, 2, '#ffd700');
     i = MAP_ICON_NAMES.indexOf('marker'); R(c, o(i) + 4, 1, 2, 16, '#101410'); R(c, o(i) + 5, 2, 10, 7, '#101410'); R(c, o(i) + 5, 2, 2, 15, '#ffd23a'); R(c, o(i) + 6, 3, 8, 5, '#ff4a3a');
   });
   MAP_ICON_NAMES.forEach((name, i) => { if (!tex.has(name)) tex.add(name, 0, i * 18, 0, 18, 18); });
@@ -767,6 +1384,10 @@ export function generateCityArt(scene) {
   drawFireArt(scene);
   drawTotoyaArt(scene);
   drawReyesArt(scene);
+  drawHospitalArt(scene);
+  drawCityHallArt(scene);
+  drawSchoolArt(scene);
+  drawMusicBarArt(scene);
   drawQuestIcons(scene);
   Object.keys(STORY_LOOKS).forEach((k) => (k === 'yosen' ? generateSmoker : generateCharacter)(scene, 'story_' + k, STORY_LOOKS[k]));
   Object.keys(ROLE_LOOKS).forEach((k) => generateCharacter(scene, 'npc_' + k, ROLE_LOOKS[k]));

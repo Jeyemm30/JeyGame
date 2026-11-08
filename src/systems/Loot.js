@@ -1,16 +1,18 @@
 import { profile } from './Profile.js';
+import { sfx } from './Audio.js';
 import { WEAPONS, WEAPON_ORDER, MELEE, MELEE_ORDER, AMMO_TYPES } from '../config.js';
 import { SUPPLIES, SUPPLY_CAP } from './Supplies.js';
 
 export const ITEMS = {
   medkit: { label: 'Medkit', tex: 'it_medkit', kind: 'medkit' },
   armor: { label: 'Armor Plate', tex: 'it_armor', kind: 'armor' },
-  backpack: { label: 'Backpack', tex: 'it_backpack', kind: 'backpack' }
+  backpack: { label: 'Backpack', tex: 'it_backpack', kind: 'backpack' },
+  cash: { label: 'Cash', tex: 'it_cash', kind: 'cash', amount: [8, 30] }
 };
 // generated: one ammo pickup per ammo type, one weapon pickup per firearm, one item per melee weapon
 Object.keys(AMMO_TYPES).forEach((k) => {
   const pk = AMMO_TYPES[k].pack;
-  ITEMS['ammo_' + k] = { label: AMMO_TYPES[k].name + ' Ammo', tex: 'it_ammo', kind: 'ammo', ammo: k, amount: [Math.max(2, Math.round(pk * 0.5)), pk] };
+  ITEMS['ammo_' + k] = { label: AMMO_TYPES[k].name + ' Ammo', tex: AMMO_TYPES[k].tex || 'it_ammo', kind: 'ammo', ammo: k, amount: [Math.max(2, Math.round(pk * 0.5)), pk] };
 });
 WEAPON_ORDER.forEach((id) => { ITEMS['w_' + id] = { label: WEAPONS[id].name, tex: WEAPONS[id].gun, kind: 'weapon', weapon: id }; });
 // everyday supplies sold in stores: id "s_<supply>" (stored in player.supplies, see Supplies.js)
@@ -25,21 +27,21 @@ MELEE_ORDER.filter((id) => id !== 'fists').forEach((id) => {
 
 // weighted tables per container tier: [itemId, weight]
 const TABLES = {
-  crate: [['w_mac10', 2], ['w_uzi', 2], ['w_sg_double', 2], ['w_revolver', 2], ['ammo_acp45', 4], ['ammo_pistol', 18], ['ammo_rifle', 10], ['ammo_shell', 8], ['medkit', 14], ['armor', 8], ['w_pistol', 4], ['w_rifle', 3], ['w_shotgun', 3], ['m_pipe', 6], ['m_crowbar', 6], ['m_bat', 4], ['backpack', 2]],
-  supply: [['w_m4', 3], ['w_mp5', 3], ['w_sg_tac', 2], ['ammo_r556', 12], ['ammo_acp45', 6], ['ammo_rifle', 20], ['ammo_pistol', 10], ['ammo_shell', 12], ['ammo_sniper', 8], ['medkit', 14], ['armor', 14], ['w_rifle', 8], ['w_shotgun', 6], ['w_sniper', 3], ['m_machete', 4], ['backpack', 4]],
-  hidden: [['w_scar', 3], ['w_sniper2', 3], ['w_deagle', 4], ['w_lmg', 1], ['w_rocket', 1], ['ammo_r556', 10], ['ammo_belt', 4], ['ammo_rocket', 2], ['ammo_rifle', 14], ['ammo_sniper', 14], ['ammo_shell', 10], ['medkit', 16], ['armor', 16], ['w_sniper', 10], ['w_rifle', 8], ['w_shotgun', 6], ['m_machete', 6], ['backpack', 12]],
-  hq: [['w_m4', 4], ['w_mp5', 4], ['w_scar', 3], ['ammo_r556', 10], ['ammo_rifle', 14], ['ammo_sniper', 10], ['ammo_shell', 10], ['ammo_pistol', 6], ['medkit', 18], ['armor', 18], ['w_sniper', 8], ['w_rifle', 6], ['w_shotgun', 6], ['backpack', 8]],
-  home: [['w_revolver', 2], ['w_sg_double', 1], ['m_katana', 1], ['ammo_pistol', 14], ['ammo_shell', 6], ['medkit', 14], ['armor', 5], ['w_pistol', 5], ['w_shotgun', 3], ['m_bat', 7], ['m_knife', 8], ['m_stick', 8], ['m_pipe', 4], ['backpack', 2]],
+  crate: [['w_mac10', 2], ['w_uzi', 2], ['w_sg_double', 2], ['w_revolver', 2], ['ammo_acp45', 4], ['ammo_pistol', 18], ['ammo_rifle', 10], ['ammo_shell', 8], ['medkit', 18], ['w_pistol', 4], ['w_rifle', 3], ['w_shotgun', 3], ['m_pipe', 6], ['m_crowbar', 6], ['m_bat', 4], ['backpack', 2]],
+  supply: [['w_m4', 3], ['w_mp5', 3], ['w_sg_tac', 2], ['ammo_r556', 12], ['ammo_acp45', 6], ['ammo_rifle', 20], ['ammo_pistol', 10], ['ammo_shell', 12], ['ammo_sniper', 8], ['medkit', 22], ['w_rifle', 8], ['w_shotgun', 6], ['w_sniper', 3], ['m_machete', 4], ['backpack', 4]],
+  hidden: [['w_scar', 3], ['w_sniper2', 3], ['w_deagle', 4], ['w_lmg', 1], ['w_rocket', 1], ['ammo_r556', 10], ['ammo_belt', 4], ['ammo_rocket', 2], ['ammo_rifle', 14], ['ammo_sniper', 14], ['ammo_shell', 10], ['medkit', 28], ['w_sniper', 10], ['w_rifle', 8], ['w_shotgun', 6], ['m_machete', 6], ['backpack', 12]],
+  hq: [['w_m4', 4], ['w_mp5', 4], ['w_scar', 3], ['ammo_r556', 10], ['ammo_rifle', 14], ['ammo_sniper', 10], ['ammo_shell', 10], ['ammo_pistol', 6], ['medkit', 28], ['w_sniper', 8], ['w_rifle', 6], ['w_shotgun', 6], ['backpack', 8]],
+  home: [['w_revolver', 2], ['w_sg_double', 1], ['m_katana', 1], ['ammo_pistol', 14], ['ammo_shell', 6], ['medkit', 16], ['w_pistol', 5], ['w_shotgun', 3], ['m_bat', 7], ['m_knife', 8], ['m_stick', 8], ['m_pipe', 4], ['backpack', 2]],
   garage: [['m_crowbar', 14], ['m_pipe', 14], ['m_bat', 10], ['m_machete', 6], ['m_stick', 8], ['ammo_pistol', 6], ['medkit', 6]],
   hardware: [['m_crowbar', 16], ['m_pipe', 16], ['m_machete', 10], ['m_bat', 10], ['m_knife', 10], ['m_stick', 8], ['medkit', 6]],
-  shop: [['m_knife', 10], ['m_stick', 8], ['m_bat', 6], ['medkit', 14], ['armor', 6], ['ammo_pistol', 8], ['backpack', 4]],
-  pharmacy: [['medkit', 60], ['armor', 8]],
+  shop: [['m_knife', 10], ['m_stick', 8], ['m_bat', 6], ['medkit', 18], ['ammo_pistol', 8], ['backpack', 4]],
+  pharmacy: [['medkit', 68]],
   food: [['medkit', 8], ['m_knife', 12], ['m_stick', 6]],
-  office: [['ammo_pistol', 12], ['medkit', 10], ['armor', 8], ['backpack', 6], ['m_stick', 4], ['m_knife', 4]],
-  police: [['w_pistol_s', 2], ['w_mp5', 3], ['ammo_mag357', 2], ['w_pistol', 14], ['ammo_pistol', 22], ['armor', 18], ['medkit', 14], ['w_shotgun', 8], ['ammo_shell', 10], ['w_rifle', 5], ['ammo_rifle', 8], ['m_stick', 6]],
-  storage: [['m_crowbar', 8], ['m_pipe', 8], ['ammo_pistol', 10], ['ammo_shell', 6], ['medkit', 8], ['armor', 6], ['backpack', 4], ['m_machete', 4]],
-  medic: [['medkit', 60], ['armor', 8], ['ammo_pistol', 6]],
-  trash: [['m_stick', 10], ['m_pipe', 6], ['m_knife', 4], ['ammo_pistol', 10], ['medkit', 5], ['armor', 2]]
+  office: [['ammo_pistol', 12], ['medkit', 16], ['backpack', 6], ['m_stick', 4], ['m_knife', 4]],
+  police: [['w_pistol_s', 2], ['w_mp5', 3], ['ammo_mag357', 2], ['w_pistol', 14], ['ammo_pistol', 22], ['medkit', 26], ['w_shotgun', 8], ['ammo_shell', 10], ['w_rifle', 5], ['ammo_rifle', 8], ['m_stick', 6]],
+  storage: [['m_crowbar', 8], ['m_pipe', 8], ['ammo_pistol', 10], ['ammo_shell', 6], ['medkit', 12], ['backpack', 4], ['m_machete', 4]],
+  medic: [['medkit', 68], ['ammo_pistol', 6]],
+  trash: [['m_stick', 10], ['m_pipe', 6], ['m_knife', 4], ['ammo_pistol', 10], ['medkit', 6]]
 };
 const COUNTS = {
   home: [1, 2], garage: [1, 2], hardware: [1, 2], shop: [1, 2], pharmacy: [1, 2], food: [0, 1], office: [1, 2], police: [2, 3],
@@ -63,15 +65,22 @@ export function rollTier(tier) {
 // drops from defeated armed NPCs, depending on their role
 export function rollNpcDrop(role, weaponId) {
   const drops = [];
-  const ammoFor = { pistol: 'ammo_pistol', rifle: 'ammo_rifle', shotgun: 'ammo_shell', sniper: 'ammo_sniper' };
-  const gunChance = role === 'police' ? 0.5 : role === 'guard' ? 0.3 : 0.4;
+  const ammoFor = {
+    pistol: 'ammo_pistol', revolver: 'ammo_mag357', deagle: 'ammo_ae50', pistol_s: 'ammo_pistol',
+    mp5: 'ammo_pistol', uzi: 'ammo_pistol', mac10: 'ammo_acp45',
+    rifle: 'ammo_rifle', m4: 'ammo_r556', scar: 'ammo_r556',
+    shotgun: 'ammo_shell', sg_double: 'ammo_shell', sg_tac: 'ammo_shell',
+    sniper: 'ammo_sniper', sniper2: 'ammo_sniper', lmg: 'ammo_belt'
+  };
+  const lawman = /^(police|copcmd|swat|army)/.test(role);       // every tier of the police response (patrol, command, SWAT, army)
+  const gunChance = lawman ? 0.5 : role === 'guard' ? 0.3 : 0.4;
   if (Math.random() < gunChance) drops.push('w_' + weaponId);
   if (Math.random() < 0.7) drops.push(ammoFor[weaponId] || 'ammo_pistol');
-  if (Math.random() < 0.22) drops.push('medkit');
-  if (Math.random() < (role === 'police' || role === 'swat' ? 0.4 : 0.15)) drops.push('armor');
+  if (Math.random() < (lawman ? 0.35 : 0.22)) drops.push('medkit');
+  if (Math.random() < (lawman ? 0.25 : 0.12)) drops.push('s_bandage');
+  if (Math.random() < (lawman ? 0.35 : 0.45)) drops.push('cash');
   if ((role === 'gang' || role === 'criminal') && Math.random() < 0.5) drops.push(['m_bat', 'm_knife', 'm_pipe', 'm_machete'][Math.floor(Math.random() * 4)]);
   if (role === 'gang' && Math.random() < 0.12) drops.push(['w_mac10', 'w_uzi', 'w_revolver', 'w_sg_double'][Math.floor(Math.random() * 4)]);
-  if (Math.random() < 0.04) drops.push('backpack');
   return drops;
 }
 
@@ -91,15 +100,26 @@ export function giveItem(player, id) {
     case 'medkit':
       if (player.medkits >= player.medCap()) return null;
       player.medkits++;
-      return 'Picked up Medkit (H to use)';
+      if (!player.slots[4]) player.slots[4] = 'medkit';
+      return 'Picked up Medkit (Slot 4 / Key 4)';
+    case 'cash': {
+      const min = it.amount ? it.amount[0] : 8;
+      const max = it.amount ? it.amount[1] : 30;
+      const amt = Math.floor(min + Math.random() * (max - min + 1));
+      profile.money += amt;
+      sfx.pickup();
+      return `Picked up $${amt} Cash`;
+    }
     case 'armor':
-      if (player.plates >= player.plateCap()) return null;
-      player.plates++;
-      return 'Picked up Armor Plate (G to use)';
+      if (player.medkits >= player.medCap()) return null;
+      player.medkits++;
+      if (!player.slots[4]) player.slots[4] = 'medkit';
+      return 'Picked up Medkit (Slot 4 / Key 4)';
     case 'supply': {
       const n = player.supplies[it.supply] || 0;
       if (n >= SUPPLY_CAP) return null;
       player.supplies[it.supply] = n + 1;
+      if (!player.slots[3]) player.slots[3] = it.supply;
       return `Bought ${it.label}`;
     }
     case 'backpack':

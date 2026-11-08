@@ -38,22 +38,22 @@ export default class SaveLoadScene extends Phaser.Scene {
         this.objs.push(label(this, 200, y + 74, `Story missions completed: ${s.completed}/15   Saved ${new Date(data.savedAt).toLocaleString()}`, 14, '#9db890'));
       } else this.objs.push(label(this, 200, y + 56, 'Empty slot', 17, '#7f9a72'));
       if (this.mode === 'save') {
-        if (slot !== 0) this.objs.push(button(this, 960, y + 40, 'SAVE', () => this.save(slot), { w: 130, h: 36, size: 17 }));
+        if (slot !== 0) this.objs.push(button(this, 960, y + 40, 'SAVE', () => this.saveSlot(slot), { w: 130, h: 36, size: 17 }));
       } else if (data) {
-        this.objs.push(button(this, 960, y + 40, 'LOAD', () => this.load(slot, data), { w: 130, h: 36, size: 17 }));
+        this.objs.push(button(this, 960, y + 40, 'LOAD', () => this.loadSlot(slot, data), { w: 130, h: 36, size: 17 }));
       }
       if (data && slot !== 0) this.objs.push(button(this, 1060, y + 86, 'DELETE', () => { deleteSlot(slot); this.msg.setText(`Slot ${slot} deleted`).setColor('#ff8a7a'); this.build(); }, { w: 100, h: 28, size: 13 }));
     });
   }
 
-  save(slot) {
+  saveSlot(slot) {
     const ok = this.gs && writeSlot(slot, this.gs);
     this.msg.setText(ok ? `Game saved to slot ${slot}!` : 'Could not save (browser storage unavailable)').setColor(ok ? '#9fe8a0' : '#ff8a7a');
     if (ok) { sfx.heal(); this.gs.events.emit('toast', `Game saved (slot ${slot})`); }
     this.build();
   }
 
-  load(slot, data) {
+  loadSlot(slot, data) {
     sfx.click();
     loadGameInto(this, data);
   }

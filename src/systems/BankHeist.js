@@ -38,11 +38,10 @@ export default class BankHeist {
     if (initial) B.refresh();
     const s = B.bank(), open = s.phase === 'active' || s.phase === 'cooldown' ? s.solved : false;
     const lock = (key, yes) => (yes ? gs.lockedDoors.add(key) : gs.lockedDoors.delete(key));
-    lock(this.keys.staff, s.phase !== 'active'); lock(this.keys.security, s.phase !== 'active');
+    lock(this.keys.staff, false); lock(this.keys.security, false);
     this.keys.vault.forEach((k) => lock(k, !open));
     this.wd.doors.vault.forEach((d) => { if (gs.doorState(d.tx, d.ty) !== null) gs.setDoor(d.tx, d.ty, open, true); });
-    if (!open) [this.wd.doors.staff, this.wd.doors.security].forEach((d) => { if (gs.doorState(d.tx, d.ty) === 'open') gs.setDoor(d.tx, d.ty, false, true); });
-    this.frame(open ? 3 : 0);
+    this.frame(open ? 4 : 0);
     this.buildLoot();
     if (s.phase === 'active') this.alarm(true);
     this.hud(true);
@@ -131,36 +130,55 @@ export default class BankHeist {
   openVault() {
     const gs = this.gs, s = B.bank();
     if (!s.solved || this.animating) return;
+    if (s.phase === 'idle') {
+      B.startRobbery();
+      if (!s.wantedFired) {
+        s.wantedFired = true;
+        gs.wanted.add(B.BANK_CFG.robberyHeat, this.wd.door, 'Bank vault heist');
+        gs.wanted.lastKnown = { x: this.wd.door.x, y: this.wd.door.y };
+      }
+      this.alarm(false);
+      this.dispatch({ x: gs.player.x, y: gs.player.y });
+    }
     this.animating = true;
-    gs.cameras.main.shake(900, 0.0025);
-    sfx.door();
-    [[0, 1], [450, 2], [900, 3]].forEach(([ms, f]) => gs.time.delayedCall(ms, () => {
-      this.frame(f); sfx.door();
-      if (f === 2) { this.keys.vault.forEach((k) => gs.lockedDoors.delete(k)); this.wd.doors.vault.forEach((d) => gs.setDoor(d.tx, d.ty, true, true)); }
-      if (f === 3) { this.animating = false; gs.events.emit('banner', { title: 'VAULT OPEN', sub: 'Take the cash - then get out before the police close in', color: '#6ad898' }); }
+    gs.cameras.main.shake(1150, 0.0028);
+    if (sfx.vaultBolt) sfx.vaultBolt(); else sfx.door();
+    // Synchronize the vault door animation with its collision boundary:
+    // 1: wheel rotates & bolts loosen -> 2: bolts fully retracted -> 3: massive door swinging open -> 4: fully open & collision cleared
+    [[0, 1], [350, 2], [750, 3], [1150, 4]].forEach(([ms, f]) => gs.time.delayedCall(ms, () => {
+      this.frame(f);
+      if (f <= 2 && sfx.vaultBolt) sfx.vaultBolt();
+      else sfx.door();
+      if (f === 4) {
+        this.keys.vault.forEach((k) => gs.lockedDoors.delete(k));
+        this.wd.doors.vault.forEach((d) => gs.setDoor(d.tx, d.ty, true, true));
+        this.animating = false;
+        gs.events.emit('banner', { title: 'VAULT OPEN', sub: 'Take the cash - then get out before the police close in', color: '#6ad898' });
+      }
     }));
     this.hud(true);
   }
 
   // interaction targets
-  doorHandled(key) { return key === this.keys.staff || key === this.keys.security || this.keys.vault.includes(key); }
+  doorHandled(key) { return this.keys.vault.includes(key); }
   doorLabel(key) {
     const s = B.bank();
-    if (this.keys.vault.includes(key)) return s.solved ? 'Vault (open)' : s.phase === 'active' ? 'Crack the vault lock' : s.phase === 'cooldown' ? 'Vault (sealed)' : 'Vault door (locked)';
-    if (key === this.keys.security) return s.phase === 'active' ? 'Security room' : 'Restricted - security';
-    return s.phase === 'active' ? 'Staff door' : 'Staff only';
+    if (this.keys.vault.includes(key)) return s.solved ? 'Vault (open)' : s.phase === 'cooldown' ? 'Vault (sealed)' : 'Crack Vault Combination Lock';
+    if (key === this.keys.security) return 'Records Room Door';
+    return 'Staff-Only Door';
   }
   // returns true when the door press was fully handled here
   onDoor(key) {
     const gs = this.gs, s = B.bank();
     if (this.keys.vault.includes(key)) {
       if (s.phase === 'cooldown') gs.events.emit('toast', `The vault is empty and sealed. Come back in ${B.fmtLeft(B.cooldownLeft())}`);
-      else if (s.phase !== 'active') gs.events.emit('toast', 'A heavy vault door. Only staff - or a robbery - gets you in');
       else if (s.solved) gs.events.emit('toast', 'The vault is open - grab the cash');
-      else if (!this.animating) { gs.scene.pause('Game'); gs.scene.launch('Vault'); }
+      else if (!this.animating && !gs.scene.isActive('Vault')) {
+        gs.scene.pause('Game');
+        gs.scene.launch('Vault');
+      }
       return true;
     }
-    if ((key === this.keys.staff || key === this.keys.security) && s.phase !== 'active') { gs.events.emit('toast', 'Staff only. A guard is watching the door'); return true; }
     return false;
   }
 
