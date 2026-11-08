@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { TILE, MAP_W, MAP_H, WEAPONS, WEAPON_ORDER, WEAPON_CATS, MELEE, MELEE_ORDER, AMMO_TYPES, ARMOR_TIERS, ARMOR_ORDER } from '../config.js';
-import { label, button, fs, uiK } from '../ui/widgets.js';
+import { label, button, fs, uiK, FONT } from '../ui/widgets.js';
 import { settings } from '../systems/Settings.js';
 import { sfx } from '../systems/Audio.js';
 import { touch, touchEnabled, resetTouch } from '../systems/Touch.js';
