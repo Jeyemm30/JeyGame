@@ -48,21 +48,52 @@ const config = {
 
 window.__game = new Phaser.Game(config);
 
-// Responsive canvas refitting when rotating or toggling fullscreen
+// Responsive canvas refitting and orientation handling
+const checkOrientation = () => {
+  const prompt = document.getElementById('rotate-prompt');
+  if (!prompt) return;
+
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  const h = window.innerHeight || document.documentElement.clientHeight;
+  const isLandscape = (w > h)
+    || (window.screen && window.screen.orientation && window.screen.orientation.type && window.screen.orientation.type.includes('landscape'))
+    || (typeof window.orientation === 'number' && Math.abs(window.orientation) === 90);
+
+  if (isLandscape) {
+    prompt.style.setProperty('display', 'none', 'important');
+  } else {
+    if (!prompt.classList.contains('dismissed')) {
+      prompt.style.removeProperty('display');
+    }
+  }
+};
+
 const refit = () => {
+  checkOrientation();
   if (!window.__game || !window.__game.scale) return;
+  const gameDiv = document.getElementById('game');
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  const h = window.innerHeight || document.documentElement.clientHeight;
+  if (gameDiv) {
+    gameDiv.style.width = w + 'px';
+    gameDiv.style.height = h + 'px';
+  }
   window.__game.scale.refresh();
 };
 
 const triggerRefit = () => {
   refit();
-  setTimeout(refit, 100);
-  setTimeout(refit, 250);
-  setTimeout(refit, 500);
+  setTimeout(refit, 50);
+  setTimeout(refit, 150);
+  setTimeout(refit, 300);
+  setTimeout(refit, 600);
 };
 
 window.addEventListener('resize', triggerRefit);
 window.addEventListener('orientationchange', triggerRefit);
+if (window.screen && window.screen.orientation) {
+  window.screen.orientation.addEventListener('change', triggerRefit);
+}
 if (window.visualViewport) window.visualViewport.addEventListener('resize', triggerRefit);
 
 // Setup portrait helper buttons (Play in Fullscreen vs Play in Portrait)
@@ -72,17 +103,22 @@ function setupOrientationPrompt() {
   const btnDismiss = document.getElementById('btn-portrait-dismiss');
   if (!prompt) return;
 
+  checkOrientation();
+
   if (btnFs) {
     btnFs.addEventListener('click', async () => {
       try {
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen().catch(() => {});
+        } else if (document.body.requestFullscreen) {
+          await document.body.requestFullscreen().catch(() => {});
         }
         if (screen.orientation && screen.orientation.lock) {
           await screen.orientation.lock('landscape').catch(() => {});
         }
       } catch (e) { /* ignored */ }
       prompt.classList.add('dismissed');
+      prompt.style.setProperty('display', 'none', 'important');
       triggerRefit();
     });
   }
@@ -90,6 +126,7 @@ function setupOrientationPrompt() {
   if (btnDismiss) {
     btnDismiss.addEventListener('click', () => {
       prompt.classList.add('dismissed');
+      prompt.style.setProperty('display', 'none', 'important');
       triggerRefit();
     });
   }

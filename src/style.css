@@ -3,6 +3,9 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: #080a0f;
   overflow: hidden;
   user-select: none;
@@ -13,17 +16,28 @@ html, body {
   overscroll-behavior: none;
 }
 body {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: #080a0f;
+  overflow: hidden;
 }
 #game {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #080a0f;
 }
@@ -32,6 +46,9 @@ canvas {
   image-rendering: crisp-edges;
   display: block;
   touch-action: none;
+  max-width: 100vw;
+  max-height: 100vh;
+  max-height: 100dvh;
 }
 
 /* Portrait mobile devices: elegant orientation helper */
@@ -39,7 +56,14 @@ canvas {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 99999;
   background: radial-gradient(circle at center, rgba(15, 23, 42, 0.96) 0%, rgba(8, 10, 15, 0.98) 100%);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -47,12 +71,19 @@ canvas {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", monospace;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   box-sizing: border-box;
 }
 
 #rotate-prompt.dismissed {
   display: none !important;
+}
+
+/* Guarantee prompt is completely hidden in landscape mode */
+@media (orientation: landscape) {
+  #rotate-prompt {
+    display: none !important;
+  }
 }
 
 @media (orientation: portrait) and (max-width: 900px) {
@@ -63,16 +94,20 @@ canvas {
 
 .rotate-card {
   max-width: 380px;
-  width: 100%;
+  width: 90%;
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
   background: #0f131f;
   border: 1.5px solid #2d374d;
   border-radius: 16px;
-  padding: 28px 22px;
+  padding: 24px 20px;
   text-align: center;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 106, 42, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .rotate-phone-anim {
