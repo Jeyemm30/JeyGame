@@ -10,10 +10,14 @@ import { poseFrame, spawnCorpse } from '../systems/Anim.js';
 // Balanced to be beatable: slow, short-sighted, inaccurate and with long gaps between shots.
 export const ENEMY_TYPES = {
   pistol: { weapon: 'pistol', hp: 45, walk: 50, run: 100, sight: 260, half: 0.85, range: 230, fireRate: 900, burst: 2, pause: 1900, spread: 0.17, reduce: 0 },
+  smg: { weapon: 'uzi', hp: 55, walk: 52, run: 108, sight: 280, half: 0.85, range: 240, fireRate: 380, burst: 4, pause: 1600, spread: 0.19, reduce: 0 },
   rifle: { weapon: 'rifle', hp: 65, walk: 54, run: 105, sight: 320, half: 0.9, range: 300, fireRate: 250, burst: 3, pause: 1800, spread: 0.15, reduce: 0 },
   shotgun: { weapon: 'shotgun', hp: 80, walk: 50, run: 112, sight: 260, half: 0.85, range: 170, fireRate: 1500, burst: 1, pause: 1300, spread: 0.12, reduce: 0 },
   sniper: { weapon: 'sniper', hp: 50, walk: 40, run: 85, sight: 520, half: 0.55, range: 480, fireRate: 3000, burst: 1, pause: 700, spread: 0.035, reduce: 0 },
-  heavy: { weapon: 'rifle', hp: 150, walk: 44, run: 85, sight: 320, half: 0.8, range: 280, fireRate: 210, burst: 4, pause: 2100, spread: 0.17, reduce: 0.35 }
+  heavy: { weapon: 'rifle', hp: 150, walk: 44, run: 85, sight: 320, half: 0.8, range: 280, fireRate: 210, burst: 4, pause: 2100, spread: 0.17, reduce: 0.35 },
+  bat: { weapon: 'pistol', melee: 'bat', hp: 60, walk: 55, run: 115, sight: 240, half: 0.9, range: 40, fireRate: 900, burst: 1, pause: 700, spread: 0.1, reduce: 0 },
+  knife: { weapon: 'pistol', melee: 'knife', hp: 50, walk: 58, run: 120, sight: 240, half: 0.9, range: 36, fireRate: 700, burst: 1, pause: 600, spread: 0.1, reduce: 0 },
+  crowbar: { weapon: 'pistol', melee: 'crowbar', hp: 55, walk: 54, run: 112, sight: 240, half: 0.9, range: 40, fireRate: 850, burst: 1, pause: 700, spread: 0.1, reduce: 0 }
 };
 
 // Armed NPC roles: look + how they decide whether the player is a target.
@@ -66,14 +70,21 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene, spec) {
     const roleCfg = ROLES[spec.role] || ROLES.criminal;
     const preset = spec.type || roleCfg.preset;
-    const cfg = spec.weapon ? { ...gangCfg(spec.weapon), ...(spec.hp ? { hp: spec.hp } : {}), ...(spec.reduce !== undefined ? { reduce: spec.reduce } : {}) } : (spec.reduce !== undefined || spec.hp ? { ...ENEMY_TYPES[preset], ...(spec.hp ? { hp: spec.hp } : {}), ...(spec.reduce !== undefined ? { reduce: spec.reduce } : {}) } : ENEMY_TYPES[preset]);
+    const baseCfg = spec.weapon
+      ? gangCfg(spec.weapon)
+      : (ENEMY_TYPES[preset] || (WEAPONS[preset] || MELEE[preset] ? gangCfg(preset) : ENEMY_TYPES.pistol));
+    const cfg = {
+      ...baseCfg,
+      ...(spec.hp ? { hp: spec.hp } : {}),
+      ...(spec.reduce !== undefined ? { reduce: spec.reduce } : {})
+    };
     super(scene, spec.x, spec.y, roleCfg.tex, 'd0');
     this.cfg = cfg;
     this.kind = preset;
     this.role = spec.role || 'criminal';
     this.hostility = roleCfg.hostility;
     this.gang = spec.gang || null; this.boss = spec.boss || null; this.bossName = spec.bossName || null; this.crew = spec.crew || spec.gang || null;
-    this.melee = cfg.melee ? MELEE[cfg.melee] : null; this.meleeId = cfg.melee || null; this.foe = null; this.warUntil = 0; this.raidUntil = 0; this.copFoeUntil = 0; this.firedUntil = 0;
+    this.melee = (cfg.melee && MELEE[cfg.melee]) ? MELEE[cfg.melee] : null; this.meleeId = cfg.melee || null; this.foe = null; this.warUntil = 0; this.raidUntil = 0; this.copFoeUntil = 0; this.firedUntil = 0;
     this.isPolice = /^(police|copcmd|swat|army)/.test(this.role);
     this.softCop = /^(police|copcmd)/.test(this.role);          // patrol / command officers: warn and cuff at up to 3 stars (SWAT and soldiers never do)
     this.angry = false;
@@ -83,7 +94,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.knockUntil = 0;
     this.kvx = 0;
     this.kvy = 0;
-    this.weaponCfg = WEAPONS[cfg.weapon];
+    this.weaponCfg = WEAPONS[cfg.weapon] || WEAPONS.pistol;
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setOrigin(0.5, 0.9);
