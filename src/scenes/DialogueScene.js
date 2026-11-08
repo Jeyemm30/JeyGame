@@ -52,7 +52,7 @@ export default class DialogueScene extends Phaser.Scene {
     this.headerDiv = this.add.rectangle(260, 474, 880, 1, 0x1c2232).setOrigin(0, 0.5);
 
     // 5. High-readability dialogue text body
-    this.body = this.add.text(260, 492, '', { fontFamily: FONT, fontSize: fs(20) + 'px', color: '#f8fafc', wordWrap: { width: 920 }, lineSpacing: 7 });
+    this.body = this.add.text(260, 492, '', { fontFamily: FONT, fontSize: (touchEnabled() ? '17px' : '19px'), color: '#f8fafc', wordWrap: { width: 920 }, lineSpacing: 6 });
 
     // 6. Action / continue pill prompt
     this.hintBg = this.add.rectangle(this.cx + PW / 2 - 20, 700, 190, 26, 0x161b28, 0.9).setOrigin(1, 0.5).setStrokeStyle(1, 0x2a334a).setInteractive({ useHandCursor: true });
@@ -168,7 +168,7 @@ export default class DialogueScene extends Phaser.Scene {
     const H = this.scale.height, W = this.scale.width;
     this.cx = W / 2;
     const pw = Math.min(PW, W - 2 * MARGIN), left = this.cx - pw / 2;
-    const bodySize = Math.round(fs(20) * (H < 560 ? 0.82 : 1));
+    const bodySize = touchEnabled() ? 17 : Math.round(fs(19) * (H < 560 ? 0.85 : 1));
     this.body.setFontSize(bodySize + 'px').setWordWrapWidth(Math.max(300, Math.min(920, pw - 280)), true).setText(text);
     const bodyH = this.body.height;
     const choices = this.node && this.node.choices ? this.currentChoices() : [];

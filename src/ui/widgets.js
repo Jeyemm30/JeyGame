@@ -1,11 +1,11 @@
 import { sfx } from '../systems/Audio.js';
 import { touchEnabled } from '../systems/Touch.js';
 
-export const FONT = '"Courier New", monospace';
+export const FONT = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
 
-// On a phone the 1280x720 canvas is scaled down to roughly half size, so small text and buttons are enlarged.
-export const uiK = () => (touchEnabled() ? 1.34 : 1);
-export const fs = (size) => (size <= 26 ? Math.round(size * uiK()) : size);
+// Clean, balanced text scaling: On mobile, avoid overflowing buttons and dialogue panels.
+export const uiK = () => (touchEnabled() ? 1.05 : 1);
+export const fs = (size) => (size <= 24 ? Math.round(size * uiK()) : size);
 
 export function label(scene, x, y, str, size = 18, color = '#e8f2e0', originX = 0, originY = 0) {
   size = fs(size);

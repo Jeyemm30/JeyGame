@@ -44,12 +44,20 @@ export default class UIScene extends Phaser.Scene {
     this.hud.setDepth(1);
     this.vignette = this.add.rectangle(640, 360, 1280, 720, 0xff0000, 0).setDepth(0);
 
-    // bottom-left stats
-    this.armLabel = label(this, 20, 592 + bo, 'AP', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
-    this.armText = label(this, 70, 592 + bo, '', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
-    this.hpText = label(this, 70, 618 + bo, '', 16, '#ffffff', 0, 0.5).setDepth(3);
-    label(this, 20, 618 + bo, 'HP', 16, '#ff7a7a', 0, 0.5).setDepth(3);
-    label(this, 20, 646 + bo, 'ST', 14, '#e8d56a', 0, 0.5).setDepth(3);
+    // bottom-left stats (or top-left on mobile touch)
+    if (this.touchMode) {
+      this.hpLabel = label(this, 20, 71, 'HP', 11, '#ff7a7a', 0, 0.5).setDepth(3);
+      this.hpText = label(this, 236, 71, '', 11, '#ffffff', 0, 0.5).setDepth(3);
+      this.stLabel = label(this, 20, 85, 'ST', 11, '#e8d56a', 0, 0.5).setDepth(3);
+      this.armLabel = label(this, 20, 99, 'AP', 11, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
+      this.armText = label(this, 236, 99, '', 11, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
+    } else {
+      this.armLabel = label(this, 20, 592, 'AP', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
+      this.armText = label(this, 70, 592, '', 14, '#38bdf8', 0, 0.5).setDepth(3).setVisible(false);
+      this.hpText = label(this, 70, 618, '', 16, '#ffffff', 0, 0.5).setDepth(3);
+      this.hpLabel = label(this, 20, 618, 'HP', 16, '#ff7a7a', 0, 0.5).setDepth(3);
+      this.stLabel = label(this, 20, 646, 'ST', 14, '#e8d56a', 0, 0.5).setDepth(3);
+    }
 
     // 4-slot customizable equipment inventory bar (Keys 1-4) centered at screen bottom
     this.hudSlots = [];
@@ -127,19 +135,27 @@ export default class UIScene extends Phaser.Scene {
       this.hudSlots.push({ bg, keyT, tagT, icon, badge, cx, cy: slotY });
     }
 
-    // top-left
-    this.killText = label(this, 20, 18, '', 26, '#ffd070', 0, 0).setDepth(3);
-    this.timeText = label(this, 20, 52, '', 18, '#cfe0c0', 0, 0).setDepth(3);
+    // top-left stats header (compact, clean fonts)
+    this.killText = label(this, 20, 14, '', this.touchMode ? 21 : 26, '#ffd070', 0, 0).setDepth(3);
+    this.timeText = label(this, 20, this.touchMode ? 40 : 52, '', this.touchMode ? 13 : 18, '#cfe0c0', 0, 0).setDepth(3);
     this.fpsText = label(this, 20, 78, '', 14, '#8fff8f', 0, 0).setDepth(3);
     this.zoneText = label(this, 20, 96, '', 16, '#ff6a5a', 0, 0).setDepth(3);
 
     // mission tracker (current mission + objectives), waypoint markers and banners
-    const ty = this.touchMode ? 236 : 126;
+    const ty = this.touchMode ? 102 : 126;
     this.trackerY = ty;
     this.trackG = this.add.graphics().setDepth(2);
-    this.mTitle = label(this, 30, ty + 8, '', 17, '#f2e08a').setDepth(3);
-    this.mObjs = this.add.text(30, ty + 34, '', { fontFamily: '"Courier New", monospace', fontSize: fs(14) + 'px', color: '#e8f2e0', lineSpacing: 4, stroke: '#000', strokeThickness: 3, wordWrap: { width: this.touchMode ? 330 : 410 } }).setDepth(3);
-    this.mInfo = label(this, 30, ty + 8, '', 13, '#9fe8a0').setDepth(3);
+    this.mTitle = label(this, 30, ty + 6, '', this.touchMode ? 13 : 17, '#f2e08a').setDepth(3);
+    this.mObjs = this.add.text(30, ty + 26, '', {
+      fontFamily: FONT,
+      fontSize: (this.touchMode ? 12 : 14) + 'px',
+      color: '#e8f2e0',
+      lineSpacing: 3,
+      stroke: '#000',
+      strokeThickness: 2,
+      wordWrap: { width: this.touchMode ? 320 : 410 }
+    }).setDepth(3);
+    this.mInfo = label(this, 30, ty + 26, '', this.touchMode ? 11 : 13, '#9fe8a0').setDepth(3);
     this.wpG = this.add.graphics().setDepth(4);
     this.wpTexts = [0, 1, 2, 3].map(() => label(this, 0, 0, '', 13, '#ffffff', 0.5, 0.5).setDepth(5).setVisible(false));
     this.bannerTitle = label(this, 640, 160, '', 44, '#f2e08a', 0.5, 0.5).setDepth(30).setAlpha(0);
@@ -177,8 +193,8 @@ export default class UIScene extends Phaser.Scene {
     this.speedSub = label(this, 640, 668, '', 14, '#bcd0b0', 0.5, 0.5).setDepth(3);
 
     // centre messages
-    this.prompt = label(this, 640, 560, '', 22, '#ffffff', 0.5, 0.5).setDepth(3);
-    this.toastText = label(this, 640, 90, '', 22, '#f2e08a', 0.5, 0.5).setDepth(3);
+    this.prompt = label(this, 640, 560, '', this.touchMode ? 16 : 22, '#ffffff', 0.5, 0.5).setDepth(3);
+    this.toastText = label(this, 640, this.touchMode ? 140 : 90, '', this.touchMode ? 18 : 22, '#f2e08a', 0.5, 0.5).setDepth(3);
     this.toastUntil = 0;
     this.reloadLabel = label(this, 640, 400, '', 16, '#ffffff', 0.5, 0.5).setDepth(3);
     this.hitMarker = this.add.graphics().setDepth(3);
@@ -1047,18 +1063,33 @@ export default class UIScene extends Phaser.Scene {
       h.fillStyle(0x2a2a2a, 1).fillRect(x, y, w, hgt);
       h.fillStyle(col, 1).fillRect(x, y, w * Phaser.Math.Clamp(frac, 0, 1), hgt);
     };
-    if (p.maxArmor > 0) {
-      const armCol = p.armorTier === 'military' ? 0xa855f7 : p.armorTier === 'tactical' ? 0x3b82f6 : 0x06b6d4;
-      bar(60, 584 + this.bo, 260, 16, Math.min(1, p.armor / p.maxArmor), armCol);
-      this.armLabel.setVisible(true);
-      this.armText.setText(String(Math.ceil(p.armor)) + ' / ' + p.maxArmor).setVisible(true).setX(70);
+    if (this.touchMode) {
+      if (p.maxArmor > 0) {
+        const armCol = p.armorTier === 'military' ? 0xa855f7 : p.armorTier === 'tactical' ? 0x3b82f6 : 0x06b6d4;
+        bar(46, 95, 180, 8, Math.min(1, p.armor / p.maxArmor), armCol);
+        this.armLabel.setVisible(true);
+        this.armText.setText(String(Math.ceil(p.armor)) + '/' + p.maxArmor).setVisible(true);
+      } else {
+        this.armLabel.setVisible(false);
+        this.armText.setVisible(false);
+      }
+      bar(46, 66, 180, 11, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
+      bar(46, 81, 180, 8, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
+      this.hpText.setText(String(Math.ceil(p.hp)));
     } else {
-      this.armLabel.setVisible(false);
-      this.armText.setVisible(false);
+      if (p.maxArmor > 0) {
+        const armCol = p.armorTier === 'military' ? 0xa855f7 : p.armorTier === 'tactical' ? 0x3b82f6 : 0x06b6d4;
+        bar(60, 584, 260, 16, Math.min(1, p.armor / p.maxArmor), armCol);
+        this.armLabel.setVisible(true);
+        this.armText.setText(String(Math.ceil(p.armor)) + ' / ' + p.maxArmor).setVisible(true).setX(70);
+      } else {
+        this.armLabel.setVisible(false);
+        this.armText.setVisible(false);
+      }
+      bar(60, 608, 260, 20, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
+      bar(60, 642, 260, 12, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
+      this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
     }
-    bar(60, 608 + this.bo, 260, 20, p.hp / p.maxHp, p.hp < 30 ? 0xff3030 : 0xd83a3a);
-    bar(60, 642 + this.bo, 260, 12, p.stamina / 100, p.winded ? 0xa06020 : 0xe8d56a);
-    this.hpText.setText(String(Math.ceil(p.hp))).setX(70);
     // 4-slot equipment inventory bar HUD update (Keys 1-4) centered at screen bottom
     if (this.hudSlots) {
       const inCar = !!p.vehicle;
@@ -1226,33 +1257,40 @@ export default class UIScene extends Phaser.Scene {
     const m = g.missions;
     const tg = this.trackG;
     tg.clear();
-    const ty = this.trackerY;
+    const ty = this.touchMode ? (p.maxArmor > 0 ? 116 : 100) : 126;
+    this.trackerY = ty;
+    this.mTitle.setY(ty + 6);
+    this.mObjs.setY(ty + 26);
     let lines = [];
     let title = '';
     const gh = g.gangJobs ? g.gangJobs.hud() : null;
     if (m.def && m.obj) {
-      title = (m.def.side ? 'JOB: ' : 'CURRENT MISSION: ') + m.def.title.toUpperCase();
-      const objs = m.def.objectives;
-      for (let i = 0; i < objs.length; i++) {
-        const o = objs[i];
-        if (i < m.step) { if (!this.touchMode && i >= m.step - 1) lines.push('[x] ' + o.text); continue; }
-        if (o.if && i !== m.step && !o.if(m.state())) continue;
-        if (lines.length >= (this.touchMode ? 2 : 6)) break;
-        lines.push(i === m.step ? '> ' + m.objectiveText() : '  ' + o.text);
+      title = (m.def.side ? 'JOB: ' : 'MISSION: ') + m.def.title.toUpperCase();
+      if (this.touchMode) {
+        lines.push('> ' + m.objectiveText());
+      } else {
+        const objs = m.def.objectives;
+        for (let i = 0; i < objs.length; i++) {
+          const o = objs[i];
+          if (i < m.step) { if (i >= m.step - 1) lines.push('[x] ' + o.text); continue; }
+          if (o.if && i !== m.step && !o.if(m.state())) continue;
+          if (lines.length >= 6) break;
+          lines.push(i === m.step ? '> ' + m.objectiveText() : '  ' + o.text);
+        }
       }
       const t = m.target();
       let info = '';
       if (t) info = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
       const left = m.timeLeft();
       if (left) info += `   TIME ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
-      this.mInfo.setText(info).setY(ty + 36 + this.mObjs.height + 2).setVisible(true);
+      this.mInfo.setText(info).setY(ty + 28 + this.mObjs.height).setVisible(true);
     } else if (gh) {                                           // a gang job is the current task: same panel as the story missions
       title = gh.title;
-      lines = gh.lines.slice(0, this.touchMode ? 2 : 5);
+      lines = gh.lines.slice(0, this.touchMode ? 1 : 5);
       const t = g.gangJobs.waypoint(); let info = '';
       if (t) info = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
       if (gh.time) info += `   TIME ${Math.floor(gh.time / 60000)}:${String(Math.floor(gh.time / 1000) % 60).padStart(2, '0')}`;
-      this.mInfo.setText(info).setY(ty + 36 + this.mObjs.height + 2).setVisible(true);
+      this.mInfo.setText(info).setY(ty + 28 + this.mObjs.height).setVisible(true);
     } else {
       const n = m.nextStory();
       if (n && !g.dialogueActive) { title = 'NEXT MISSION'; lines = [n.title + (n.giver ? `  -  see ${g.npcName(n.giver)}` : '')]; }
@@ -1263,10 +1301,10 @@ export default class UIScene extends Phaser.Scene {
     this.mObjs.setText(lines.join('\n'));
     this.mTitle.setVisible(!!title); this.mObjs.setVisible(!!title);
     if (title) {
-      const pw = this.touchMode ? 360 : 430;
-      const h = 40 + this.mObjs.height + (m.def || gh ? 24 : 4);
-      tg.fillStyle(0x000000, 0.5).fillRect(22, ty, pw, h);
-      tg.lineStyle(2, 0x6b8f5a, 0.8).strokeRect(22, ty, pw, h);
+      const pw = this.touchMode ? 336 : 430;
+      const h = 32 + this.mObjs.height + (this.mInfo.visible ? 18 : 6);
+      tg.fillStyle(0x0c1018, 0.72).fillRect(22, ty, pw, h);
+      tg.lineStyle(1.5, 0x3d5a36, 0.9).strokeRect(22, ty, pw, h);
     }
     // waypoint markers (on screen: a pin with distance; off screen: an arrow at the screen edge)
     const wg = this.wpG;

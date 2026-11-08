@@ -2,6 +2,7 @@
 import { DIALOGUES } from '../story/dialogues.js';
 import { STORY_NPCS } from '../story/npcs.js';
 import { profile, flag } from './Profile.js';
+import { touchEnabled } from './Touch.js';
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
@@ -469,9 +470,13 @@ export function chatDialogue(npcId, s) {
   else if (s.rep >= 40) text = pick(['Hey, there you are! Port City has a lot of good things to say about you.', "You've got a good name in this town now. Don't waste it."]);
   else {
     const neutral = {
-      marla: "The board's quiet at the moment. Open the job list (J) if you want extra work.",
+      marla: touchEnabled()
+        ? "The board's quiet at the moment. Tap the JOBS button at the top if you want extra work."
+        : "The board's quiet at the moment. Open the job list (J) if you want extra work.",
       hal: 'The ducks are loud today. Thanks again for sitting with an old man.',
-      dex: 'Need fuel? Pull up to a pump and hold G to refuel. Our pumps are open all day.',
+      dex: touchEnabled()
+        ? 'Need fuel? Pull up to a pump and tap the REFUEL button. Our pumps are open all day.'
+        : 'Need fuel? Pull up to a pump and hold G to refuel. Our pumps are open all day.',
       gus: 'Hardware store is open. Crowbars, pipes, bats - for "home improvement".',
       gordy: "Cars! Good ones. Come see what's on the lot.",
       hale: "Keep your nose clean, friend. I'm always watching.",
