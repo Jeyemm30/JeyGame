@@ -54,15 +54,21 @@ export const CONTROLS_TEXT = [
   'Mouse Wheel . Zoom',
   'ESC .......... Pause',
   '',
-  'Touch: left side = move, right side = aim',
-  '(push far to fire); buttons on the right'
+  'Touch (Mobile):',
+  '  Left stick ........ Move character / Steer vehicle',
+  '  FIRE button / Stick Aim & Shoot / Auto-target nearby enemies',
+  '  USE button ........ Enter car, talk to NPCs, loot items, doors',
+  '  RUN / CROUCH ...... Sprint / sneak silently',
+  '  RELOAD / SWAP ..... Fast tactical reload and weapon swap',
+  '  Driving pedals .... Dedicated Gas, Brake/Rev, and Drift Handbrake'
 ].join('\n');
 
 // A modal panel listing controls. Returns the container so callers can destroy it.
 export function controlsPanel(scene, onClose) {
   const c = scene.add.container(0, 0).setDepth(100);
   const block = scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0.75).setInteractive();
-  const panel = scene.add.rectangle(640, 360, 760, 680, 0x14161c).setStrokeStyle(3, 0xff6a2a);
+  block.on('pointerup', () => { c.destroy(); if (onClose) onClose(); });
+  const panel = scene.add.rectangle(640, 360, 760, 680, 0x14161c).setStrokeStyle(3, 0xff6a2a).setInteractive();
   const title = label(scene, 640, 40, 'CONTROLS', 30, '#ffb070', 0.5, 0);
   const body = scene.add.text(640, 84, CONTROLS_TEXT, { fontFamily: FONT, fontSize: '17px', color: '#e8f2e0', lineSpacing: 4 }).setOrigin(0.5, 0);
   const close = button(scene, 640, 668, 'CLOSE', () => { c.destroy(); if (onClose) onClose(); }, { w: 200, h: 44, size: 20 });

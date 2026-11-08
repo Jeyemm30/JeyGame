@@ -55,8 +55,9 @@ export default class DialogueScene extends Phaser.Scene {
     this.body = this.add.text(260, 492, '', { fontFamily: FONT, fontSize: fs(20) + 'px', color: '#f8fafc', wordWrap: { width: 920 }, lineSpacing: 7 });
 
     // 6. Action / continue pill prompt
-    this.hintBg = this.add.rectangle(this.cx + PW / 2 - 20, 700, 190, 26, 0x161b28, 0.9).setOrigin(1, 0.5).setStrokeStyle(1, 0x2a334a);
-    this.hint = label(this, this.cx + PW / 2 - 115, 700, '[ SPACE ]  CONTINUE', 12, '#94a3b8', 0.5, 0.5);
+    this.hintBg = this.add.rectangle(this.cx + PW / 2 - 20, 700, 190, 26, 0x161b28, 0.9).setOrigin(1, 0.5).setStrokeStyle(1, 0x2a334a).setInteractive({ useHandCursor: true });
+    this.hintBg.on('pointerup', () => this.advance());
+    this.hint = label(this, this.cx + PW / 2 - 115, 700, touchEnabled() ? '[ TAP ]  CONTINUE' : '[ SPACE ]  CONTINUE', 12, '#94a3b8', 0.5, 0.5);
     this.tweens.add({
       targets: [this.hint, this.hintBg],
       alpha: 0.65,
@@ -86,8 +87,11 @@ export default class DialogueScene extends Phaser.Scene {
     for (let i = 1; i <= 9; i++) this.input.keyboard.on('keydown-' + ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'][i - 1], () => this.choose(i - 1));
     this.input.on('wheel', (p, over, dx, dy) => { if (this.maxScroll > 0) this.scrollBy(dy * 0.6); });
     this.input.on('pointerdown', (p, over) => {
-      if (this.node && this.node.choices && this.inList(p)) { this.drag = { y: p.y, s: this.scroll, moved: false }; return; }
-      if (!over.length) this.advance();
+      if (this.node && this.node.choices && this.inList(p)) {
+        this.drag = { y: p.y, s: this.scroll, moved: false };
+        return;
+      }
+      this.advance();
     });
     this.input.on('pointermove', (p) => {
       if (!this.drag || !p.isDown) return;
@@ -139,7 +143,7 @@ export default class DialogueScene extends Phaser.Scene {
     this.typed = 0;
     this.typing = true;
     this.body.setText('');
-    this.hint.setText('[ SPACE ]  SKIP');
+    this.hint.setText(touchEnabled() ? '[ TAP ]  SKIP' : '[ SPACE ]  SKIP');
     this.layout(this.full);
     applyEffects(this.gs, node.effects, this.replay);
     if (this.typeEvt) this.typeEvt.remove();
@@ -229,12 +233,14 @@ export default class DialogueScene extends Phaser.Scene {
     if (node.choices) {
       this.layout(this.full);
       this.visible = this.currentChoices();
-      this.hint.setText('SELECT A REPLY [ 1 - ' + this.visible.length + ' ]');
+      this.hint.setText(touchEnabled() ? 'SELECT A REPLY' : 'SELECT A REPLY [ 1 - ' + this.visible.length + ' ]');
       const hintW = Math.max(180, this.hint.width + 28);
       this.hintBg.setSize(hintW, 26);
       this.buildChoices();
     } else {
-      this.hint.setText(node.next ? '[ SPACE ]  CONTINUE' : '[ SPACE ]  CLOSE');
+      const continueTxt = touchEnabled() ? '[ TAP ]  CONTINUE' : '[ SPACE ]  CONTINUE';
+      const closeTxt = touchEnabled() ? '[ TAP ]  CLOSE' : '[ SPACE ]  CLOSE';
+      this.hint.setText(node.next ? continueTxt : closeTxt);
       const hintW = Math.max(170, this.hint.width + 28);
       this.hintBg.setSize(hintW, 26);
     }

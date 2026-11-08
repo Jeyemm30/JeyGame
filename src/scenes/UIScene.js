@@ -287,7 +287,8 @@ export default class UIScene extends Phaser.Scene {
     const c = this.add.container(0, 0).setDepth(50).setVisible(false);
     this.inv = c;
     const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.68).setInteractive();
-    const panel = this.add.rectangle(640, 360, 1140, 590, 0x151d12).setStrokeStyle(4, 0x6b8f5a);
+    dim.on('pointerup', () => this.toggleInventory());
+    const panel = this.add.rectangle(640, 360, 1140, 590, 0x151d12).setStrokeStyle(4, 0x6b8f5a).setInteractive();
     c.add([
       dim,
       panel,
@@ -710,74 +711,288 @@ export default class UIScene extends Phaser.Scene {
   buildTouchControls() {
     this.tg = this.add.graphics().setDepth(40);
     this.sticks = { move: { id: -1, ox: 0, oy: 0, x: 0, y: 0 }, aim: { id: -1, ox: 0, oy: 0, x: 0, y: 0 } };
-    const mk = (x, y, txt, r, onDown, onUp) => {
-      const c = this.add.circle(x, y, r, 0x1b2a17, 0.6).setStrokeStyle(3, 0x8fb27a, 0.95).setDepth(41).setInteractive();
-      label(this, x, y, txt, r > 32 ? 11 : 9, '#ffffff', 0.5, 0.5).setDepth(42);
-      const up = () => { c.setFillStyle(0x1b2a17, 0.6); if (onUp) onUp(); };
-      c.on('pointerdown', () => { c.setFillStyle(0x4a6e3c, 0.85); if (onDown) onDown(); });
+
+    // Modern obsidian glass button builder
+    const mk = (x, y, txt, r, opts = {}) => {
+      const normalCol = opts.col || 0x242d42;
+      const normalBg = opts.bg || 0x0a0d16;
+      const activeCol = opts.activeCol || 0x3b82f6;
+      const activeBg = opts.activeBg || 0x1d283a;
+      const strokeW = opts.strokeW || 2.5;
+
+      const c = this.add.circle(x, y, r, normalBg, 0.85).setStrokeStyle(strokeW, normalCol, 0.95).setDepth(41).setInteractive();
+      const txtObj = label(this, x, y, txt, r > 34 ? 12 : r > 28 ? 10 : 9, opts.textColor || '#ffffff', 0.5, 0.5).setDepth(42);
+      if (opts.bold !== false) txtObj.setFontStyle('bold');
+
+      const up = () => {
+        c.setFillStyle(normalBg, 0.85).setStrokeStyle(strokeW, normalCol, 0.95).setScale(1);
+        txtObj.setScale(1);
+        if (opts.onUp) opts.onUp();
+      };
+      c.on('pointerdown', () => {
+        c.setFillStyle(activeBg, 0.95).setStrokeStyle(strokeW, activeCol, 1).setScale(0.93);
+        txtObj.setScale(0.93);
+        if (opts.onDown) opts.onDown();
+      });
       c.on('pointerup', up);
       c.on('pointerout', up);
-      return c;
+      c.on('pointercancel', up);
+
+      const item = {
+        circle: c, text: txtObj,
+        setVisible: (v) => { c.setVisible(v); txtObj.setVisible(v); },
+        setText: (t) => txtObj.setText(t),
+        setCol: (col) => c.setStrokeStyle(strokeW, col, 0.95),
+        x, y
+      };
+      return item;
     };
+
     const act = (name) => () => { touch.actions.add(name); };
-    mk(1225, 245, 'USE', 38, () => { touch.actions.add('interact'); touch.interactHeld = true; }, () => { touch.interactHeld = false; });
-    mk(1225, 322, 'HIT', 36, act('melee'));
-    mk(1225, 399, 'RUN', 36, () => { touch.sprint = true; }, () => { touch.sprint = false; });
-    mk(1225, 476, 'CROUCH', 36, act('crouch'));
-    mk(1225, 553, 'RELOAD', 36, act('reload'));
-    mk(1225, 630, 'SWAP', 36, act('cycle'));
-    mk(1140, 668, 'FOOD', 30, act('slot3'));
-    mk(1060, 668, 'MED', 30, act('slot4'));
-    mk(1140, 590, 'HORN', 30, act('horn'));
-    mk(1140, 510, 'MELEE', 30, act('melee-swap'));
-    mk(1060, 590, 'FUEL', 30, () => { touch.refuel = true; }, () => { touch.refuel = false; });
-    mk(452, 38, 'II', 31, () => this.openPause());
-    mk(526, 38, 'BAG', 31, () => this.toggleInventory());
-    mk(600, 38, 'MAP', 31, () => this.openMap());
-    mk(896, 38, 'JOBS', 31, () => this.openMissions());
-    mk(674, 38, '+', 31, () => { this.game_.zoomTarget = Math.min(3, this.game_.zoomTarget + 0.2); });
-    mk(748, 38, '-', 31, () => { this.game_.zoomTarget = Math.max(0.8, this.game_.zoomTarget - 0.2); });
+
+    this.touchFootGroup = [];
+    this.touchCarGroup = [];
+    this.touchCommonGroup = [];
+
+    // --- On-Foot Control Layout (Modern Arc Layout) ---
+    // 1. Primary Action (FIRE / ATTACK)
+    this.tBtnFire = mk(1200, 520, 'FIRE', 40, {
+      col: 0xef4444, activeCol: 0xff6b6b, activeBg: 0x5c1d1d,
+      onDown: () => { touch.fire = true; touch.tapFire = true; touch.actions.add('fire'); },
+      onUp: () => { touch.fire = false; }
+    });
+    this.touchFootGroup.push(this.tBtnFire);
+
+    // 2. Interaction (USE / TALK / ENTER / LOOT)
+    this.tBtnUse = mk(1200, 390, 'USE', 36, {
+      col: 0x10b981, activeCol: 0x34d399, activeBg: 0x064e3b,
+      onDown: () => { touch.actions.add('interact'); touch.interactHeld = true; },
+      onUp: () => { touch.interactHeld = false; }
+    });
+    this.touchFootGroup.push(this.tBtnUse);
+
+    // 3. Sprint / Run
+    this.tBtnRun = mk(1200, 645, 'RUN', 32, {
+      col: 0x38bdf8, activeCol: 0x7dd3fc, activeBg: 0x0c4a6e,
+      onDown: () => { touch.sprint = true; },
+      onUp: () => { touch.sprint = false; }
+    });
+    this.touchFootGroup.push(this.tBtnRun);
+
+    // 4. Tactical Reload
+    this.tBtnReload = mk(1105, 390, 'RELOAD', 28, {
+      col: 0x94a3b8, activeCol: 0xe2e8f0, activeBg: 0x334155,
+      onDown: act('reload')
+    });
+    this.touchFootGroup.push(this.tBtnReload);
+
+    // 5. Crouch / Stealth
+    this.tBtnCrouch = mk(1200, 275, 'CROUCH', 27, {
+      col: 0x64748b, activeCol: 0x94a3b8, activeBg: 0x1e293b,
+      onDown: act('crouch')
+    });
+    this.touchFootGroup.push(this.tBtnCrouch);
+
+    // 6. Weapon Swap / Cycle
+    this.tBtnSwap = mk(1105, 275, 'SWAP', 27, {
+      col: 0xa855f7, activeCol: 0xc084fc, activeBg: 0x3b0764,
+      onDown: act('cycle')
+    });
+    this.touchFootGroup.push(this.tBtnSwap);
+
+    // 7. Quick Slots (Food / Med)
+    this.tBtnFood = mk(1095, 665, 'FOOD', 26, {
+      col: 0xf59e0b, activeCol: 0xfbbf24, activeBg: 0x451a03,
+      onDown: act('slot3')
+    });
+    this.touchFootGroup.push(this.tBtnFood);
+
+    this.tBtnMed = mk(995, 665, 'MED', 26, {
+      col: 0x22c55e, activeCol: 0x4ade80, activeBg: 0x14532d,
+      onDown: act('slot4')
+    });
+    this.touchFootGroup.push(this.tBtnMed);
+
+    // --- Vehicle Driving Layout ---
+    // 1. Gas Pedal (Accelerate)
+    this.tBtnGas = mk(1195, 560, 'GAS', 44, {
+      col: 0x22c55e, activeCol: 0x4ade80, activeBg: 0x14532d, strokeW: 3,
+      onDown: () => { touch.gas = true; },
+      onUp: () => { touch.gas = false; }
+    });
+    this.touchCarGroup.push(this.tBtnGas);
+
+    // 2. Brake / Reverse Pedal
+    this.tBtnBrake = mk(1085, 585, 'BRAKE', 38, {
+      col: 0xef4444, activeCol: 0xf87171, activeBg: 0x7f1d1d, strokeW: 3,
+      onDown: () => { touch.brake = true; },
+      onUp: () => { touch.brake = false; }
+    });
+    this.touchCarGroup.push(this.tBtnBrake);
+
+    // 3. Drift / Handbrake
+    this.tBtnDrift = mk(1085, 475, 'DRIFT', 32, {
+      col: 0x06b6d4, activeCol: 0x22d3ee, activeBg: 0x164e63,
+      onDown: () => { touch.handbrake = true; },
+      onUp: () => { touch.handbrake = false; }
+    });
+    this.touchCarGroup.push(this.tBtnDrift);
+
+    // 4. Exit Vehicle
+    this.tBtnExit = mk(1195, 425, 'EXIT', 36, {
+      col: 0xf97316, activeCol: 0xfb923c, activeBg: 0x431407,
+      onDown: act('interact')
+    });
+    this.touchCarGroup.push(this.tBtnExit);
+
+    // 5. Vehicle Horn
+    this.tBtnHorn = mk(1195, 305, 'HORN', 28, {
+      col: 0xeab308, activeCol: 0xfde047, activeBg: 0x422006,
+      onDown: act('horn')
+    });
+    this.touchCarGroup.push(this.tBtnHorn);
+
+    // 6. Headlights Toggle
+    this.tBtnLights = mk(1085, 365, 'LIGHTS', 28, {
+      col: 0x94a3b8, activeCol: 0xe2e8f0, activeBg: 0x1e293b,
+      onDown: act('lights')
+    });
+    this.touchCarGroup.push(this.tBtnLights);
+
+    // 7. Refuel Button (automatically highlighted near pumps)
+    this.tBtnRefuel = mk(970, 475, 'REFUEL', 34, {
+      col: 0x38bdf8, activeCol: 0x67e8f9, activeBg: 0x083344,
+      onDown: () => { touch.refuel = true; },
+      onUp: () => { touch.refuel = false; }
+    });
+    this.touchCarGroup.push(this.tBtnRefuel);
+
+    // --- Top Status & Navigation Bar ---
+    this.touchCommonGroup.push(mk(440, 38, 'II', 30, { col: 0x475569, onDown: () => this.openPause() }));
+    this.touchCommonGroup.push(mk(512, 38, 'BAG', 30, { col: 0x6366f1, onDown: () => this.toggleInventory() }));
+    this.touchCommonGroup.push(mk(584, 38, 'MAP', 30, { col: 0x10b981, onDown: () => this.openMap() }));
+    this.touchCommonGroup.push(mk(656, 38, 'JOBS', 30, { col: 0xf59e0b, onDown: () => this.openMissions() }));
+    this.touchCommonGroup.push(mk(728, 38, '+', 30, { col: 0x475569, onDown: () => { this.game_.zoomTarget = Math.min(3, this.game_.zoomTarget + 0.2); } }));
+    this.touchCommonGroup.push(mk(800, 38, '-', 30, { col: 0x475569, onDown: () => { this.game_.zoomTarget = Math.max(0.8, this.game_.zoomTarget - 0.2); } }));
     if (this.scale.fullscreen && this.scale.fullscreen.available) {
-      mk(822, 38, 'FS', 31, () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); });
+      this.touchCommonGroup.push(mk(872, 38, 'FS', 30, { col: 0x475569, onDown: () => { if (this.scale.isFullscreen) this.scale.stopFullscreen(); else this.scale.startFullscreen(); } }));
     }
+
+    // Touch input routing for virtual sticks
     this.input.on('pointerdown', (ptr, over) => {
       if (over.length || this.invOpen || this.modalActive()) return;
-      const s = ptr.x < 640 ? this.sticks.move : this.sticks.aim;
-      if (s.id !== -1) return;
-      s.id = ptr.id; s.ox = s.x = ptr.x; s.oy = s.y = ptr.y;
+      if (ptr.x < 520 && ptr.y > 180) {
+        if (this.sticks.move.id === -1) {
+          this.sticks.move.id = ptr.id;
+          this.sticks.move.ox = this.sticks.move.x = ptr.x;
+          this.sticks.move.oy = this.sticks.move.y = ptr.y;
+        }
+      } else if (!this.p.vehicle && ptr.x >= 680 && ptr.x <= 1120 && ptr.y >= 320 && ptr.y <= 650) {
+        if (this.sticks.aim.id === -1) {
+          this.sticks.aim.id = ptr.id;
+          this.sticks.aim.ox = this.sticks.aim.x = ptr.x;
+          this.sticks.aim.oy = this.sticks.aim.y = ptr.y;
+        }
+      }
     });
+
     this.input.on('pointermove', (ptr) => {
-      Object.values(this.sticks).forEach((s) => { if (s.id === ptr.id) { s.x = ptr.x; s.y = ptr.y; } });
+      Object.values(this.sticks).forEach((s) => {
+        if (s.id === ptr.id) { s.x = ptr.x; s.y = ptr.y; }
+      });
     });
-    const release = (ptr) => { Object.values(this.sticks).forEach((s) => { if (s.id === ptr.id) s.id = -1; }); };
+
+    const release = (ptr) => {
+      Object.values(this.sticks).forEach((s) => {
+        if (s.id === ptr.id) s.id = -1;
+      });
+    };
     this.input.on('pointerup', release);
     this.input.on('pointerupoutside', release);
   }
 
   updateTouch() {
-    const R = 70;
-    if (this.invOpen || this.modalActive() || this.p.dead) Object.values(this.sticks).forEach((s) => { s.id = -1; });
+    const R = 65;
+    if (this.invOpen || this.modalActive() || this.p.dead) {
+      Object.values(this.sticks).forEach((s) => { s.id = -1; });
+    }
+    const inCar = !!this.p.vehicle;
+    if (inCar && this.sticks.aim.id !== -1) this.sticks.aim.id = -1;
+
+    // Toggle On-Foot vs In-Vehicle Button Groups
+    this.touchFootGroup.forEach((b) => b.setVisible(!inCar));
+    this.touchCarGroup.forEach((b) => b.setVisible(inCar));
+
+    if (!inCar) {
+      // Dynamic button label for FIRE (FIRE vs HIT)
+      const isMelee = this.p.isMelee;
+      this.tBtnFire.setText(isMelee ? 'HIT' : 'FIRE');
+
+      // Dynamic button label for USE (ENTER / TALK / TAKE / OPEN / USE)
+      const it = this.game_.interact;
+      if (it) {
+        let actLbl = 'USE';
+        if (it.kind === 'vehicle') actLbl = 'ENTER';
+        else if (it.kind === 'item') actLbl = 'TAKE';
+        else if (it.kind === 'firebay' || it.kind === 'door') actLbl = 'OPEN';
+        else if (it.ref && (it.ref.kind === 'civilian' || it.ref.storyNpc || it.ref.isStory)) actLbl = 'TALK';
+        this.tBtnUse.setText(actLbl);
+        this.tBtnUse.setCol(0x34d399); // bright emerald pulse
+      } else {
+        this.tBtnUse.setText('USE');
+        this.tBtnUse.setCol(0x10b981);
+      }
+    } else {
+      // If near pump, highlight REFUEL
+      const pump = this.game_.nearestPump && this.game_.nearestPump(this.p.vehicle);
+      const nearPump = pump && Math.abs(this.p.vehicle.speed) < 40;
+      this.tBtnRefuel.setCol(nearPump ? 0x38bdf8 : 0x1e293b);
+    }
+
+    // Process sticks
     const m = this.sticks.move, a = this.sticks.aim;
     let dx = m.x - m.ox, dy = m.y - m.oy, len = Math.hypot(dx, dy);
     if (m.id === -1 || len < 10) { touch.moveX = touch.moveY = 0; }
     else { const k = Math.min(1, len / R); touch.moveX = (dx / len) * k; touch.moveY = (dy / len) * k; }
-    dx = a.x - a.ox; dy = a.y - a.oy; len = Math.hypot(dx, dy);
-    if (a.id !== -1 && len > 18) { touch.aiming = true; touch.aimAngle = Math.atan2(dy, dx); touch.firing = len > 45; }
-    else { touch.aiming = false; touch.firing = false; }
+
+    if (!inCar) {
+      dx = a.x - a.ox; dy = a.y - a.oy; len = Math.hypot(dx, dy);
+      if (a.id !== -1 && len > 18) {
+        touch.aiming = true;
+        touch.aimAngle = Math.atan2(dy, dx);
+        touch.firing = len > 45;
+      } else {
+        touch.aiming = false;
+        touch.firing = false;
+      }
+    } else {
+      touch.aiming = false;
+      touch.firing = false;
+    }
+
+    // Render virtual joysticks with sleek glowing obsidian rings
     const g = this.tg;
     g.clear();
     const draw = (s, hx, hy, col, hot) => {
       const active = s.id !== -1;
       const bx = active ? s.ox : hx, by = active ? s.oy : hy;
-      g.fillStyle(col, active ? 0.18 : 0.08).fillCircle(bx, by, R);
-      g.lineStyle(3, col, active ? 0.6 : 0.25).strokeCircle(bx, by, R);
+      // Outer ring
+      g.fillStyle(0x0c0f18, active ? 0.35 : 0.15).fillCircle(bx, by, R);
+      g.lineStyle(active ? 2.5 : 1.5, col, active ? 0.75 : 0.35).strokeCircle(bx, by, R);
+      // Center thumb cap
       if (active) {
         const dx2 = s.x - s.ox, dy2 = s.y - s.oy, l2 = Math.hypot(dx2, dy2) || 1, k = Math.min(1, l2 / R);
-        g.fillStyle(hot ? 0xff5a3a : col, 0.55).fillCircle(bx + (dx2 / l2) * k * R, by + (dy2 / l2) * k * R, 30);
+        const tx = bx + (dx2 / l2) * k * R, ty = by + (dy2 / l2) * k * R;
+        g.fillStyle(hot ? 0xef4444 : col, 0.65).fillCircle(tx, ty, 28);
+        g.lineStyle(2, 0xffffff, 0.8).strokeCircle(tx, ty, 28);
+      } else {
+        g.fillStyle(col, 0.25).fillCircle(bx, by, 16);
       }
     };
-    draw(m, 150, 560, 0xcfe8c0, false);
-    draw(a, 1000, 560, 0xffd0a0, touch.firing);
+    draw(m, 140, 560, 0x38bdf8, false);
+    if (!inCar) {
+      draw(a, 960, 510, 0xf97316, touch.firing || touch.fire);
+    }
   }
 
   /* ------------------------------------------------------------------ update */

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { controlsPanel, FONT, fs } from '../ui/widgets.js';
 import { profile, repTitle } from '../systems/Profile.js';
+import { touchEnabled } from '../systems/Touch.js';
 import { TH, buildLogo, menuList, confirmBox, statCard, exitFlow } from '../ui/menuUi.js';
 
 /* The pause overlay: the world stays visible (darkened and softly blurred) behind a charcoal side panel. ESC or RESUME closes it;
@@ -15,8 +16,9 @@ export default class PauseScene extends Phaser.Scene {
     this.blurFx = null;
     try { this.blurFx = this.gs.cameras.main.postFX.addBlur(0, 1.4, 1.4, 1, 0xffffff, 3); } catch (e) { this.blurFx = null; }
     this.events.once('shutdown', () => this.releaseFx());
-    this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.46).setInteractive();
-    const side = this.add.rectangle(0, 0, 490, 720, 0x0c0d11, 0.95).setOrigin(0, 0).setStrokeStyle(0);
+    const bgDim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.46).setInteractive();
+    bgDim.on('pointerup', () => { if (!this.menu.locked) this.resume(); });
+    const side = this.add.rectangle(0, 0, 490, 720, 0x0c0d11, 0.95).setOrigin(0, 0).setStrokeStyle(0).setInteractive();
     this.add.rectangle(490, 0, 3, 720, TH.accent).setOrigin(0, 0);
     this.add.rectangle(493, 0, 2, 720, TH.cyan, 0.5).setOrigin(0, 0);
     this.add.image(40, 22, buildLogo(this)).setOrigin(0, 0).setScale(0.42);
@@ -35,7 +37,8 @@ export default class PauseScene extends Phaser.Scene {
     ];
     this.menu = menuList(this, items, 40 + 205, 206, { w: 410, h: 44, gap: 8, size: 19 });
     this.menu.items.forEach((b, i) => { b.c.setAlpha(0); this.tweens.add({ targets: b.c, alpha: 1, duration: 220, delay: 40 + i * 35 }); });
-    this.add.text(44, 690, 'ESC to resume   -   sleep in your safehouse to heal and save', { fontFamily: FONT, fontSize: fs(11) + 'px', color: TH.dim });
+    const escHint = touchEnabled() ? 'Tap RESUME or tap outside to resume - sleep in your safehouse to heal and save' : 'ESC to resume   -   sleep in your safehouse to heal and save';
+    this.add.text(44, 690, escHint, { fontFamily: FONT, fontSize: fs(11) + 'px', color: TH.dim });
 
     // a small status card on the right
     this.card = statCard(this, 960, 480, [['MONEY', ''], ['TIME', ''], ['WANTED', ''], ['STANDING', '']]);

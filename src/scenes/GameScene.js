@@ -6247,8 +6247,27 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const dn = this.fromScreen(0, CHEST);                 // pointer sees the target's chest; the ground point is lower on the screen
     let aimX = ptr.worldX + dn.x, aimY = ptr.worldY + dn.y;
     if (tm) {
-      const moving = Math.hypot(touch.moveX, touch.moveY) > 0.15;
-      const a = (touch.aiming ? touch.aimAngle : moving ? Math.atan2(touch.moveY, touch.moveX) : p.aim + this.camRot) - this.camRot;   // screen angle -> world angle
+      let a;
+      if (touch.aiming) {
+        a = touch.aimAngle - this.camRot;
+      } else {
+        let targetEnemy = null, minDist = 360;
+        if (touch.fire || touch.tapFire) {
+          if (this.enemies && this.enemies.children) {
+            this.enemies.children.iterate((e) => {
+              if (!e || !e.active || e.dead) return;
+              const d = Math.hypot(e.x - p.x, e.y - p.y);
+              if (d < minDist) { minDist = d; targetEnemy = e; }
+            });
+          }
+        }
+        if (targetEnemy) {
+          a = Math.atan2(targetEnemy.y - p.y, targetEnemy.x - p.x);
+        } else {
+          const moving = Math.hypot(touch.moveX, touch.moveY) > 0.15;
+          a = (moving ? Math.atan2(touch.moveY, touch.moveX) : p.aim + this.camRot) - this.camRot;
+        }
+      }
       aimX = p.x + Math.cos(a) * 200;
       aimY = p.y + Math.sin(a) * 200;
       p.updatePlayer(now, dt, { mx: touch.moveX, my: touch.moveY, sprint: touch.sprint, aimX, aimY });
@@ -6262,14 +6281,18 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (p.sprinting) { this.sprintT += dt; if (this.sprintT > 700) this.missionEvent('tut:sprint'); } else this.sprintT = 0;
     if (p.swing && !this.swingSeen) { this.swingSeen = true; this.missionEvent('tut:melee'); } else if (!p.swing) this.swingSeen = false;
 
-    const down = tm ? touch.firing : ptr.leftButtonDown();
+    const down = tm ? (touch.firing || touch.fire || touch.tapFire) : ptr.leftButtonDown();
     if (down) {
       if (p.isMelee) p.meleeAttack(now);
       else p.tryShoot(now, this.combat, !this.prevDown);
     }
     this.prevDown = down;
+    if (tm) touch.tapFire = false;
     if (!p.isMelee && settings.shake && down && p.flash.visible) cam.shake(50, p.weapon.shake);
-    if (Phaser.Input.Keyboard.JustDown(k.SPACE) || consumeAction('melee')) p.meleeAttack(now);
+    if (Phaser.Input.Keyboard.JustDown(k.SPACE) || consumeAction('melee') || consumeAction('fire') || consumeAction('attack')) {
+      if (p.isMelee) p.meleeAttack(now);
+      else p.tryShoot(now, this.combat, true);
+    }
 
     if (Phaser.Input.Keyboard.JustDown(k.R) || consumeAction('reload')) p.startReload(now);
     if (Phaser.Input.Keyboard.JustDown(k.C) || consumeAction('crouch')) { p.crouching = !p.crouching; sfx.click(); if (p.crouching) this.missionEvent('tut:crouch'); }
@@ -6346,11 +6369,16 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const v = p.vehicle;
     const k = this.keys;
     let throttle = 0, steer = 0;
-    if (tm) { throttle = -touch.moveY; steer = touch.moveX; if (Math.abs(throttle) < 0.2) throttle = 0; if (Math.abs(steer) < 0.15) steer = 0; }
+    if (tm) {
+      const buttonThrottle = (touch.gas ? 1 : 0) - (touch.brake ? 1 : 0);
+      if (buttonThrottle !== 0) throttle = buttonThrottle;
+      else { throttle = -touch.moveY; if (Math.abs(throttle) < 0.2) throttle = 0; }
+      steer = touch.moveX; if (Math.abs(steer) < 0.15) steer = 0;
+    }
     else { throttle = (k.W.isDown ? 1 : 0) - (k.S.isDown ? 1 : 0); steer = (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0); }
-    v.cmd = { throttle, steer, handbrake: k.SPACE.isDown };
+    v.cmd = { throttle, steer, handbrake: (tm ? touch.handbrake : false) || k.SPACE.isDown };
     if (Phaser.Input.Keyboard.JustDown(k.H) || consumeAction('horn')) { if (v.honk(this.gt, 260)) this.alertNoise(v.x, v.y, 260, 'step'); }                    // H: this vehicle's own horn (one short blast per press)
-    if (Phaser.Input.Keyboard.JustDown(k.L)) { const m = v.headMode || 'auto'; v.headMode = m === 'auto' ? 'on' : m === 'on' ? 'off' : 'auto'; sfx.click(); this.events.emit('toast', 'Headlights: ' + (v.headMode === 'auto' ? 'automatic (on at night)' : v.headMode === 'on' ? 'on' : 'off')); }       // L: auto -> on -> off
+    if (Phaser.Input.Keyboard.JustDown(k.L) || consumeAction('lights')) { const m = v.headMode || 'auto'; v.headMode = m === 'auto' ? 'on' : m === 'on' ? 'off' : 'auto'; sfx.click(); this.events.emit('toast', 'Headlights: ' + (v.headMode === 'auto' ? 'automatic (on at night)' : v.headMode === 'on' ? 'on' : 'off')); }       // L: auto -> on -> off
     if (Phaser.Input.Keyboard.JustDown(k.Z)) { v.sigManual = v.sigManual === -1 ? 0 : -1; sfx.click(); }                                                           // Z / C: left / right indicator
     if (Phaser.Input.Keyboard.JustDown(k.C)) { v.sigManual = v.sigManual === 1 ? 0 : 1; sfx.click(); }
     if (Phaser.Input.Keyboard.JustDown(k.M) || consumeAction('map')) this.events.emit('request-map');
