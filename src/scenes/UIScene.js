@@ -1362,7 +1362,15 @@ export default class UIScene extends Phaser.Scene {
   drawMinimap(g, p) {
     const show = settings.minimap;
     this.mmImg.setVisible(show); this.mmFrame.setVisible(show); this.mmHit.setVisible(show); this.mmLabel.setVisible(show);
-    this.mmLabel.setText(g.casinoFloor === 2 ? "VIP LEVEL" : g.casinoFloor === 1 ? "CASINO" : "MAP");
+    let mapText = 'MAP';
+    if (g.inCasino && g.inCasino(p)) {
+      mapText = g.casinoFloor === 2 ? 'VIP LEVEL' : 'CASINO';
+    } else if (g.inCityHall && g.inCityHall(p)) {
+      mapText = g.cityHallFloor === 2 ? 'CITY HALL F2' : 'CITY HALL';
+    } else if (g.inHospital && g.inHospital(p)) {
+      mapText = g.hospitalFloor === 2 ? 'HOSPITAL F2' : 'HOSPITAL';
+    }
+    this.mmLabel.setText(mapText);
     this.mmDots.clear();
     if (!show) { this.ysTxt.setVisible(false); if (this.mmIcons) this.mmIcons.forEach((im) => im.setVisible(false)); if (this.mmTesla) this.mmTesla.setVisible(false); return; }
     const ptx = p.x / TILE, pty = p.y / TILE;
