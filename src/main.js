@@ -48,28 +48,8 @@ const config = {
 
 window.__game = new Phaser.Game(config);
 
-// Responsive canvas refitting and orientation handling
-const checkOrientation = () => {
-  const prompt = document.getElementById('rotate-prompt');
-  if (!prompt) return;
-
-  const w = window.innerWidth || document.documentElement.clientWidth;
-  const h = window.innerHeight || document.documentElement.clientHeight;
-  const isLandscape = (w > h)
-    || (window.screen && window.screen.orientation && window.screen.orientation.type && window.screen.orientation.type.includes('landscape'))
-    || (typeof window.orientation === 'number' && Math.abs(window.orientation) === 90);
-
-  if (isLandscape) {
-    prompt.style.setProperty('display', 'none', 'important');
-  } else {
-    if (!prompt.classList.contains('dismissed')) {
-      prompt.style.removeProperty('display');
-    }
-  }
-};
-
+// Responsive canvas refitting when rotating or toggling fullscreen
 const refit = () => {
-  checkOrientation();
   if (!window.__game || !window.__game.scale) return;
   const gameDiv = document.getElementById('game');
   const w = window.innerWidth || document.documentElement.clientWidth;
@@ -95,48 +75,6 @@ if (window.screen && window.screen.orientation) {
   window.screen.orientation.addEventListener('change', triggerRefit);
 }
 if (window.visualViewport) window.visualViewport.addEventListener('resize', triggerRefit);
-
-// Setup portrait helper buttons (Play in Fullscreen vs Play in Portrait)
-function setupOrientationPrompt() {
-  const prompt = document.getElementById('rotate-prompt');
-  const btnFs = document.getElementById('btn-fullscreen-landscape');
-  const btnDismiss = document.getElementById('btn-portrait-dismiss');
-  if (!prompt) return;
-
-  checkOrientation();
-
-  if (btnFs) {
-    btnFs.addEventListener('click', async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen().catch(() => {});
-        } else if (document.body.requestFullscreen) {
-          await document.body.requestFullscreen().catch(() => {});
-        }
-        if (screen.orientation && screen.orientation.lock) {
-          await screen.orientation.lock('landscape').catch(() => {});
-        }
-      } catch (e) { /* ignored */ }
-      prompt.classList.add('dismissed');
-      prompt.style.setProperty('display', 'none', 'important');
-      triggerRefit();
-    });
-  }
-
-  if (btnDismiss) {
-    btnDismiss.addEventListener('click', () => {
-      prompt.classList.add('dismissed');
-      prompt.style.setProperty('display', 'none', 'important');
-      triggerRefit();
-    });
-  }
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupOrientationPrompt);
-} else {
-  setupOrientationPrompt();
-}
 
 // Developer smoke test: open http://localhost:5173/?autotest to exercise the game automatically.
 if (location.search.includes('autotest')) import('./autotest.js').then((m) => m.runAutotest(window.__game));
