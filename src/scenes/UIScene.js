@@ -7,6 +7,7 @@ import { touch, touchEnabled, resetTouch } from '../systems/Touch.js';
 import { VEHICLES } from '../entities/Vehicle.js';
 import { profile, repTitle } from '../systems/Profile.js';
 import { SUPPLIES, SUPPLY_IDS, useSupply, supplyCount } from '../systems/Supplies.js';
+import { CHAPTERS } from '../story/missions.js';
 
 // minimap: shows an 80x64 tile window around the player at 2px per tile
 // location icons on the minimap (same badges as the world map); gang hideouts and Kenny's alley appear once discovered (they join wd.pois then)
@@ -140,45 +141,46 @@ export default class UIScene extends Phaser.Scene {
     this.fpsText = label(this, 20, 78, '', 14, '#8fff8f', 0, 0).setDepth(3);
     this.zoneText = label(this, 20, 96, '', 16, '#ff6a5a', 0, 0).setDepth(3);
 
-    // mission tracker (current mission + objectives), waypoint markers and banners
+    // mission tracker / quest scroll (current mission + objectives), waypoint markers and banners
     const ty = this.touchMode ? 102 : 126;
     this.trackerY = ty;
     this.missionMinimized = false;
     this.trackG = this.add.graphics().setDepth(2);
-    this.mTitle = label(this, 30, ty + 6, '', this.touchMode ? 13 : 17, '#facc15').setDepth(3);
-    this.mObjs = this.add.text(30, ty + 26, '', {
+    this.mTitle = label(this, 34, ty + 10, '', this.touchMode ? 13 : 15, '#fde68a').setDepth(3);
+    this.mSub = label(this, 34, ty + 30, '', this.touchMode ? 10 : 11, '#c8a97e').setDepth(3);
+    this.mObjs = this.add.text(34, ty + 46, '', {
       fontFamily: FONT,
-      fontSize: (this.touchMode ? 12 : 14) + 'px',
-      color: '#e2e8f0',
-      lineSpacing: 3,
+      fontSize: (this.touchMode ? 11 : 13) + 'px',
+      color: '#e8ded1',
+      lineSpacing: 4,
       stroke: '#000',
       strokeThickness: 2,
-      wordWrap: { width: this.touchMode ? 320 : 410 }
+      wordWrap: { width: this.touchMode ? 300 : 386 }
     }).setDepth(3);
-    this.mInfo = label(this, 30, ty + 26, '', this.touchMode ? 11 : 13, '#38bdf8').setDepth(3);
+    this.mInfo = label(this, 34, ty + 26, '', this.touchMode ? 11 : 12, '#38bdf8').setDepth(3);
+    this.mHint = label(this, 34, ty + 26, '', 10, '#8c7860').setDepth(3);
 
-    const initPw = this.touchMode ? 336 : 430;
-    this.mHeaderHit = this.add.rectangle(22, ty, initPw, 28, 0xffffff, 0.0001)
+    const initPw = this.touchMode ? 336 : 410;
+    this.mHeaderHit = this.add.rectangle(24, ty, initPw, 28, 0xffffff, 0.0001)
       .setOrigin(0, 0)
       .setDepth(4)
       .setInteractive({ useHandCursor: true });
-    this.mToggleBtn = this.add.text(22 + initPw - 8, ty + 5, '[-]', {
+    this.mToggleBtn = this.add.text(24 + initPw - 8, ty + 8, this.touchMode ? '[-]' : '[Q] [-]', {
       fontFamily: FONT,
-      fontSize: (this.touchMode ? 12 : 13) + 'px',
+      fontSize: (this.touchMode ? 11 : 12) + 'px',
       fontStyle: 'bold',
-      color: '#ff944d',
-      backgroundColor: '#161f2e',
+      color: '#ffd977',
+      backgroundColor: '#261b11',
       padding: { left: 6, right: 6, top: 2, bottom: 2 }
     }).setOrigin(1, 0).setDepth(5).setInteractive({ useHandCursor: true });
 
     const toggleMission = () => {
-      sfx.click();
-      this.missionMinimized = !this.missionMinimized;
+      this.toggleMissionTracker();
     };
     this.mToggleBtn.on('pointerup', toggleMission);
     this.mHeaderHit.on('pointerup', toggleMission);
-    this.mToggleBtn.on('pointerover', () => this.mToggleBtn.setStyle({ color: '#ffffff', backgroundColor: '#ff6a2a' }));
-    this.mToggleBtn.on('pointerout', () => this.mToggleBtn.setStyle({ color: '#ff944d', backgroundColor: '#161f2e' }));
+    this.mToggleBtn.on('pointerover', () => this.mToggleBtn.setStyle({ color: '#ffffff', backgroundColor: '#614122' }));
+    this.mToggleBtn.on('pointerout', () => this.mToggleBtn.setStyle({ color: '#ffd977', backgroundColor: '#261b11' }));
     this.wpG = this.add.graphics().setDepth(4);
     this.wpTexts = [0, 1, 2, 3].map(() => label(this, 0, 0, '', 13, '#ffffff', 0.5, 0.5).setDepth(5).setVisible(false));
     this.bannerTitle = label(this, 640, 160, '', 44, '#f2e08a', 0.5, 0.5).setDepth(30).setAlpha(0);
@@ -238,6 +240,8 @@ export default class UIScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-TAB', () => this.toggleInventory());
     this.input.keyboard.on('keydown-ESC', () => this.onEsc());
     this.input.keyboard.on('keydown-I', () => this.toggleInventory());
+    this.input.keyboard.addKey('Q');
+    this.input.keyboard.on('keydown-Q', () => this.toggleMissionTracker());
 
     const g = this.game_;
     this.onToast = (m) => this.toast(m);
@@ -320,6 +324,13 @@ export default class UIScene extends Phaser.Scene {
     this.bannerSub.setText(b.sub || '').setAlpha(0);
     this.tweens.add({ targets: this.bannerTitle, alpha: 1, y: 160, duration: 300, hold: 2400, yoyo: true });
     this.tweens.add({ targets: this.bannerSub, alpha: 1, duration: 300, hold: 2400, yoyo: true });
+  }
+
+  toggleMissionTracker() {
+    if (this.game_.cine) return;
+    if (this.modalActive() || this.game_.over || this.p.dead) return;
+    sfx.click();
+    this.missionMinimized = !this.missionMinimized;
   }
 
   toggleInventory() {
@@ -1281,59 +1292,162 @@ export default class UIScene extends Phaser.Scene {
     if (this.invOpen) this.refreshInventory();
   }
 
+  drawQuestScroll(tg, x, y, pw, h, minimized) {
+    const dowelOverhang = 8;
+    const dowelH = 8;
+    const knobR = 6;
+    const topDowelY = y - 4;
+    const botDowelY = y + h - 4;
+    const knobLeftX = x - dowelOverhang - knobR + 1;
+    const knobRightX = x + pw + dowelOverhang + knobR - 1;
+
+    // --- Top Spindle Rod (Wood & Brass) ---
+    tg.fillStyle(0x2d1e11, 0.96).fillRoundedRect(x - dowelOverhang, topDowelY, pw + dowelOverhang * 2, dowelH, 3);
+    tg.fillStyle(0x614122, 0.92).fillRect(x - dowelOverhang + 2, topDowelY + 2, pw + dowelOverhang * 2 - 4, 3);
+    // Gold ferrule rings
+    tg.fillStyle(0xd4a853, 0.95).fillRect(x - 2, topDowelY, 3, dowelH);
+    tg.fillStyle(0xd4a853, 0.95).fillRect(x + pw - 1, topDowelY, 3, dowelH);
+
+    // Top Knobs
+    const topKnobY = topDowelY + dowelH / 2;
+    tg.fillStyle(0x3a2716, 1).fillCircle(knobLeftX, topKnobY, knobR);
+    tg.lineStyle(1.5, 0xd4a853, 0.95).strokeCircle(knobLeftX, topKnobY, knobR);
+    tg.fillStyle(0xfde68a, 1).fillCircle(knobLeftX, topKnobY, 2);
+
+    tg.fillStyle(0x3a2716, 1).fillCircle(knobRightX, topKnobY, knobR);
+    tg.lineStyle(1.5, 0xd4a853, 0.95).strokeCircle(knobRightX, topKnobY, knobR);
+    tg.fillStyle(0xfde68a, 1).fillCircle(knobRightX, topKnobY, 2);
+
+    // Top Paper Roll Curl
+    tg.fillStyle(0x3d2c1c, 0.95).fillRoundedRect(x, topDowelY + 3, pw, 7, 2);
+    tg.fillStyle(0x735332, 0.85).fillRect(x + 2, topDowelY + 7, pw - 4, 2);
+
+    // --- Parchment Body ---
+    tg.fillStyle(0x19130d, 0.92).fillRect(x, y + 6, pw, h - 10);
+    tg.fillStyle(0x241b12, 0.85).fillRect(x + 4, y + 8, pw - 8, h - 14);
+
+    // Antique bronze/gold outer border
+    tg.lineStyle(1.5, 0x8a6639, 0.95).strokeRect(x, y + 6, pw, h - 10);
+    // Inner fine golden hairline
+    tg.lineStyle(1, 0xd4a853, 0.35).strokeRect(x + 3, y + 9, pw - 6, h - 16);
+
+    // Left scroll wax / ribbon accent line
+    tg.fillStyle(0xd4a853, 0.85).fillRect(x + 2, y + 8, 2, h - 14);
+
+    // Corner ornate scroll brackets
+    const cs = 6;
+    tg.lineStyle(1, 0xfcd34d, 0.75);
+    tg.lineBetween(x + 5, y + 11, x + 5 + cs, y + 11);
+    tg.lineBetween(x + 5, y + 11, x + 5, y + 11 + cs);
+    tg.lineBetween(x + pw - 5, y + 11, x + pw - 5 - cs, y + 11);
+    tg.lineBetween(x + pw - 5, y + 11, x + pw - 5, y + 11 + cs);
+    tg.lineBetween(x + 5, y + h - 6, x + 5 + cs, y + h - 6);
+    tg.lineBetween(x + 5, y + h - 6, x + 5, y + h - 6 - cs);
+    tg.lineBetween(x + pw - 5, y + h - 6, x + pw - 5 - cs, y + h - 6);
+    tg.lineBetween(x + pw - 5, y + h - 6, x + pw - 5, y + h - 6 - cs);
+
+    // --- Bottom Spindle Rod (Wood & Brass) ---
+    // Bottom paper roll curl
+    tg.fillStyle(0x3d2c1c, 0.95).fillRoundedRect(x, botDowelY - 4, pw, 7, 2);
+    tg.fillStyle(0x281c10, 0.85).fillRect(x + 2, botDowelY - 4, pw - 4, 2);
+
+    tg.fillStyle(0x2d1e11, 0.96).fillRoundedRect(x - dowelOverhang, botDowelY, pw + dowelOverhang * 2, dowelH, 3);
+    tg.fillStyle(0x614122, 0.92).fillRect(x - dowelOverhang + 2, botDowelY + 2, pw + dowelOverhang * 2 - 4, 3);
+    tg.fillStyle(0xd4a853, 0.95).fillRect(x - 2, botDowelY, 3, dowelH);
+    tg.fillStyle(0xd4a853, 0.95).fillRect(x + pw - 1, botDowelY, 3, dowelH);
+
+    // Bottom Knobs
+    const botKnobY = botDowelY + dowelH / 2;
+    tg.fillStyle(0x3a2716, 1).fillCircle(knobLeftX, botKnobY, knobR);
+    tg.lineStyle(1.5, 0xd4a853, 0.95).strokeCircle(knobLeftX, botKnobY, knobR);
+    tg.fillStyle(0xfde68a, 1).fillCircle(knobLeftX, botKnobY, 2);
+
+    tg.fillStyle(0x3a2716, 1).fillCircle(knobRightX, botKnobY, knobR);
+    tg.lineStyle(1.5, 0xd4a853, 0.95).strokeCircle(knobRightX, botKnobY, knobR);
+    tg.fillStyle(0xfde68a, 1).fillCircle(knobRightX, botKnobY, 2);
+  }
+
   drawMissionHud(g, p) {
     const m = g.missions;
     const tg = this.trackG;
     tg.clear();
     const ty = this.touchMode ? (p.maxArmor > 0 ? 116 : 100) : 126;
     this.trackerY = ty;
-    const pw = this.touchMode ? 336 : 430;
-    this.mTitle.setY(ty + 6);
-    this.mObjs.setY(ty + 26);
+    const pw = this.touchMode ? 336 : 410;
+    const x = 24;
+
     let lines = [];
     let title = '';
-    const gh = g.gangJobs ? g.gangJobs.hud() : null;
+    let subTitle = '';
+    let rewardInfo = '';
     let distInfo = '';
+
+    const gh = g.gangJobs ? g.gangJobs.hud() : null;
     if (m.def && m.obj) {
-      title = (m.def.side ? 'JOB: ' : 'MISSION: ') + m.def.title.toUpperCase();
+      title = (m.def.side ? 'JOB: ' : 'QUEST: ') + m.def.title.toUpperCase();
+      if (m.def.giver) {
+        subTitle = `✦ Contractor: ${g.npcName ? g.npcName(m.def.giver) : m.def.giver}`;
+      }
+      if (m.def.chapter) {
+        const ch = CHAPTERS.find((c) => c.id === m.def.chapter);
+        if (ch) subTitle = (subTitle ? subTitle + '  •  ' : '✦ ') + ch.title;
+      }
+      if (m.def.reward) {
+        const rew = [];
+        if (m.def.reward.money) rew.push(`$${m.def.reward.money.toLocaleString()}`);
+        if (m.def.reward.rep) rew.push(`+${m.def.reward.rep} Rep`);
+        if (m.def.reward.weapon) rew.push(m.def.reward.weapon.toUpperCase());
+        if (m.def.reward.medkits) rew.push(`+${m.def.reward.medkits} Medkit`);
+        if (m.def.reward.plates) rew.push(`+${m.def.reward.plates} Plate`);
+        if (rew.length > 0) rewardInfo = `Reward: ${rew.join(' • ')}`;
+      }
+
       if (this.touchMode) {
-        lines.push('> ' + m.objectiveText());
+        lines.push('➤ ' + m.objectiveText());
       } else {
         const objs = m.def.objectives;
         for (let i = 0; i < objs.length; i++) {
           const o = objs[i];
-          if (i < m.step) { if (i >= m.step - 1) lines.push('[x] ' + o.text); continue; }
+          if (i < m.step) {
+            if (i >= m.step - 1) lines.push('✔ ' + o.text);
+            continue;
+          }
           if (o.if && i !== m.step && !o.if(m.state())) continue;
           if (lines.length >= 6) break;
-          lines.push(i === m.step ? '> ' + m.objectiveText() : '  ' + o.text);
+          lines.push(i === m.step ? '➤ ' + m.objectiveText() : '  • ' + o.text);
         }
       }
       const t = m.target();
-      if (t) distInfo = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
+      if (t) distInfo = `📍 Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
       const left = m.timeLeft();
-      if (left) distInfo += `   TIME ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
-    } else if (gh) {                                           // a gang job is the current task: same panel as the story missions
-      title = gh.title;
-      lines = gh.lines.slice(0, this.touchMode ? 1 : 5);
+      if (left) distInfo += `   ⏳ ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, '0')}`;
+    } else if (gh) {
+      title = 'JOB: ' + gh.title.toUpperCase();
+      lines = gh.lines.slice(0, this.touchMode ? 1 : 5).map((l) => (l.startsWith('>') ? '➤' + l.slice(1) : '  • ' + l));
       const t = g.gangJobs.waypoint();
-      if (t) distInfo = `Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
-      if (gh.time) distInfo += `   TIME ${Math.floor(gh.time / 60000)}:${String(Math.floor(gh.time / 1000) % 60).padStart(2, '0')}`;
+      if (t) distInfo = `📍 Distance: ${Math.round(Math.hypot(t.x - p.x, t.y - p.y) / 16)} m`;
+      if (gh.time) distInfo += `   ⏳ ${Math.floor(gh.time / 60000)}:${String(Math.floor(gh.time / 1000) % 60).padStart(2, '0')}`;
     } else {
       const n = m.nextStory();
-      if (n && !g.dialogueActive) { title = 'NEXT MISSION'; lines = [n.title + (n.giver ? `  -  see ${g.npcName(n.giver)}` : '')]; }
+      if (n && !g.dialogueActive) {
+        title = 'NEXT QUEST';
+        lines = ['• ' + n.title + (n.giver ? ` (see ${g.npcName(n.giver)})` : '')];
+      }
     }
     if (m.def && m.obj && gh && !this.touchMode) lines.push('+ ' + gh.title.toLowerCase());
 
     if (!title) {
       this.mTitle.setVisible(false);
+      this.mSub.setVisible(false);
       this.mObjs.setVisible(false);
       this.mInfo.setVisible(false);
+      this.mHint.setVisible(false);
       if (this.mToggleBtn) this.mToggleBtn.setVisible(false);
       if (this.mHeaderHit) this.mHeaderHit.setVisible(false);
     } else {
-      this.mTitle.setText(title).setVisible(true);
+      this.mTitle.setText('📜 ' + title).setX(x + 8).setVisible(true);
       if (this.mToggleBtn) {
-        this.mToggleBtn.setVisible(true).setPosition(22 + pw - 8, ty + 5);
+        this.mToggleBtn.setVisible(true).setPosition(x + pw - 8, ty + 7);
       }
       if (this.mHeaderHit) {
         this.mHeaderHit.setVisible(true);
@@ -1341,34 +1455,61 @@ export default class UIScene extends Phaser.Scene {
 
       let h = 30;
       if (this.missionMinimized) {
-        if (this.mToggleBtn) this.mToggleBtn.setText('[+]');
+        if (this.mToggleBtn) this.mToggleBtn.setText(this.touchMode ? '[+]' : '[Q] [+]');
+        this.mSub.setVisible(false);
         this.mObjs.setVisible(false);
+        this.mHint.setVisible(false);
+        this.mTitle.setY(ty + 8);
         if (distInfo) {
-          this.mInfo.setText(distInfo).setY(ty + (this.touchMode ? 22 : 25)).setVisible(true);
-          h = this.touchMode ? 38 : 44;
+          this.mInfo.setText(distInfo).setX(x + 10).setY(ty + (this.touchMode ? 24 : 26)).setVisible(true);
+          h = this.touchMode ? 42 : 46;
         } else {
           this.mInfo.setVisible(false);
-          h = this.touchMode ? 26 : 30;
+          h = this.touchMode ? 28 : 32;
         }
-        if (this.mHeaderHit) this.mHeaderHit.setPosition(22, ty).setSize(pw, h);
+        if (this.mHeaderHit) this.mHeaderHit.setPosition(x, ty).setSize(pw, h);
       } else {
-        if (this.mToggleBtn) this.mToggleBtn.setText('[-]');
-        this.mObjs.setText(lines.join('\n')).setVisible(true);
-        if (distInfo) {
-          this.mInfo.setText(distInfo).setY(ty + 28 + this.mObjs.height).setVisible(true);
+        if (this.mToggleBtn) this.mToggleBtn.setText(this.touchMode ? '[-]' : '[Q] [-]');
+        this.mTitle.setY(ty + 8);
+
+        let curY = ty + 28;
+        if (subTitle) {
+          this.mSub.setText(subTitle).setX(x + 10).setY(curY).setVisible(true);
+          curY += 18;
+        } else {
+          this.mSub.setVisible(false);
+        }
+
+        curY += 6;
+
+        this.mObjs.setText(lines.join('\n')).setX(x + 10).setY(curY).setVisible(true);
+        curY += this.mObjs.height + 6;
+
+        let combinedInfo = distInfo;
+        if (rewardInfo) combinedInfo = (combinedInfo ? combinedInfo + '\n' : '') + `💰 ${rewardInfo}`;
+        if (combinedInfo) {
+          this.mInfo.setText(combinedInfo).setX(x + 10).setY(curY).setVisible(true);
+          curY += this.mInfo.height + 6;
         } else {
           this.mInfo.setVisible(false);
         }
-        h = 32 + this.mObjs.height + (this.mInfo.visible ? 20 : 8);
-        if (this.mHeaderHit) this.mHeaderHit.setPosition(22, ty).setSize(pw, 26);
+
+        const hintText = this.touchMode ? 'Tap header to minimize' : '[Q] or click header to minimize';
+        this.mHint.setText(hintText).setX(x + 10).setY(curY).setVisible(true);
+        curY += this.mHint.height + 8;
+
+        h = curY - ty + 2;
+        if (this.mHeaderHit) this.mHeaderHit.setPosition(x, ty).setSize(pw, 28);
       }
 
-      // Modern City of Chaos dark slate card styling with cyber orange accent
-      tg.fillStyle(0x0c1017, 0.88).fillRect(22, ty, pw, h);
-      tg.lineStyle(1.5, 0x263346, 0.95).strokeRect(22, ty, pw, h);
-      tg.fillStyle(0xff6a2a, 0.95).fillRect(22, ty, 3, h);
-      if (!this.missionMinimized && lines.length > 0) {
-        tg.lineStyle(1, 0x1e293b, 0.8).lineBetween(25, ty + (this.touchMode ? 22 : 25), 22 + pw, ty + (this.touchMode ? 22 : 25));
+      // Paint the complete authentic quest scroll with spindles, knobs, and aged parchment
+      this.drawQuestScroll(tg, x, ty, pw, h, this.missionMinimized);
+
+      // Decorative inner divider lines for maximized state
+      if (!this.missionMinimized) {
+        const sepY = ty + (subTitle ? 46 : 28);
+        tg.lineStyle(1, 0x8a6639, 0.6).lineBetween(x + 10, sepY, x + pw - 10, sepY);
+        tg.fillStyle(0xd4a853, 0.9).fillRect(x + pw / 2 - 2, sepY - 2, 4, 4);
       }
     }
     // waypoint markers (on screen: a pin with distance; off screen: an arrow at the screen edge)
