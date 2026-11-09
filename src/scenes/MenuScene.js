@@ -6,12 +6,14 @@ import { latestSlot, loadGameInto } from '../systems/Save.js';
 import { resetProfile } from '../systems/Profile.js';
 import { goImmersive } from '../systems/Touch.js';
 import { GAME_TITLE, TH, buildLogo, cityBackdrop, menuList, confirmBox, exitFlow } from '../ui/menuUi.js';
+import { triggerRefit } from '../main.js';
 
 /* The main menu: the title logo over an animated dusk view of the city (real game tiles, cars, lamps), a keyboard / mouse menu list on the left. */
 export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create() {
+    triggerRefit();
     music.set('menu');
     this.input.setDefaultCursor('default');
     this.cameras.main.setBackgroundColor('#080b12');
