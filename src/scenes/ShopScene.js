@@ -33,13 +33,16 @@ export default class ShopScene extends Phaser.Scene {
   create() {
     this.gs = this.scene.get('Game');
     this.input.setDefaultCursor('default');
-    this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.7).setInteractive();
-    this.add.rectangle(640, 360, 940, 580, 0x141d12).setStrokeStyle(4, 0x6b8f5a);
-    label(this, 640, 100, this.shopName.toUpperCase(), 30, '#f2e08a', 0.5, 0.5);
-    this.moneyText = label(this, 1080, 100, '', 20, '#ffd070', 1, 0.5);
+    this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.72).setInteractive();
+    this.add.rectangle(640, 360, 940, 580, 0x0c1017).setStrokeStyle(3, 0xff6a2a);
+    const hBar = this.add.rectangle(640, 100, 940, 48, 0x131924).setOrigin(0.5, 0.5);
+    this.add.rectangle(590, 122, 100, 2, 0xff6a2a);
+    this.add.rectangle(670, 122, 60, 2, 0x38bdf8);
+    label(this, 640, 100, this.shopName.toUpperCase(), 26, '#f8fafc', 0.5, 0.5);
+    this.moneyText = label(this, 1080, 100, '', 18, '#ffd070', 1, 0.5);
     this.rows = [];
-    this.msg = label(this, 640, 640, '', 16, '#9fe8a0', 0.5, 0.5);
-    button(this, 640, 600, 'CLOSE', () => this.close(), { w: 180, h: 40, size: 18 });
+    this.msg = label(this, 640, 640, '', 15, '#4ade80', 0.5, 0.5);
+    button(this, 640, 600, 'CLOSE', () => this.close(), { w: 180, h: 40, size: 18, fill: 0x1e2738, stroke: 0x38bdf8 });
     this.input.keyboard.on('keydown-ESC', () => this.close());
     this.build();
   }
@@ -57,12 +60,12 @@ export default class ShopScene extends Phaser.Scene {
       const price = Math.round(e.price * disc);
       const locked = e.rep && profile.rep < e.rep;
       const owned = e.kind === 'outfit' && profile.outfits.includes(e.id);
-      const bg = this.add.rectangle(200, y, 880, rowH - 6, 0x1f2c1b).setOrigin(0, 0).setStrokeStyle(2, 0x44603c);
-      const name = label(this, 214, y + hh, e.label, 18, locked ? '#777' : '#ffffff', 0, 0.5);
+      const bg = this.add.rectangle(200, y, 880, rowH - 6, 0x141a26).setOrigin(0, 0).setStrokeStyle(1.5, 0x263346);
+      const name = label(this, 214, y + hh, e.label, 18, locked ? '#64748b' : '#ffffff', 0, 0.5);
       const extra = e.kind === 'vehicle' ? `${e.label}: top ${Math.round(VEHICLES[e.id].max * 0.4)} km/h` : locked ? `Requires reputation ${e.rep}` : '';
-      const sub = label(this, 560, y + hh, extra, 13, '#9db890', 0, 0.5);
-      const priceT = label(this, 880, y + hh, owned ? 'OWNED' : `$${price}`, 18, owned ? '#7aff9a' : '#ffd070', 1, 0.5);
-      const btn = button(this, 990, y + hh, owned ? 'WEAR' : locked ? 'LOCKED' : 'BUY', () => { if (!locked) this.buy(e, price, owned); }, { w: 100, h: 32, size: 15 });
+      const sub = label(this, 560, y + hh, extra, 13, '#94a3b8', 0, 0.5);
+      const priceT = label(this, 880, y + hh, owned ? 'OWNED' : `$${price}`, 18, owned ? '#4ade80' : '#ffd070', 1, 0.5);
+      const btn = button(this, 990, y + hh, owned ? 'WEAR' : locked ? 'LOCKED' : 'BUY', () => { if (!locked) this.buy(e, price, owned); }, { w: 100, h: 32, size: 15, fill: owned ? 0x0284c7 : 0x1e2738, stroke: owned ? 0x38bdf8 : 0xff6a2a });
       this.rows.push(bg, name, sub, priceT, btn);
     });
   }

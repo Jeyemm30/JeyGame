@@ -28,28 +28,28 @@ export default class StoreScene extends Phaser.Scene {
     this.input.setDefaultCursor('default');
 
     this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.72).setInteractive();
-    this.add.rectangle(640, 360, 1060, 640, 0x141d12).setStrokeStyle(4, 0x6b8f5a);
-    label(this, 150, 70, this.shopName.toUpperCase(), 30, '#f2e08a', 0, 0.5);
-    label(this, 150, 104, `${this.store.type}  -  ${this.store.tagline}`, 15, '#9db890', 0, 0.5);
-    this.moneyText = label(this, 1130, 70, '', 24, '#ffd070', 1, 0.5);
-    this.discText = label(this, 1130, 102, '', 13, '#7aff9a', 1, 0.5);
-    this.add.rectangle(640, 124, 1000, 2, 0x44603c);
+    this.add.rectangle(640, 360, 1060, 640, 0x0c1017).setStrokeStyle(3, 0xff6a2a);
+    label(this, 150, 70, this.shopName.toUpperCase(), 28, '#f8fafc', 0, 0.5);
+    label(this, 150, 104, `${this.store.type}  -  ${this.store.tagline}`, 14, '#94a3b8', 0, 0.5);
+    this.moneyText = label(this, 1130, 70, '', 22, '#ffd070', 1, 0.5);
+    this.discText = label(this, 1130, 102, '', 13, '#4ade80', 1, 0.5);
+    this.add.rectangle(640, 124, 1000, 2, 0x263346);
 
     // categories
     this.catBtns = this.store.cats.map((c, i) => {
-      const b = button(this, 250, 170 + i * 52, c.name.toUpperCase(), () => { this.catIdx = i; this.build(); }, { w: 170, h: 42, size: 15 });
+      const b = button(this, 250, 170 + i * 52, c.name.toUpperCase(), () => { this.catIdx = i; this.build(); }, { w: 170, h: 42, size: 15, fill: 0x141a26, stroke: 0x38bdf8 });
       return b;
     });
-    label(this, 250, 150, 'CATEGORIES', 12, '#6f8a64', 0.5, 0.5);
+    label(this, 250, 150, 'CATEGORIES', 12, '#ffb070', 0.5, 0.5);
 
     // footer
-    this.add.rectangle(640, 566, 1000, 2, 0x44603c);
-    this.cartText = label(this, 150, 596, '', 18, '#e8f2e0', 0, 0.5);
-    this.totalText = label(this, 150, 626, '', 24, '#ffd070', 0, 0.5);
-    this.msg = label(this, 640, 536, '', 16, '#9fe8a0', 0.5, 0.5);
-    button(this, 790, 612, 'CLEAR', () => { this.cart = {}; this.msg.setText(''); this.build(); }, { w: 130, h: 44, size: 16 });
-    this.buyBtn = button(this, 940, 612, 'BUY', () => this.tryBuy(), { w: 150, h: 48, size: 20 });
-    button(this, 1086, 612, 'CLOSE', () => this.close(), { w: 130, h: 44, size: 16 });
+    this.add.rectangle(640, 566, 1000, 2, 0x263346);
+    this.cartText = label(this, 150, 596, '', 16, '#e2e8f0', 0, 0.5);
+    this.totalText = label(this, 150, 626, '', 22, '#ffd070', 0, 0.5);
+    this.msg = label(this, 640, 536, '', 15, '#4ade80', 0.5, 0.5);
+    button(this, 790, 612, 'CLEAR', () => { this.cart = {}; this.msg.setText(''); this.build(); }, { w: 130, h: 44, size: 16, fill: 0x1e2738, stroke: 0x64748b });
+    this.buyBtn = button(this, 940, 612, 'BUY', () => this.tryBuy(), { w: 150, h: 48, size: 20, fill: 0x0284c7, stroke: 0x38bdf8 });
+    button(this, 1086, 612, 'CLOSE', () => this.close(), { w: 130, h: 44, size: 16, fill: 0x1e2738, stroke: 0xff6a2a });
     this.input.keyboard.on('keydown-ESC', () => { if (this.confirmBox) this.closeConfirm(); else this.close(); });
 
     this.build();
@@ -84,17 +84,17 @@ export default class StoreScene extends Phaser.Scene {
     this.items().forEach(([id, base], i) => {
       const y = 150 + i * ROW_H, x0 = 350, w = 790;
       const it = ITEMS[id], owned = canTake(this.p, id) === 0, q = this.cart[id] || 0, pr = this.price(id, base);
-      const bg = this.add.rectangle(x0, y, w, ROW_H - 8, q ? 0x25361f : 0x1b261a).setOrigin(0, 0).setStrokeStyle(2, q ? 0x7aa86a : 0x44603c);
-      const iconBg = this.add.rectangle(x0 + 8, y + 7, 48, 48, 0x0f160e).setOrigin(0, 0).setStrokeStyle(1, 0x44603c);
+      const bg = this.add.rectangle(x0, y, w, ROW_H - 8, q ? 0x1a2638 : 0x141a26).setOrigin(0, 0).setStrokeStyle(1.5, q ? 0x38bdf8 : 0x263346);
+      const iconBg = this.add.rectangle(x0 + 8, y + 7, 48, 48, 0x101520).setOrigin(0, 0).setStrokeStyle(1, 0x263346);
       const icon = this.add.image(x0 + 32, y + 31, itemIcon(id)).setOrigin(0.5);
       icon.setScale(Math.min(1.6, 40 / Math.max(icon.width, icon.height)));
-      const name = label(this, x0 + 70, y + 16, it.label, 18, owned ? '#8a9a82' : '#ffffff', 0, 0.5);
-      const desc = label(this, x0 + 70, y + 40, itemDesc(id), 12, '#9db890', 0, 0.5);
+      const name = label(this, x0 + 70, y + 16, it.label, 18, owned ? '#64748b' : '#ffffff', 0, 0.5);
+      const desc = label(this, x0 + 70, y + 40, itemDesc(id), 12, '#94a3b8', 0, 0.5);
       const price = label(this, x0 + 530, y + 27, `$${pr}`, 20, '#ffd070', 1, 0.5);
-      const minus = button(this, x0 + 585, y + 27, '-', () => this.setQty(id, -1), { w: 38, h: 38, size: 22 });
-      const qty = label(this, x0 + 640, y + 27, owned && !q ? 'OWNED' : String(q), owned && !q ? 12 : 20, q ? '#7aff9a' : '#ffffff', 0.5, 0.5);
-      const plus = button(this, x0 + 695, y + 27, '+', () => this.setQty(id, 1), { w: 38, h: 38, size: 22 });
-      const sub = q ? label(this, x0 + w - 12, y + 52, `= $${q * pr}`, 12, '#7aff9a', 1, 0.5) : null;
+      const minus = button(this, x0 + 585, y + 27, '-', () => this.setQty(id, -1), { w: 38, h: 38, size: 22, fill: 0x1e2738, stroke: 0x38bdf8 });
+      const qty = label(this, x0 + 640, y + 27, owned && !q ? 'OWNED' : String(q), owned && !q ? 12 : 20, q ? '#4ade80' : '#ffffff', 0.5, 0.5);
+      const plus = button(this, x0 + 695, y + 27, '+', () => this.setQty(id, 1), { w: 38, h: 38, size: 22, fill: 0x1e2738, stroke: 0x38bdf8 });
+      const sub = q ? label(this, x0 + w - 12, y + 52, `= $${q * pr}`, 12, '#4ade80', 1, 0.5) : null;
       this.rows.push(bg, iconBg, icon, name, desc, price, minus, qty, plus);
       if (sub) this.rows.push(sub);
     });
@@ -118,8 +118,8 @@ export default class StoreScene extends Phaser.Scene {
     const lines = this.cartLines(), n = lines.reduce((s, l) => s + l.q, 0);
     const c = this.add.container(0, 0).setDepth(20);
     const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.6).setInteractive();
-    const box = this.add.rectangle(640, 360, 560, 80 + Math.min(6, lines.length) * 26 + 120, 0x1a2618).setStrokeStyle(4, 0xf2e08a);
-    c.add([dim, box, label(this, 640, 360 - box.height / 2 + 34, 'CONFIRM PURCHASE', 24, '#f2e08a', 0.5, 0.5)]);
+    const box = this.add.rectangle(640, 360, 560, 80 + Math.min(6, lines.length) * 26 + 120, 0x141a26).setStrokeStyle(3, 0xff6a2a);
+    c.add([dim, box, label(this, 640, 360 - box.height / 2 + 34, 'CONFIRM PURCHASE', 22, '#f8fafc', 0.5, 0.5)]);
     lines.slice(0, 6).forEach((l, i) => c.add(label(this, 400, 360 - box.height / 2 + 74 + i * 26, `${l.q} x ${ITEMS[l.id].label}`, 16, '#e8f2e0', 0, 0.5)));
     lines.slice(0, 6).forEach((l, i) => c.add(label(this, 880, 360 - box.height / 2 + 74 + i * 26, `$${l.q * l.price}`, 16, '#ffd070', 1, 0.5)));
     const by = 360 + box.height / 2 - 78;

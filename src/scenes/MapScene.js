@@ -129,8 +129,8 @@ export default class MapScene extends Phaser.Scene {
     // legend with toggles
     const gf = (profile.flags.gangs && profile.flags.gangs.found) || {};
     const LG = (profile.flags.kennyFound ? LEGEND.concat([['kenny', "Kenny's Arms"]]) : LEGEND).concat([['gang_blue', 'Cobalt Wolves'], ['gang_purple', 'Violet Vultures'], ['gang_green', 'Emerald Vipers']].filter(([t]) => gf[t.slice(5)]));
-    this.add.rectangle(110, 360, 200, LG.length * 34 + 52, 0x0e151c, 0.88).setStrokeStyle(2, 0x44603c).setDepth(D);
-    label(this, 110, 360 - (LG.length * 34) / 2 - 12, 'LEGEND', 15, '#f2e08a', 0.5, 0.5).setDepth(D + 1);
+    this.add.rectangle(110, 360, 200, LG.length * 34 + 52, 0x0e151c, 0.88).setStrokeStyle(2, 0x263346).setDepth(D);
+    label(this, 110, 360 - (LG.length * 34) / 2 - 12, 'LEGEND', 15, '#ffb070', 0.5, 0.5).setDepth(D + 1);
     this.legendRows = LG.map(([type, name], i) => {
       const y = 360 - (LG.length * 34) / 2 + 20 + i * 34;
       const count = this.wd.pois.filter((p) => p.type === type).length;

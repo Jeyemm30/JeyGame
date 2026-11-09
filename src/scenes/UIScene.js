@@ -169,7 +169,7 @@ export default class UIScene extends Phaser.Scene {
     this.ysTxt = this.add.text(0, 0, '?', { fontFamily: '"Courier New", monospace', fontSize: '15px', fontStyle: 'bold', color: '#ffd23a', stroke: '#000', strokeThickness: 3 }).setOrigin(0.5).setDepth(5).setVisible(false);
     // minimap (click it to open the full-screen world map)
     this.mmImg = this.add.image(MM_X, MM_Y, 'minimap').setOrigin(0, 0).setScale(MM_SCALE).setDepth(1);
-    this.mmFrame = this.add.rectangle(MM_X - 3, MM_Y - 3, MM_W + 6, MM_H + 6).setOrigin(0, 0).setStrokeStyle(3, 0x6b8f5a).setDepth(2);
+    this.mmFrame = this.add.rectangle(MM_X - 3, MM_Y - 3, MM_W + 6, MM_H + 6).setOrigin(0, 0).setStrokeStyle(3, 0xff6a2a).setDepth(2);
     this.mmDots = this.add.graphics().setDepth(2);
     this.mmHit = this.add.rectangle(MM_X, MM_Y, MM_W, MM_H, 0xffffff, 0.001).setOrigin(0, 0).setDepth(6).setInteractive({ useHandCursor: true });
     this.mmHit.on('pointerup', () => { sfx.click(); this.openMap(); });
@@ -178,7 +178,7 @@ export default class UIScene extends Phaser.Scene {
     // compass: the arrow always points world-north
     this.compass = this.add.container(MM_X + 17, MM_Y + 17).setDepth(4).setScale(0.62);
     const cbg = this.add.graphics();
-    cbg.fillStyle(0x0e151c, 0.8).fillCircle(0, 0, 21); cbg.lineStyle(2, 0x6b8f5a, 1).strokeCircle(0, 0, 21);
+    cbg.fillStyle(0x0e151c, 0.8).fillCircle(0, 0, 21); cbg.lineStyle(2, 0xff6a2a, 1).strokeCircle(0, 0, 21);
     cbg.fillStyle(0xe04a3a, 1).fillTriangle(0, -17, -6, 2, 6, 2); cbg.fillStyle(0xd8e2d0, 1).fillTriangle(0, 17, -6, 2, 6, 2);
     const cn = label(this, 0, -30, 'N', 12, '#ffffff', 0.5, 0.5);
     this.compass.add([cbg, cn]);
@@ -189,7 +189,7 @@ export default class UIScene extends Phaser.Scene {
 
     // vehicle HUD
     this.speedText = label(this, 640, 636, '', 40, '#ffffff', 0.5, 0.5).setDepth(3);
-    this.speedSub = label(this, 640, 668, '', 14, '#bcd0b0', 0.5, 0.5).setDepth(3);
+    this.speedSub = label(this, 640, 668, '', 14, '#94a3b8', 0.5, 0.5).setDepth(3);
 
     // centre messages
     this.prompt = label(this, 640, 560, '', this.touchMode ? 16 : 22, '#ffffff', 0.5, 0.5).setDepth(3);
@@ -324,15 +324,21 @@ export default class UIScene extends Phaser.Scene {
   buildInventory() {
     const c = this.add.container(0, 0).setDepth(50).setVisible(false);
     this.inv = c;
-    const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.68).setInteractive();
+    const dim = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.72).setInteractive();
     dim.on('pointerup', () => this.toggleInventory());
-    const panel = this.add.rectangle(640, 360, 1140, 590, 0x151d12).setStrokeStyle(4, 0x6b8f5a).setInteractive();
+    const panel = this.add.rectangle(640, 360, 1140, 590, 0x0c1017).setStrokeStyle(3, 0xff6a2a).setInteractive();
+    const headerBg = this.add.rectangle(640, 92, 1140, 48, 0x131924).setOrigin(0.5, 0.5);
+    const lineAccent1 = this.add.rectangle(570, 114, 140, 2, 0xff6a2a);
+    const lineAccent2 = this.add.rectangle(670, 114, 80, 2, 0x38bdf8);
     c.add([
       dim,
       panel,
-      label(this, 640, 92, 'EQUIPMENT LOADOUT & INVENTORY', 24, '#f2e08a', 0.5, 0.5),
-      label(this, 640, 640, this.touchMode ? 'Tap slots or items to customize loadout - Tap X to close' : 'Keys 1-4: [1] Primary (Hand)  [2] Secondary (Back)  [3] Food  [4] Medical - TAB / ESC to close', 13, '#7f9a72', 0.5, 0.5),
-      button(this, 1150, 92, 'X', () => this.toggleInventory(), { w: 46, h: 36, size: 20 })
+      headerBg,
+      lineAccent1,
+      lineAccent2,
+      label(this, 640, 92, 'EQUIPMENT LOADOUT & INVENTORY', 22, '#f8fafc', 0.5, 0.5),
+      label(this, 640, 640, this.touchMode ? 'Tap slots or items to customize loadout - Tap X to close' : 'Keys 1-4: [1] Primary (Hand)  [2] Secondary (Back)  [3] Food  [4] Medical - TAB / ESC to close', 12, '#94a3b8', 0.5, 0.5),
+      button(this, 1150, 92, 'X', () => this.toggleInventory(), { w: 42, h: 32, size: 18, fill: 0x1e2738, stroke: 0xef4444 })
     ]);
 
     // ---- 4 customizable equipment loadout cards across the top ----
@@ -346,13 +352,13 @@ export default class UIScene extends Phaser.Scene {
 
     for (let i = 0; i < 4; i++) {
       const cx = 90 + i * 276;
-      const cy = 114;
-      const bg = this.add.rectangle(cx, cy, 266, 68, 0x1a2618).setOrigin(0, 0).setStrokeStyle(2, 0x44603c).setInteractive({ useHandCursor: true });
-      const tag = label(this, cx + 8, cy + 6, cardDefs[i].title, 11, '#9db890');
+      const cy = 118;
+      const bg = this.add.rectangle(cx, cy, 266, 68, 0x141a26).setOrigin(0, 0).setStrokeStyle(1.5, 0x263346).setInteractive({ useHandCursor: true });
+      const tag = label(this, cx + 8, cy + 6, cardDefs[i].title, 11, '#94a3b8');
       const badge = label(this, cx + 258, cy + 6, '', 10, '#ffd070', 1, 0);
       const icon = this.add.image(cx + 8, cy + 44, 'm_stick').setOrigin(0, 0.5);
       const name = label(this, cx + 50, cy + 24, 'Empty', 13, '#ffffff');
-      const info = label(this, cx + 50, cy + 44, cardDefs[i].subDef, 11, '#bcd0b0');
+      const info = label(this, cx + 50, cy + 44, cardDefs[i].subDef, 11, '#94a3b8');
 
       bg.on('pointerup', () => {
         const p = this.p;
@@ -429,16 +435,16 @@ export default class UIScene extends Phaser.Scene {
         c1.info.setText(isM ? `Dmg ${def.dmg}` : `Mag ${p.weapons[w1].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`);
         const act = (p.current === w1);
         c1.badge.setText(act ? 'IN HAND' : 'READY');
-        c1.badge.setColor(act ? '#f2e08a' : '#7aff9a');
-        c1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+        c1.badge.setColor(act ? '#facc15' : '#4ade80');
+        c1.bg.setStrokeStyle(2, act ? 0xff8a3a : 0x0284c7);
       } else {
         c1.icon.setVisible(false);
         c1.name.setText('Bare Hands (Fists)');
         c1.info.setText('Dmg 8 (Punch)');
         const act = (p.current === 'fists');
         c1.badge.setText(act ? 'IN HAND' : 'UNARMED');
-        c1.badge.setColor(act ? '#f2e08a' : '#889980');
-        c1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x2c3a28);
+        c1.badge.setColor(act ? '#facc15' : '#64748b');
+        c1.bg.setStrokeStyle(1.5, act ? 0xff8a3a : 0x263346);
       }
 
       // Slot 2: Secondary Weapon (Back)
@@ -453,15 +459,15 @@ export default class UIScene extends Phaser.Scene {
         c2.info.setText(isM ? `Dmg ${def.dmg}` : `Mag ${p.weapons[w2].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`);
         const act = (p.current === w2);
         c2.badge.setText(act ? 'IN HAND' : 'ON BACK');
-        c2.badge.setColor(act ? '#f2e08a' : '#7aff9a');
-        c2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
+        c2.badge.setColor(act ? '#facc15' : '#38bdf8');
+        c2.bg.setStrokeStyle(2, act ? 0xff8a3a : 0x0284c7);
       } else {
         c2.icon.setVisible(false);
         c2.name.setText('Empty (Back)');
         c2.info.setText('Click [2] on weapon below');
         c2.badge.setText('NONE');
-        c2.badge.setColor('#777777');
-        c2.bg.setStrokeStyle(1.5, 0x2c3a28);
+        c2.badge.setColor('#64748b');
+        c2.bg.setStrokeStyle(1.5, 0x263346);
       }
 
       // Slot 3: Food / Consumable
@@ -474,23 +480,23 @@ export default class UIScene extends Phaser.Scene {
         c3.name.setText(SUPPLIES[s3].label);
         c3.info.setText(`Owned: x${count}  (${SUPPLIES[s3].heal ? '+' + SUPPLIES[s3].heal + ' HP' : ''} ${SUPPLIES[s3].stamina ? '+' + SUPPLIES[s3].stamina + ' ST' : ''})`);
         c3.badge.setText('READY');
-        c3.badge.setColor('#ffe9a0');
-        c3.bg.setStrokeStyle(2, 0x5a7e4e);
+        c3.badge.setColor('#facc15');
+        c3.bg.setStrokeStyle(2, 0xeab308);
       } else if (s3 && SUPPLIES[s3]) {
         c3.icon.setTexture('sp_' + s3).setVisible(true);
         c3.icon.setScale(Math.min(1.2, 36 / Math.max(c3.icon.width, 16)));
         c3.name.setText(SUPPLIES[s3].label);
         c3.info.setText('Owned: 0 (Depleted)');
         c3.badge.setText('DEPLETED');
-        c3.badge.setColor('#ff6a5a');
-        c3.bg.setStrokeStyle(1.5, 0x2c3a28);
+        c3.badge.setColor('#ef4444');
+        c3.bg.setStrokeStyle(1.5, 0x263346);
       } else {
         c3.icon.setVisible(false);
         c3.name.setText('Empty');
         c3.info.setText('Click a food item below');
         c3.badge.setText('NONE');
-        c3.badge.setColor('#777777');
-        c3.bg.setStrokeStyle(1.5, 0x2c3a28);
+        c3.badge.setColor('#64748b');
+        c3.bg.setStrokeStyle(1.5, 0x263346);
       }
 
       // Slot 4: Medkit / Medical Items
@@ -503,8 +509,8 @@ export default class UIScene extends Phaser.Scene {
         c4.name.setText('Medkits');
         c4.info.setText(`Owned: ${count} / ${p.medCap()} (+50 HP)`);
         c4.badge.setText(count > 0 ? 'READY' : 'DEPLETED');
-        c4.badge.setColor(count > 0 ? '#ff7a7a' : '#ff6a5a');
-        c4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x2c3a28);
+        c4.badge.setColor(count > 0 ? '#f87171' : '#ef4444');
+        c4.bg.setStrokeStyle(2, count > 0 ? 0xef4444 : 0x263346);
       } else if (SUPPLIES[s4]) {
         const count = p.supplies[s4] || 0;
         c4.icon.setTexture('sp_' + s4).setVisible(true);
@@ -512,8 +518,8 @@ export default class UIScene extends Phaser.Scene {
         c4.name.setText(SUPPLIES[s4].label);
         c4.info.setText(`Owned: x${count} (+${SUPPLIES[s4].heal || 0} HP)`);
         c4.badge.setText(count > 0 ? 'READY' : 'DEPLETED');
-        c4.badge.setColor(count > 0 ? '#ffe9a0' : '#ff6a5a');
-        c4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x2c3a28);
+        c4.badge.setColor(count > 0 ? '#facc15' : '#ef4444');
+        c4.bg.setStrokeStyle(2, count > 0 ? 0x0284c7 : 0x263346);
       }
     }
 
@@ -546,10 +552,10 @@ export default class UIScene extends Phaser.Scene {
     // LEFT SIDE: OWNED WEAPONS (x: 90 .. 770)
     // ==========================================
     // FIREARMS (only owned guns)
-    this.invBody.add(label(this, 90, 196, `OWNED FIREARMS (${ownedGuns.length})`, 14, '#9db890'));
+    this.invBody.add(label(this, 90, 198, `OWNED FIREARMS (${ownedGuns.length})`, 13, '#ffb070'));
     let nextY = 220;
     if (ownedGuns.length === 0) {
-      this.invBody.add(label(this, 90, 222, 'No firearms in inventory. (Find weapons or visit arms dealers)', 12, '#7a9270'));
+      this.invBody.add(label(this, 90, 222, 'No firearms in inventory. (Find weapons or visit arms dealers)', 12, '#94a3b8'));
       nextY = 252;
     } else {
       ownedGuns.forEach((id, idx) => {
@@ -560,24 +566,24 @@ export default class UIScene extends Phaser.Scene {
         const isS2 = (p.slots[2] === id);
         const isActive = (p.current === id);
 
-        const bg = this.add.rectangle(gx, gy, 224, 42, 0x1f2c1b).setOrigin(0, 0)
-          .setStrokeStyle(2, isActive ? 0xf2e08a : (isS1 || isS2 ? 0x6b8f5a : 0x44603c))
+        const bg = this.add.rectangle(gx, gy, 224, 42, 0x141a26).setOrigin(0, 0)
+          .setStrokeStyle(2, isActive ? 0xff8a3a : (isS1 || isS2 ? 0x0284c7 : 0x263346))
           .setInteractive({ useHandCursor: true });
         bg.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Equipped ${def.name} in hand`); this.refreshInventory(); });
 
         const icon = this.add.image(gx + 6, gy + 21, def.gun).setOrigin(0, 0.5);
         icon.setScale(Math.min(1.2, 40 / Math.max(icon.width, 16)));
         const name = label(this, gx + 48, gy + 4, def.name, 12, '#ffffff');
-        const info = label(this, gx + 48, gy + 25, `${p.weapons[id].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`, 10, '#bcd0b0');
+        const info = label(this, gx + 48, gy + 25, `${p.weapons[id].mag}/${def.mag}  Res ${p.ammo[def.ammo]}`, 10, '#94a3b8');
 
         // Button [1] (Primary)
-        const btn1 = this.add.rectangle(gx + 172, gy + 21, 22, 26, isS1 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
-        const txt1 = label(this, gx + 172, gy + 21, isS1 ? '1*' : '1', 11, isS1 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        const btn1 = this.add.rectangle(gx + 172, gy + 21, 22, 26, isS1 ? 0xff6a2a : 0x1a2230).setStrokeStyle(1.5, isS1 ? 0xffa04a : 0x334155).setInteractive({ useHandCursor: true });
+        const txt1 = label(this, gx + 172, gy + 21, isS1 ? '1*' : '1', 11, isS1 ? '#0b0f17' : '#ffffff', 0.5, 0.5);
         btn1.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Assigned ${def.name} to Primary (Key 1)`); this.refreshInventory(); });
 
         // Button [2] (Secondary / Back)
-        const btn2 = this.add.rectangle(gx + 200, gy + 21, 22, 26, isS2 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
-        const txt2 = label(this, gx + 200, gy + 21, isS2 ? '2*' : '2', 11, isS2 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        const btn2 = this.add.rectangle(gx + 200, gy + 21, 22, 26, isS2 ? 0x0284c7 : 0x1a2230).setStrokeStyle(1.5, isS2 ? 0x38bdf8 : 0x334155).setInteractive({ useHandCursor: true });
+        const txt2 = label(this, gx + 200, gy + 21, isS2 ? '2*' : '2', 11, isS2 ? '#0b0f17' : '#ffffff', 0.5, 0.5);
         btn2.on('pointerup', () => { p.assignSlot(2, id); this.toast(`Assigned ${def.name} to Secondary (Key 2, on back)`); this.refreshInventory(); });
 
         this.invBody.add([bg, icon, name, info, btn1, txt1, btn2, txt2]);
@@ -586,9 +592,9 @@ export default class UIScene extends Phaser.Scene {
     }
 
     // MELEE WEAPONS (only owned melee)
-    this.invBody.add(label(this, 90, nextY, `OWNED MELEE WEAPONS (${ownedMelee.length})`, 14, '#9db890'));
+    this.invBody.add(label(this, 90, nextY, `OWNED MELEE WEAPONS (${ownedMelee.length})`, 13, '#ffb070'));
     if (ownedMelee.length === 0) {
-      this.invBody.add(label(this, 90, nextY + 24, 'No melee weapons in inventory.', 12, '#7a9270'));
+      this.invBody.add(label(this, 90, nextY + 24, 'No melee weapons in inventory.', 12, '#94a3b8'));
     } else {
       ownedMelee.forEach((id, idx) => {
         const col = idx % 3, row = Math.floor(idx / 3);
@@ -598,49 +604,55 @@ export default class UIScene extends Phaser.Scene {
         const isS2 = (p.slots[2] === id);
         const isActive = (p.current === id);
 
-        const bg = this.add.rectangle(mx, my, 224, 42, 0x1f2c1b).setOrigin(0, 0)
-          .setStrokeStyle(2, isActive ? 0xf2e08a : (isS1 || isS2 ? 0x6b8f5a : 0x44603c))
+        const bg = this.add.rectangle(mx, my, 224, 42, 0x141a26).setOrigin(0, 0)
+          .setStrokeStyle(2, isActive ? 0xff8a3a : (isS1 || isS2 ? 0x0284c7 : 0x263346))
           .setInteractive({ useHandCursor: true });
         bg.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Equipped ${def.name} in hand`); this.refreshInventory(); });
 
         const icon = this.add.image(mx + 6, my + 21, def.tex).setOrigin(0, 0.5);
         icon.setScale(Math.min(1.2, 40 / Math.max(icon.width, 16)));
         const name = label(this, mx + 48, my + 4, def.name, 12, '#ffffff');
-        const info = label(this, mx + 48, my + 25, `Dmg ${def.dmg}  (${(1000 / def.cd).toFixed(1)}/s)`, 10, '#bcd0b0');
+        const info = label(this, mx + 48, my + 25, `Dmg ${def.dmg}  (${(1000 / def.cd).toFixed(1)}/s)`, 10, '#94a3b8');
 
         // Button [1] (Primary)
-        const btn1 = this.add.rectangle(mx + 172, my + 21, 22, 26, isS1 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
-        const txt1 = label(this, mx + 172, my + 21, isS1 ? '1*' : '1', 11, isS1 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        const btn1 = this.add.rectangle(mx + 172, my + 21, 22, 26, isS1 ? 0xff6a2a : 0x1a2230).setStrokeStyle(1.5, isS1 ? 0xffa04a : 0x334155).setInteractive({ useHandCursor: true });
+        const txt1 = label(this, mx + 172, my + 21, isS1 ? '1*' : '1', 11, isS1 ? '#0b0f17' : '#ffffff', 0.5, 0.5);
         btn1.on('pointerup', () => { p.assignSlot(1, id); this.toast(`Assigned ${def.name} to Primary (Key 1)`); this.refreshInventory(); });
 
         // Button [2] (Secondary / Back)
-        const btn2 = this.add.rectangle(mx + 200, my + 21, 22, 26, isS2 ? 0xf2e08a : 0x2a3d24).setStrokeStyle(1.5, 0x5a7e4e).setInteractive({ useHandCursor: true });
-        const txt2 = label(this, mx + 200, my + 21, isS2 ? '2*' : '2', 11, isS2 ? '#151d12' : '#ffffff', 0.5, 0.5);
+        const btn2 = this.add.rectangle(mx + 200, my + 21, 22, 26, isS2 ? 0x0284c7 : 0x1a2230).setStrokeStyle(1.5, isS2 ? 0x38bdf8 : 0x334155).setInteractive({ useHandCursor: true });
+        const txt2 = label(this, mx + 200, my + 21, isS2 ? '2*' : '2', 11, isS2 ? '#0b0f17' : '#ffffff', 0.5, 0.5);
         btn2.on('pointerup', () => { p.assignSlot(2, id); this.toast(`Assigned ${def.name} to Secondary (Key 2, on back)`); this.refreshInventory(); });
 
         this.invBody.add([bg, icon, name, info, btn1, txt1, btn2, txt2]);
       });
     }
 
-    // Player Status Line
-    const wStars = this.game_.wanted ? '*'.repeat(this.game_.wanted.level) : '';
-    this.invBody.add(label(this, 90, 588, `HP ${Math.ceil(p.hp)}/${p.maxHp}    Stamina ${Math.ceil(p.stamina)}%    Wanted ${wStars || 'None'}`, 14, '#ffffff'));
+    // Player Status Bar
+    const wStars = this.game_.wanted ? '★'.repeat(this.game_.wanted.level) : '';
+    const statBg = this.add.rectangle(640, 592, 1100, 30, 0x141a26).setStrokeStyle(1.5, 0x263346);
+    const hpTxt = label(this, 100, 584, `HP ${Math.ceil(p.hp)}/${p.maxHp}`, 13, '#f87171');
+    const stTxt = label(this, 260, 584, `STAMINA ${Math.ceil(p.stamina)}%`, 13, '#38bdf8');
+    const armTxt = label(this, 440, 584, `ARMOR ${Math.ceil(p.armor)}/${p.maxArmor} AP`, 13, '#60a5fa');
+    const wantTxt = label(this, 650, 584, `WANTED ${wStars || 'None'}`, 13, '#facc15');
+    const cashTxt = label(this, 860, 584, `CASH $${Math.round(profile.money).toLocaleString()}`, 13, '#4ade80');
+    this.invBody.add([statBg, hpTxt, stTxt, armTxt, wantTxt, cashTxt]);
 
     // ==========================================
     // RIGHT SIDE: AMMO, MEDICAL, SUPPLIES (x: 815 .. 1170)
     // ==========================================
     // AMMO RESERVE (only ammo types currently owned or matching owned firearms)
-    this.invBody.add(label(this, 815, 196, 'AMMO RESERVE', 14, '#9db890'));
+    this.invBody.add(label(this, 815, 198, 'AMMO RESERVE', 13, '#ffb070'));
     let curRightY = 218;
     if (ownedAmmo.length === 0) {
-      this.invBody.add(label(this, 815, 218, 'No ammo in reserve.', 12, '#7a9270'));
+      this.invBody.add(label(this, 815, 218, 'No ammo in reserve.', 12, '#64748b'));
       curRightY = 244;
     } else {
       ownedAmmo.forEach((k, idx) => {
         const ay = 216 + idx * 21;
         const iconTex = AMMO_TYPES[k].tex || 'it_ammo';
         const ic = this.add.image(815, ay + 6, iconTex).setOrigin(0, 0.5).setScale(0.75);
-        const lbl = label(this, 838, ay, `${AMMO_TYPES[k].name.padEnd(12)} ${String(p.ammo[k]).padStart(3)} / ${p.ammoCap(k)}`, 12, p.ammo[k] > 0 ? '#e8f2e0' : '#889980');
+        const lbl = label(this, 838, ay, `${AMMO_TYPES[k].name.padEnd(12)} ${String(p.ammo[k]).padStart(3)} / ${p.ammoCap(k)}`, 12, p.ammo[k] > 0 ? '#f1f5f9' : '#64748b');
         this.invBody.add([ic, lbl]);
       });
       curRightY = 216 + ownedAmmo.length * 21 + 12;
@@ -648,7 +660,7 @@ export default class UIScene extends Phaser.Scene {
 
     // MEDICAL & GEAR (only shows owned items)
     const medHeaderY = Math.max(curRightY, 260);
-    this.invBody.add(label(this, 815, medHeaderY, 'BODY ARMOR & MEDICAL GEAR', 14, '#9db890'));
+    this.invBody.add(label(this, 815, medHeaderY, 'BODY ARMOR & MEDICAL GEAR', 13, '#ffb070'));
     let medItemY = medHeaderY + 22;
 
     // Body Armor Card
@@ -657,12 +669,12 @@ export default class UIScene extends Phaser.Scene {
       const aTex = armDef.tex || 'it_armor_light';
       const aImg = this.add.image(826, medItemY + 12, aTex).setOrigin(0.5).setScale(0.85);
       const aName = label(this, 846, medItemY + 2, armDef.name + ' (' + Math.round(armDef.defense * 100) + '% Def)', 12, '#38bdf8');
-      const aPts = label(this, 846, medItemY + 18, 'Armor: ' + Math.ceil(p.armor) + ' / ' + p.maxArmor + ' AP', 11, '#e8f2e0');
+      const aPts = label(this, 846, medItemY + 18, 'Armor: ' + Math.ceil(p.armor) + ' / ' + p.maxArmor + ' AP', 11, '#e2e8f0');
       this.invBody.add([aImg, aName, aPts]);
       if ((p.plates || 0) > 0 && p.armor < p.maxArmor) {
         const repBtn = button(this, 1115, medItemY + 12, 'REPAIR [G]', () => {
           if (p.useArmor()) this.refreshInventory();
-        }, { w: 82, h: 24, size: 11, fill: 0x1e3a5f, stroke: 0x38bdf8 });
+        }, { w: 82, h: 24, size: 11, fill: 0x1a2230, stroke: 0x38bdf8 });
         this.invBody.add(repBtn);
       }
       medItemY += 38;
@@ -671,7 +683,7 @@ export default class UIScene extends Phaser.Scene {
     // Trauma Plates
     if ((p.plates || 0) > 0) {
       const plImg = this.add.image(826, medItemY + 8, 'it_armor_plate').setOrigin(0.5).setScale(0.85);
-      const plTxt = label(this, 846, medItemY + 2, 'Trauma Plates: ' + p.plates + '/5  (+40 AP on repair)', 12, '#bcd0b0');
+      const plTxt = label(this, 846, medItemY + 2, 'Trauma Plates: ' + p.plates + '/5  (+40 AP on repair)', 12, '#cbd5e1');
       this.invBody.add([plImg, plTxt]);
       medItemY += 26;
     }
@@ -686,7 +698,7 @@ export default class UIScene extends Phaser.Scene {
           p.equipArmor(tId, false);
           this.toast('Equipped ' + oDef.name);
           this.refreshInventory();
-        }, { w: 68, h: 22, size: 10, fill: 0x243820, stroke: 0x5a7e4e });
+        }, { w: 68, h: 22, size: 10, fill: 0x1a2230, stroke: 0x38bdf8 });
         this.invBody.add([oTxt, eqBtn]);
         medItemY += 26;
       });
@@ -696,31 +708,31 @@ export default class UIScene extends Phaser.Scene {
     if (p.medkits > 0) {
       hasMedItem = true;
       const isS4 = ((p.slots[4] || 'medkit') === 'medkit');
-      const t = label(this, 815, medItemY + 5, `Medkits   ${p.medkits}/${p.medCap()}  (+50 HP)`, 13, '#e8f2e0');
+      const t = label(this, 815, medItemY + 5, `Medkits   ${p.medkits}/${p.medCap()}  (+50 HP)`, 13, '#f1f5f9');
       const useBtn = button(this, 1055, medItemY + 8, 'USE', () => {
         this.toggleInventory();
         p.startMedkit();
-      }, { w: 58, h: 26, size: 12 });
-      const setBtn = button(this, 1130, medItemY + 8, isS4 ? 'SET [4]*' : 'SET [4]', () => { p.assignSlot(4, 'medkit'); this.toast('Assigned Medkit to Slot 4 (Key 4)'); this.refreshInventory(); }, { w: 72, h: 26, size: 12, fill: isS4 ? 0xf2e08a : 0x243820, stroke: isS4 ? 0xf2e08a : 0x6b8f5a });
+      }, { w: 58, h: 26, size: 12, fill: 0x1a2230, stroke: 0xef4444 });
+      const setBtn = button(this, 1130, medItemY + 8, isS4 ? 'SET [4]*' : 'SET [4]', () => { p.assignSlot(4, 'medkit'); this.toast('Assigned Medkit to Slot 4 (Key 4)'); this.refreshInventory(); }, { w: 72, h: 26, size: 12, fill: isS4 ? 0xef4444 : 0x1a2230, stroke: isS4 ? 0xf87171 : 0x334155 });
       this.invBody.add([t, useBtn, setBtn]);
       medItemY += 34;
     }
 
     if (!hasMedItem) {
-      this.invBody.add(label(this, 815, medItemY + 4, 'No medical items in inventory.', 12, '#7a9270'));
+      this.invBody.add(label(this, 815, medItemY + 4, 'No medical items in inventory.', 12, '#64748b'));
       medItemY += 24;
     }
 
     if (p.backpack > 0) {
-      this.invBody.add(label(this, 815, medItemY + 2, `Backpack  Lv ${p.backpack}/2 (+carrying capacity)`, 13, '#bcd0b0'));
+      this.invBody.add(label(this, 815, medItemY + 2, `Backpack  Lv ${p.backpack}/2 (+carrying capacity)`, 13, '#cbd5e1'));
       medItemY += 24;
     }
 
     // EVERYDAY SUPPLIES (only shows owned supplies)
     const supHeaderY = Math.max(medItemY + 8, 430);
-    this.invBody.add(label(this, 815, supHeaderY, `EVERYDAY SUPPLIES (${ownedSupplies.length})`, 13, '#9db890'));
+    this.invBody.add(label(this, 815, supHeaderY, `EVERYDAY SUPPLIES (${ownedSupplies.length})`, 13, '#ffb070'));
     if (ownedSupplies.length === 0) {
-      this.invBody.add(label(this, 815, supHeaderY + 20, 'No food or drinks in inventory.', 12, '#7a9270'));
+      this.invBody.add(label(this, 815, supHeaderY + 20, 'No food or drinks in inventory.', 12, '#64748b'));
     } else {
       ownedSupplies.forEach((id, idx) => {
         const col = idx % 2, row = Math.floor(idx / 2);
@@ -728,7 +740,7 @@ export default class UIScene extends Phaser.Scene {
         const isS3 = (p.slots[3] === id);
         const icon = this.add.image(sx + 6, sy + 7, 'sp_' + id).setOrigin(0, 0.5);
         icon.setScale(Math.min(1.2, 20 / Math.max(icon.width, 14)));
-        const t = label(this, sx + 24, sy, `${isS3 ? '[3] ' : ''}${SUPPLIES[id].label} x${p.supplies[id]}`, 12, isS3 ? '#f2e08a' : '#ffe9a0').setInteractive({ useHandCursor: true });
+        const t = label(this, sx + 24, sy, `${isS3 ? '[3] ' : ''}${SUPPLIES[id].label} x${p.supplies[id]}`, 12, isS3 ? '#facc15' : '#f1f5f9').setInteractive({ useHandCursor: true });
         t.on('pointerup', () => {
           p.assignSlot(3, id);
           this.toast(`Assigned ${SUPPLIES[id].label} to Slot 3 (Key 3)`);
@@ -1111,18 +1123,18 @@ export default class UIScene extends Phaser.Scene {
           s1.icon.setTexture(tex).setVisible(true).setAlpha(1);
           s1.icon.setScale(Math.min(1.2, 40 / Math.max(s1.icon.width, 16)));
           const act = (p.current === w1);
-          s1.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
-          s1.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.92);
-          s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+          s1.bg.setStrokeStyle(2, act ? 0xff8a3a : 0x0284c7);
+          s1.bg.setFillStyle(act ? 0x241812 : 0x0f1724, 0.92);
+          s1.keyT.setColor(act ? '#ffb070' : '#ffffff');
           const st = isM ? `DMG ${MELEE[w1].dmg}` : `${p.weapons[w1].mag}/${p.ammo[WEAPONS[w1].ammo]}`;
-          s1.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+          s1.badge.setText(st).setColor(act ? '#facc15' : '#38bdf8');
         } else {
           s1.icon.setVisible(false);
           const act = (p.current === 'fists');
-          s1.bg.setStrokeStyle(1.5, act ? 0xf2e08a : 0x242d42);
-          s1.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.88);
-          s1.keyT.setColor(act ? '#f2e08a' : '#ffffff');
-          s1.badge.setText('Fists').setColor(act ? '#f2e08a' : '#777777');
+          s1.bg.setStrokeStyle(1.5, act ? 0xff8a3a : 0x263346);
+          s1.bg.setFillStyle(act ? 0x241812 : 0x0a0e17, 0.88);
+          s1.keyT.setColor(act ? '#ffb070' : '#ffffff');
+          s1.badge.setText('Fists').setColor(act ? '#facc15' : '#64748b');
         }
 
         // Slot 2: Secondary Weapon (on back)
@@ -1134,15 +1146,15 @@ export default class UIScene extends Phaser.Scene {
           s2.icon.setTexture(tex).setVisible(true).setAlpha(1);
           s2.icon.setScale(Math.min(1.2, 40 / Math.max(s2.icon.width, 16)));
           const act = (p.current === w2);
-          s2.bg.setStrokeStyle(2, act ? 0xf2e08a : 0x5a7e4e);
-          s2.bg.setFillStyle(act ? 0x1b281a : 0x0f131f, 0.92);
-          s2.keyT.setColor(act ? '#f2e08a' : '#ffffff');
+          s2.bg.setStrokeStyle(2, act ? 0xff8a3a : 0x0284c7);
+          s2.bg.setFillStyle(act ? 0x241812 : 0x0f1724, 0.92);
+          s2.keyT.setColor(act ? '#ffb070' : '#ffffff');
           const st = isM ? `DMG ${MELEE[w2].dmg}` : `${p.weapons[w2].mag}/${p.ammo[WEAPONS[w2].ammo]}`;
-          s2.badge.setText(st).setColor(act ? '#f2e08a' : '#bcd0b0');
+          s2.badge.setText(st).setColor(act ? '#facc15' : '#38bdf8');
         } else {
           s2.icon.setVisible(false);
-          s2.bg.setStrokeStyle(1.5, 0x242d42);
-          s2.bg.setFillStyle(0x0a0c14, 0.82);
+          s2.bg.setStrokeStyle(1.5, 0x263346);
+          s2.bg.setFillStyle(0x0a0e17, 0.82);
           s2.keyT.setColor('#64748b');
           s2.badge.setText('Empty').setColor('#64748b');
         }
@@ -1154,14 +1166,14 @@ export default class UIScene extends Phaser.Scene {
           const count = p.supplies[fId] || 0;
           s3.icon.setTexture('sp_' + fId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
           s3.icon.setScale(Math.min(1.2, 30 / Math.max(s3.icon.width, 16)));
-          s3.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x242d42);
-          s3.bg.setFillStyle(count > 0 ? 0x142018 : 0x0a0c14, 0.9);
+          s3.bg.setStrokeStyle(2, count > 0 ? 0xeab308 : 0x263346);
+          s3.bg.setFillStyle(count > 0 ? 0x1f1b10 : 0x0a0e17, 0.9);
           s3.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
-          s3.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#64748b');
+          s3.badge.setText(`x${count}`).setColor(count > 0 ? '#fde047' : '#64748b');
         } else {
           s3.icon.setVisible(false);
-          s3.bg.setStrokeStyle(1.5, 0x242d42);
-          s3.bg.setFillStyle(0x0a0c14, 0.82);
+          s3.bg.setStrokeStyle(1.5, 0x263346);
+          s3.bg.setFillStyle(0x0a0e17, 0.82);
           s3.keyT.setColor('#64748b');
           s3.badge.setText('Empty').setColor('#64748b');
         }
@@ -1173,22 +1185,22 @@ export default class UIScene extends Phaser.Scene {
           const count = p.medkits;
           s4.icon.setTexture('it_medkit').setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
           s4.icon.setScale(Math.min(1.2, 30 / Math.max(s4.icon.width, 16)));
-          s4.bg.setStrokeStyle(2, count > 0 ? 0xd03030 : 0x242d42);
-          s4.bg.setFillStyle(count > 0 ? 0x241215 : 0x0a0c14, 0.9);
+          s4.bg.setStrokeStyle(2, count > 0 ? 0xef4444 : 0x263346);
+          s4.bg.setFillStyle(count > 0 ? 0x241215 : 0x0a0e17, 0.9);
           s4.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
-          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ff7a7a' : '#64748b');
+          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#f87171' : '#64748b');
         } else if (SUPPLIES[mId]) {
           const count = p.supplies[mId] || 0;
           s4.icon.setTexture('sp_' + mId).setVisible(true).setAlpha(count > 0 ? 1 : 0.35);
           s4.icon.setScale(Math.min(1.2, 30 / Math.max(s4.icon.width, 16)));
-          s4.bg.setStrokeStyle(2, count > 0 ? 0x5a7e4e : 0x242d42);
-          s4.bg.setFillStyle(count > 0 ? 0x142018 : 0x0a0c14, 0.9);
+          s4.bg.setStrokeStyle(2, count > 0 ? 0x0284c7 : 0x263346);
+          s4.bg.setFillStyle(count > 0 ? 0x0f1724 : 0x0a0e17, 0.9);
           s4.keyT.setColor(count > 0 ? '#ffffff' : '#64748b');
-          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#ffe9a0' : '#64748b');
+          s4.badge.setText(`x${count}`).setColor(count > 0 ? '#38bdf8' : '#64748b');
         } else {
           s4.icon.setVisible(false);
-          s4.bg.setStrokeStyle(1.5, 0x242d42);
-          s4.bg.setFillStyle(0x0a0c14, 0.82);
+          s4.bg.setStrokeStyle(1.5, 0x263346);
+          s4.bg.setFillStyle(0x0a0e17, 0.82);
           s4.keyT.setColor('#64748b');
           s4.badge.setText('Empty').setColor('#64748b');
         }
