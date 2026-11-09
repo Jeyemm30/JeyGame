@@ -63,6 +63,16 @@
             pStatus.innerText = 'Almost ready, finalizing download...';
           }
         }, 15000);
+
+        // Safety fallback: if Menu is already active, ensure preloader is removed
+        setInterval(function() {
+          var p = document.getElementById('preloader');
+          if (p && window.__game && window.__game.scene && (window.__game.scene.isActive('Menu') || window.__game.scene.isActive('Game'))) {
+            p.style.pointerEvents = 'none';
+            p.style.opacity = '0';
+            setTimeout(function() { try { p.remove(); } catch(e) {} }, 300);
+          }
+        }, 500);
       })();
 
       window.addEventListener('error', function(e) {

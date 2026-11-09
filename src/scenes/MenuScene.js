@@ -14,8 +14,10 @@ export default class MenuScene extends Phaser.Scene {
   create() {
     const preloader = document.getElementById('preloader');
     if (preloader) {
+      preloader.style.pointerEvents = 'none';
       preloader.style.opacity = '0';
-      setTimeout(() => { try { preloader.remove(); } catch (e) {} }, 400);
+      preloader.style.display = 'none';
+      try { preloader.remove(); } catch (e) {}
     }
     music.set('menu');
     this.input.setDefaultCursor('default');

@@ -13,8 +13,8 @@ export default class BootScene extends Phaser.Scene {
     if (pStatus) pStatus.innerText = 'Building Port City...';
     if (pBar) pBar.style.width = '70%';
 
-    // Yield a frame so mobile browsers can render the update before generating procedural canvas textures
-    requestAnimationFrame(() => {
+    // Yield a frame with native setTimeout so browser paints "Building Port City..."
+    setTimeout(() => {
       try {
         generateTextures(this);
       } catch (err) {
@@ -23,14 +23,18 @@ export default class BootScene extends Phaser.Scene {
       if (pBar) pBar.style.width = '100%';
       if (pStatus) pStatus.innerText = 'Welcome to Port City!';
 
-      this.time.delayedCall(120, () => {
-        const preloader = document.getElementById('preloader');
-        if (preloader) {
-          preloader.style.opacity = '0';
-          setTimeout(() => { try { preloader.remove(); } catch (e) {} }, 400);
-        }
-        this.scene.start('Menu');
-      });
-    });
+      const preloader = document.getElementById('preloader');
+      if (preloader) {
+        preloader.style.pointerEvents = 'none';
+        preloader.style.opacity = '0';
+        setTimeout(() => {
+          try {
+            preloader.style.display = 'none';
+            preloader.remove();
+          } catch (e) {}
+        }, 250);
+      }
+      this.scene.start('Menu');
+    }, 30);
   }
 }
