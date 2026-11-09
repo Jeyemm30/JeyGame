@@ -526,7 +526,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const h = WEAPON_HANDLING[w.id] || { gripX: 0.38 };
     const len = Math.max(8, (1 - h.gripX) * (this.gun.width || 20));
     const mx = this.x + Math.cos(a) * (7 + len), my = this.y + Math.sin(a) * (7 + len);
-    this.scene.combat.fire('enemy', mx, my, a, w, { spread: this.cfg.spread * (p.crouching ? 1.15 : 1), damageMul: ENEMY_DAMAGE_MUL });
+    this.scene.combat.fire('enemy', mx, my, a, w, { spread: this.cfg.spread, damageMul: ENEMY_DAMAGE_MUL });
     const fo = this.scene.elev(CHEST);
     this.flash.setVisible(this.visible).setPosition(mx + fo.x, my + fo.y).setRotation(Math.random() * 6);
     this.flashUntil = time + 45;
@@ -603,7 +603,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     const toP = Math.atan2(dy, dx);
     const diff = Math.abs(wrap(toP - this.face));
     const half = aware ? 1.7 : this.ai === 'search' ? Math.max(cfg.half, 1.1) : cfg.half;
-    const range = cfg.sight * (p.crouching ? 0.5 : p.sprinting ? 1.25 : p.moving ? 1 : 0.75) * (aware ? 1.3 : 1);
+    const range = cfg.sight * (p.sprinting ? 1.25 : p.moving ? 1 : 0.75) * (aware ? 1.3 : 1);
     const inView = this.los && dist < range && diff < half;
     const bump = this.los && dist < 22;
     const seen = (inView || bump) && interested;

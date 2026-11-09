@@ -27,14 +27,14 @@ Main menu: **Continue** (loads your newest save, including the autosave), **New 
 | Space | Melee swing (fists if a gun is out) · **handbrake** in a vehicle |
 | Z · X · 1-6 | Cycle melee · cycle all weapons · gun class: **1** pistols, **2** SMGs, **3** rifles, **4** shotguns, **5** snipers, **6** heavy (press again to cycle inside the class) |
 | F | Talk, pick up, search, open doors, enter / exit vehicles, take down an unaware enemy from behind |
-| Shift · C | Sprint (noisy) · crouch (quiet) |
+| Shift | Sprint (noisy) |
 | R · H · G | Reload · medkit · armor plate (in a car at a gas station: **R** repair, hold **G** refuel; H = horn) |
 | L | Lock / unlock a vehicle you own |
 | J | Mission log & job board |
 | M or minimap click | World map (drag, zoom, markers, waypoints) |
 | Tab / I · Esc | Inventory · pause (save / load / missions) |
 
-Touch controls appear automatically (left = move, right = aim; buttons for USE, HIT, RUN, CROUCH, RELOAD, SWAP, MED, ARMOR, FUEL, FIX, HORN, and a top bar for pause / bag / map / jobs / zoom). On phones the HUD moves out of the way of your thumbs, text and tap targets are enlarged (menus, inventory, shop, mission log, dialogue replies), the first tap requests fullscreen + landscape (Android), physics runs at 60 Hz and far-away NPCs/vehicles stop simulating sooner. Portrait shows a "rotate your device" screen. Settings → Touch Controls (AUTO / ON / OFF) overrides detection; `?touch=1` forces it on for testing in a desktop browser.
+Touch controls appear automatically (left = move, right = aim; buttons for USE, HIT, RUN, RELOAD, SWAP, MED, ARMOR, FUEL, FIX, HORN, and a top bar for pause / bag / map / jobs / zoom). On phones the HUD moves out of the way of your thumbs, text and tap targets are enlarged (menus, inventory, shop, mission log, dialogue replies), the first tap requests fullscreen + landscape (Android), physics runs at 60 Hz and far-away NPCs/vehicles stop simulating sooner. Portrait shows a "rotate your device" screen. Settings → Touch Controls (AUTO / ON / OFF) overrides detection; `?touch=1` forces it on for testing in a desktop browser.
 
 ## Story mode (15 missions, 3 chapters)
 

@@ -824,15 +824,8 @@ export default class UIScene extends Phaser.Scene {
     });
     this.touchFootGroup.push(this.tBtnReload);
 
-    // 5. Crouch / Stealth
-    this.tBtnCrouch = mk(1200, 275, 'CROUCH', 27, {
-      col: 0x64748b, activeCol: 0x94a3b8, activeBg: 0x1e293b,
-      onDown: act('crouch')
-    });
-    this.touchFootGroup.push(this.tBtnCrouch);
-
-    // 6. Weapon Swap / Cycle
-    this.tBtnSwap = mk(1105, 275, 'SWAP', 27, {
+    // 5. Weapon Swap / Cycle
+    this.tBtnSwap = mk(1200, 275, 'SWAP', 28, {
       col: 0xa855f7, activeCol: 0xc084fc, activeBg: 0x3b0764,
       onDown: act('cycle')
     });
@@ -1219,7 +1212,7 @@ export default class UIScene extends Phaser.Scene {
     this.compass.setRotation(g.camRot || 0);
     this.fpsText.setText(settings.fps ? `FPS ${Math.round(this.game.loop.actualFps)}` : '');
     this.zoneText.setText(g.inRestricted(p.x, p.y) ? 'RESTRICTED MILITARY AREA' : '');
-    this.stance.setText(p.vehicle ? '' : p.crouching ? 'CROUCHING (quiet)' : p.sprinting ? 'SPRINTING (noisy)' : g.insideBuilding ? 'INSIDE' : '');
+    this.stance.setText(p.vehicle ? '' : p.sprinting ? 'SPRINTING (noisy)' : g.insideBuilding ? 'INSIDE' : '');
 
     // vehicle HUD
     const v = p.vehicle;

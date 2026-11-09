@@ -40,7 +40,6 @@ export const CONTROLS_TEXT = [
   'Z ........... Cycle melee weapons',
   'R ........... Reload',
   'Shift ....... Sprint (noisy)',
-  'C ........... Crouch / sneak',
   'F ........... Loot / search / doors / enter car',
   '              (behind unaware enemy: takedown)',
   '1 ........... Slot 1: Primary weapon (held in hand)',
@@ -58,7 +57,7 @@ export const CONTROLS_TEXT = [
   '  Left stick ........ Move character / Steer vehicle',
   '  FIRE button / Stick Aim & Shoot / Auto-target nearby enemies',
   '  USE button ........ Enter car, talk to NPCs, loot items, doors',
-  '  RUN / CROUCH ...... Sprint / sneak silently',
+  '  RUN ............... Sprint (noisy)',
   '  RELOAD / SWAP ..... Fast tactical reload and weapon swap',
   '  Driving pedals .... Dedicated Gas, Brake/Rev, and Drift Handbrake'
 ].join('\n');

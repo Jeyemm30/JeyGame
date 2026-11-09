@@ -6332,7 +6332,6 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     }
 
     if (Phaser.Input.Keyboard.JustDown(k.R) || consumeAction('reload')) p.startReload(now);
-    if (Phaser.Input.Keyboard.JustDown(k.C) || consumeAction('crouch')) { p.crouching = !p.crouching; sfx.click(); if (p.crouching) this.missionEvent('tut:crouch'); }
     if (Phaser.Input.Keyboard.JustDown(k.ONE) || consumeAction('slot1')) {
       const w1 = p.slots[1];
       if (w1 && p.weapons[w1]) {

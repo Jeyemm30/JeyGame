@@ -21,7 +21,6 @@ export const STORY = [
     reward: { money: 150, rep: 5 },
     objectives: [
       { type: 'event', name: 'tut:sprint', text: 'Hold SHIFT while moving to sprint', textTouch: 'Hold RUN while moving to sprint' },
-      { type: 'event', name: 'tut:crouch', text: 'Press C to crouch (quiet and hard to spot)', textTouch: 'Tap CROUCH' },
       { type: 'event', name: 'tut:melee', text: 'Swing your weapon: click, or press SPACE', textTouch: 'Tap HIT' },
       { type: 'event', name: 'tut:map', text: 'Open the world map: press M or click the minimap', textTouch: 'Tap MAP' },
       { type: 'goto', place: 'diner', radius: 120, text: 'Walk to Voss Diner in Westend' },

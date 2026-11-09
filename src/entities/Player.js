@@ -223,7 +223,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     const h = this.handling;
     const gripLen = Math.max(8, ((1 - h.gripX) * (this.gun.width || 20)) - this.kick);
     const rot = this.gun && this.gun.visible ? this.gun.rotation : this.aim;
-    const lift = this.crouching ? CHEST - 5 : CHEST;
+    const lift = CHEST;
     const fo = this.scene.elev(lift);
     const tipX = (this.gun && this.gun.visible ? this.gun.x : this.x) + Math.cos(rot) * gripLen;
     const tipY = (this.gun && this.gun.visible ? this.gun.y : this.y) + Math.sin(rot) * gripLen;
@@ -335,8 +335,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     st.mag--;
     let spread = w.spread;
     if (this.sprinting) spread *= 2.4;
-    else if (this.moving && !this.crouching) spread *= 1.4;
-    else if (this.crouching) spread *= 0.7;
+    else if (this.moving) spread *= 1.4;
     const m = this.muzzle();
     combat.fire('player', m.x, m.y, this.aim, w, { spread, height: m.lift });
     this.kick = w.kick || 5;
@@ -553,8 +552,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     const mag = analog ? Math.min(1, len) : 1;
     this.moving = analog ? len > 0.15 : (sx !== 0 || sy !== 0);
     if (this.usingItem) ctrl.sprint = false;
-    if (ctrl.sprint && this.moving) this.crouching = false;
-    this.sprinting = this.moving && ctrl.sprint && !this.winded && this.stamina > 0 && !this.crouching;
+    this.sprinting = this.moving && ctrl.sprint && !this.winded && this.stamina > 0;
     if (this.sprinting) {
       this.stamina = Math.max(0, this.stamina - 26 * dt / 1000);
       if (this.stamina <= 0) this.winded = true;
@@ -577,7 +575,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       else this.burstQueue = 0;
     }
     const gunMul = !this.isMelee && this.weapon.moveMul ? this.weapon.moveMul : 1;
-    const speed = (this.usingItem ? 52 : this.sprinting ? 160 : this.crouching ? 54 : this.reloading ? 78 : this.swing ? 71 : 100) * gunMul;      // on foot, ~25 % slower than before (was 215 / 72 / 105 / 95 / 135)
+    const speed = (this.usingItem ? 52 : this.sprinting ? 160 : this.reloading ? 78 : this.swing ? 71 : 100) * gunMul;      // on foot, ~25 % slower than before (was 215 / 72 / 105 / 95 / 135)
     const k = this.moving ? (analog ? Math.max(0.55, mag) : 1) : 0;
     if (time < this.knockUntil) this.setVelocity(this.kvx, this.kvy);
     else this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
@@ -592,7 +590,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       const interval = this.sprinting ? 340 : 500;           // footsteps follow the slower pace
       // a step only counts while the body really moves (not while pushing against a wall) and on foot
       const moved = Math.abs(this.body.velocity.x) + Math.abs(this.body.velocity.y) > 30;
-      if (!this.crouching && this.stepT > interval && moved) {
+      if (this.stepT > interval && moved) {
         this.stepT = 0;
         sfx.step(this.sprinting ? 1 : 0.6, this.sprinting);
         this.scene.alertNoise(this.x, this.y, this.sprinting ? 150 : 55, 'step');
@@ -613,7 +611,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     const pose = poseFrame({
-      moving: this.moving, sprint: this.sprinting, crouch: this.crouching, t: this.animT, now: time, moveBlend: this.moveBlend,
+      moving: this.moving, sprint: this.sprinting, crouch: false, t: this.animT, now: time, moveBlend: this.moveBlend,
       hurt: this.scene.gt < (this.hurtUntil || 0), pickup: this.scene.gt < (this.pickupUntil || 0) || (this.swing && this.swing.t < this.swing.dur * 0.45) || (this.reloading && !this.moving) || !!this.usingItem
     });
     this.setFrame((this.dir === 'l' ? 'r' : this.dir) + pose);
@@ -633,11 +631,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // depth sorting + shadow
     const depth = sc.depthOf(this.x, this.y);
     if (Math.abs(depth - this.lastDepth) > 0.002) { this.setDepth(depth); this.lastDepth = depth; }
-    this.shadow.setPosition(this.x, this.y + 2).setScale(this.crouching ? 0.85 : 1);
+    this.shadow.setPosition(this.x, this.y + 2).setScale(1);
 
     this.kick = Math.max(0, this.kick - dt * 0.03);
     this.swapT = Math.max(0, this.swapT - dt);
-    const baseLift = this.crouching ? CHEST - 5 : CHEST;
+    const baseLift = CHEST;
 
     // Weapon handling and motion sway
     const h = this.handling;
@@ -723,7 +721,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.backGun.setTexture(tex);
         this.backGun.setVisible(true);
         const bobY = motionWob;
-        const backLift = (this.crouching ? CHEST - 6 : CHEST) + 1;
+        const backLift = CHEST + 1;
         let sx = 0, sy = -backLift + bobY, bRot = 0, bDepth = depth;
         if (this.dir === 'u') {
           sx = -1; sy = -backLift + bobY - 2;
