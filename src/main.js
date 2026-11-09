@@ -43,35 +43,36 @@ const config = {
     width: VIEW_W,
     height: VIEW_H
   },
-  // phones get a lower physics rate (60 Hz), desktops 90 Hz
   physics: { default: 'arcade', arcade: { fps: touch.detected ? 60 : 90, gravity: { x: 0, y: 0 } } },
   render: { antialias: false, batchSize: 4096 },
   fps: { target: 60, smoothStep: true },
   input: { activePointers: 4 },
-  // Order matters: later scenes render on top of earlier ones.
   scene: [BootScene, MenuScene, CharacterScene, GameScene, UIScene, PauseScene, GameOverScene, MapScene, MissionsScene, ShopScene, ArmsScene, WiseScene, CasinoScene, AtmScene, VaultScene, GangScene, DialogueScene, EndingScene, SaveLoadScene, CreditsScene, SettingsScene, IntroScene, StoreScene, LockpickScene]
 };
 
 window.__game = new Phaser.Game(config);
 
-// Responsive canvas refitting when rotating or resizing
+// Responsive canvas refitting when rotating or resizing on mobile (Android & iOS)
 const refit = () => {
   if (!window.__game || !window.__game.scale) return;
-  const gameDiv = document.getElementById('game');
-  if (gameDiv) {
-    gameDiv.style.removeProperty('width');
-    gameDiv.style.removeProperty('height');
+  const w = window.visualViewport ? Math.round(window.visualViewport.width) : (window.innerWidth || document.documentElement.clientWidth);
+  const h = window.visualViewport ? Math.round(window.visualViewport.height) : (window.innerHeight || document.documentElement.clientHeight);
+  
+  if (w > 0 && h > 0) {
+    window.__game.scale.setParentSize(w, h);
   }
   window.__game.scale.refresh();
 };
 
 const triggerRefit = () => {
+  refit();
   requestAnimationFrame(refit);
   setTimeout(refit, 50);
-  setTimeout(refit, 150);
-  setTimeout(refit, 300);
-  setTimeout(refit, 600);
-  setTimeout(refit, 1000);
+  setTimeout(refit, 100);
+  setTimeout(refit, 200);
+  setTimeout(refit, 350);
+  setTimeout(refit, 500);
+  setTimeout(refit, 800);
 };
 
 window.addEventListener('resize', triggerRefit);
@@ -79,22 +80,10 @@ window.addEventListener('orientationchange', triggerRefit);
 if (window.screen && window.screen.orientation) {
   window.screen.orientation.addEventListener('change', triggerRefit);
 }
-if (window.visualViewport) window.visualViewport.addEventListener('resize', triggerRefit);
-
-// Handle WebGL context recovery on mobile GPUs during rotation
-window.__game.events.once('ready', () => {
-  const canvas = window.__game.canvas;
-  if (canvas) {
-    canvas.addEventListener('webglcontextlost', (e) => {
-      e.preventDefault();
-    }, false);
-    canvas.addEventListener('webglcontextrestored', () => {
-      if (window.__game && window.__game.scale) {
-        window.__game.scale.refresh();
-      }
-    }, false);
-  }
-});
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', triggerRefit);
+  window.visualViewport.addEventListener('scroll', triggerRefit);
+}
 
 // Developer smoke test: open http://localhost:5173/?autotest to exercise the game automatically.
 if (location.search.includes('autotest')) import('./autotest.js').then((m) => m.runAutotest(window.__game));

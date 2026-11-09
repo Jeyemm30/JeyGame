@@ -38,13 +38,7 @@ export function resetTouch() {
   touch.actions.clear();
 }
 
-// Request landscape orientation lock if supported by the mobile device
 export function goImmersive(game) {
   if (!touchEnabled() || touch.immersive) return;
   touch.immersive = true;
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('landscape').catch(() => {});
-    }
-  } catch (e) { /* not allowed */ }
 }
