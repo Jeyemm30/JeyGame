@@ -36,10 +36,16 @@ const config = {
   backgroundColor: '#080a0f',
   pixelArt: true,
   roundPixels: true,
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, fullscreenTarget: 'game' },
-  // phones get a lower physics rate (60 Hz), desktops 90 Hz (was 120: twice the collision work per frame; the fastest bullet, 1300 px/s, still moves < 15 px per step, less than an NPC is wide); everything is delta-time based so gameplay is unchanged
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    parent: 'game',
+    width: VIEW_W,
+    height: VIEW_H
+  },
+  // phones get a lower physics rate (60 Hz), desktops 90 Hz
   physics: { default: 'arcade', arcade: { fps: touch.detected ? 60 : 90, gravity: { x: 0, y: 0 } } },
-  render: { antialias: false, powerPreference: 'high-performance', batchSize: 4096 },
+  render: { antialias: false, batchSize: 4096 },
   fps: { target: 60, smoothStep: true },
   input: { activePointers: 4 },
   // Order matters: later scenes render on top of earlier ones.
@@ -48,25 +54,24 @@ const config = {
 
 window.__game = new Phaser.Game(config);
 
-// Responsive canvas refitting when rotating or toggling fullscreen
+// Responsive canvas refitting when rotating or resizing
 const refit = () => {
   if (!window.__game || !window.__game.scale) return;
   const gameDiv = document.getElementById('game');
-  const w = window.innerWidth || document.documentElement.clientWidth;
-  const h = window.innerHeight || document.documentElement.clientHeight;
   if (gameDiv) {
-    gameDiv.style.width = w + 'px';
-    gameDiv.style.height = h + 'px';
+    gameDiv.style.removeProperty('width');
+    gameDiv.style.removeProperty('height');
   }
   window.__game.scale.refresh();
 };
 
 const triggerRefit = () => {
-  refit();
+  requestAnimationFrame(refit);
   setTimeout(refit, 50);
   setTimeout(refit, 150);
   setTimeout(refit, 300);
   setTimeout(refit, 600);
+  setTimeout(refit, 1000);
 };
 
 window.addEventListener('resize', triggerRefit);
@@ -75,6 +80,21 @@ if (window.screen && window.screen.orientation) {
   window.screen.orientation.addEventListener('change', triggerRefit);
 }
 if (window.visualViewport) window.visualViewport.addEventListener('resize', triggerRefit);
+
+// Handle WebGL context recovery on mobile GPUs during rotation
+window.__game.events.once('ready', () => {
+  const canvas = window.__game.canvas;
+  if (canvas) {
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+    }, false);
+    canvas.addEventListener('webglcontextrestored', () => {
+      if (window.__game && window.__game.scale) {
+        window.__game.scale.refresh();
+      }
+    }, false);
+  }
+});
 
 // Developer smoke test: open http://localhost:5173/?autotest to exercise the game automatically.
 if (location.search.includes('autotest')) import('./autotest.js').then((m) => m.runAutotest(window.__game));
