@@ -268,6 +268,13 @@ export default class MissionManager {
         if (live.length) { const p = gs.player; live.sort((a, b) => dist(a, p) - dist(b, p)); return { x: live[0].x, y: live[0].y }; }
         return this.place(o);
       }
+      case 'vehicleChase': {
+        const liveEnemies = this.spawned.enemies.filter((e) => e.active && !e.dead);
+        if (liveEnemies.length) return { x: liveEnemies[0].x, y: liveEnemies[0].y };
+        const v = this.spawned.vehicles.find((q) => q.active && q.questTag === (o.tag || 'chase_target'));
+        if (v) return { x: v.x, y: v.y };
+        return this.place(o);
+      }
       case 'defeat': {
         const live = this.spawned.enemies.filter((e) => e.active && !e.dead);
         if (live.length) return { x: live[0].x, y: live[0].y };
@@ -284,7 +291,21 @@ export default class MissionManager {
     if (!o) return '';
     let t = this.gs.touchOn && o.textTouch ? o.textTouch : o.text;
     if (o.type === 'collect' && (o.count || 1) > 1) t += ` (${this.data.got || 0}/${o.count})`;
-    if (o.type === 'defeat') t += ` (${this.spawned.enemies.filter((e) => e.active && !e.dead).length} left)`;
+    if (o.type === 'defeat') {
+      const live = this.spawned.enemies.filter((e) => e.active && !e.dead).length;
+      if (this.data.waitingForArrival) t = `Reach destination: ${o.text || 'Infiltrate area'}`;
+      else t += ` (${live} left)`;
+    }
+    if (o.type === 'vehicleChase') {
+      const v = this.spawned.vehicles.find((q) => q.active && q.questTag === (o.tag || 'chase_target'));
+      const liveEnemies = this.spawned.enemies.filter((e) => e.active && !e.dead);
+      if (liveEnemies.length > 0) {
+        t = `Eliminate target on foot (${liveEnemies.length} left)`;
+      } else if (v && !v.bailedOut) {
+        const d = Math.round(dist(this.gs.player, v));
+        t = `${o.text || 'Pursue and disable target vehicle'} [${d}m]`;
+      }
+    }
     if (o.type === 'losewanted') t += ` - wanted ${this.gs.wanted.level}★`;
     return t;
   }
@@ -385,7 +406,38 @@ const BEGIN = {
   },
   defeat(o) {
     const t = this.place(o);
-    if (!this.spawned.enemies.length) this.spawnGroup(o.spawn || [], t, o, true);
+    const p = this.gs.player;
+    const trig = o.triggerRadius || 360;
+    if (t && dist(p, t) > trig) {
+      this.data.waitingForArrival = true;
+    } else {
+      if (!this.spawned.enemies.length) this.spawnGroup(o.spawn || [], t, o, o.hostile !== false);
+      this.data.waitingForArrival = false;
+      if (o.alertCue) this.gs.events.emit('banner', { title: 'ENCOUNTER!', sub: o.alertCue, color: '#ff6a3a' });
+    }
+  },
+  vehicleChase(o) {
+    const gs = this.gs;
+    const from = (o.from && typeof o.from === 'string' ? gs.places[o.from] : o.from) || gs.player;
+    const to = (o.to && typeof o.to === 'string' ? gs.places[o.to] : o.to) || gs.places.yard2;
+    const v = gs.spawnQuestVehicle({
+      type: o.vtype || 'sports',
+      variant: o.variant !== undefined ? o.variant : 1,
+      x: from.x + (o.off ? o.off[0] : 60),
+      y: from.y + (o.off ? o.off[1] : 40),
+      mode: 'flee',
+      chaseTarget: true,
+      chaseDest: to,
+      chaseOccupants: o.occupants || [
+        { role: 'syndicate_driver', type: 'smg', targetName: o.targetName || 'Syndicate Courier' },
+        { role: 'syndicate_brawler', type: 'shotgun', targetName: 'Courier Bodyguard' }
+      ],
+      tag: o.tag || 'chase_target'
+    });
+    this.track('vehicles', v);
+    this.data.chaseStarted = true;
+    gs.events.emit('banner', { title: 'PURSUIT INITIATED!', sub: 'CHASE AND CRIPPLE THE ENEMY VEHICLE', color: '#ffd24a' });
+    if (sfx.crash) sfx.crash(0.5);
   },
   observe(o) {
     const t = this.place(o);
@@ -438,9 +490,38 @@ const TICK = {
     this.data.watch = Math.max(0, (this.data.watch || 0) + (ok ? dt : -dt * 0.5));
     return this.data.watch >= o.ms;
   },
-  defeat() {
+  defeat(o, dt, p) {
+    const t = this.place(o);
+    if (this.data.waitingForArrival) {
+      const trig = o.triggerRadius || 360;
+      if (t && dist(p, t) <= trig) {
+        this.spawnGroup(o.spawn || [], t, o, o.hostile !== false);
+        this.data.waitingForArrival = false;
+        if (o.arrivalCue || o.alertCue) {
+          this.gs.events.emit('banner', { title: 'ENCOUNTER ACTIVATED!', sub: o.arrivalCue || o.alertCue, color: '#ff6a3a' });
+        }
+      }
+      return false;
+    }
     const live = this.spawned.enemies.filter((e) => e.active && !e.dead);
     return this.spawned.enemies.length > 0 && live.length === 0;
+  },
+  vehicleChase(o, dt, p) {
+    const v = this.spawned.vehicles.find((q) => q.active && q.questTag === (o.tag || 'chase_target'));
+    const live = this.spawned.enemies.filter((e) => e.active && !e.dead);
+    if (v && v.bailedOut) {
+      if (this.spawned.enemies.length > 0 && live.length === 0) {
+        if (o.dropItem && !this.data.dropped) {
+          this.data.dropped = true;
+          this.track('items', this.gs.spawnItem(v.x, v.y, o.dropItem, true));
+        }
+        return true;
+      }
+    }
+    if (!v || v.wrecked) {
+      if (this.spawned.enemies.length > 0 && live.length === 0) return true;
+    }
+    return false;
   },
   losewanted() { return this.gs.wanted.level === 0; },
   script() { return !!this.data.scripted; },
@@ -460,7 +541,18 @@ const TICK = {
 // spawns a group of armed NPCs around a point; `hostile` flags make them attack immediately
 MissionManager.prototype.spawnGroup = function spawnGroup(list, center, o, hostile = false) {
   list.forEach((s) => {
-    const e = this.gs.spawnMissionEnemy({ role: s.role, type: s.type, x: center.x + (s.dx || 0), y: center.y + (s.dy || 0), hostile: hostile || s.hostile });
-    this.track('enemies', e);
+    const e = this.gs.spawnMissionEnemy({
+      role: s.role,
+      type: s.type,
+      x: center.x + (s.dx || 0),
+      y: center.y + (s.dy || 0),
+      hostile: hostile || s.hostile,
+      targetName: s.targetName || s.name,
+      name: s.name
+    });
+    if (e) {
+      if (s.say) e.say(s.say, 2500);
+      this.track('enemies', e);
+    }
   });
 };

@@ -2610,9 +2610,23 @@ export default class GameScene extends Phaser.Scene {
 
   spawnMissionEnemy(spec) {
     const pos = this.freeSpotNear(spec.x, spec.y, 120) || { x: spec.x, y: spec.y };
-    const e = this.spawnEnemy({ x: pos.x, y: pos.y, role: spec.role, type: spec.type, mode: 'guard', radius: 50, route: null });
+    const e = this.spawnEnemy({
+      x: pos.x,
+      y: pos.y,
+      role: spec.role,
+      type: spec.type,
+      mode: 'guard',
+      radius: 50,
+      route: null,
+      targetName: spec.targetName || spec.name,
+      name: spec.name
+    });
     e.questTag = true;
-    if (spec.hostile) { e.angry = true; e.angryUntil = 1e12; }
+    if (spec.hostile) {
+      e.angry = true;
+      e.angryUntil = 1e12;
+      e.enterAlert(this.gt, true);
+    }
     return e;
   }
 
@@ -2634,8 +2648,29 @@ export default class GameScene extends Phaser.Scene {
 
   spawnQuestVehicle(spec) {
     const spot = this.freeSpotNear(spec.x, spec.y, 200) || spec;
-    const v = this.spawnVehicle({ type: spec.type, variant: spec.variant, x: spot.x, y: spot.y, heading: spec.heading || 0, mode: 'parked', locked: false, questTag: spec.tag });
+    const v = this.spawnVehicle({
+      type: spec.type,
+      variant: spec.variant,
+      x: spot.x,
+      y: spot.y,
+      heading: spec.heading || 0,
+      mode: spec.mode || 'parked',
+      locked: !!spec.locked,
+      questTag: spec.tag,
+      chaseTarget: !!spec.chaseTarget,
+      chaseDest: spec.chaseDest,
+      chaseOccupants: spec.chaseOccupants
+    });
     this.ensureFree(v);
+    if (spec.mode === 'flee' || spec.chaseTarget) {
+      this.placeOnRoad(v);
+      v.driver = 'ai';
+      v.mode = 'flee';
+      v.chaseTarget = true;
+      v.chaseDest = spec.chaseDest || null;
+      v.chaseOccupants = spec.chaseOccupants || null;
+      v.body.setImmovable(false);
+    }
     if (this.missions) this.missions.track('vehicles', v);
     return v;
   }
@@ -6151,7 +6186,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => { if (c && c.active) { if (c.sleeping && ((fN + (c.__i = c.__i ?? (this.__ic = (this.__ic || 0) + 1))) & 7)) return; c.updateCivilian(now, dt); } });
     const rx = tm ? 1100 : 1500, ry = tm ? 800 : 1100;
     const near = (v) => Math.abs(v.x - p.x) < rx && Math.abs(v.y - p.y) < ry;
-    this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver === 'player' || v.mode === 'chase' || near(v))) v.updateVehicle(now, dt); });
+    this.vehicles.children.iterate((v) => { if (v && v.active && (v.driver === 'player' || v.mode === 'chase' || v.mode === 'flee' || near(v))) v.updateVehicle(now, dt); });
     this.combat.update();
     this.wanted.update(dt, now);
     this.updatePoliceResponse(now);

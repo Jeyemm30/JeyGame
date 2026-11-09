@@ -1,7 +1,7 @@
 // Main storyline: 21 interconnected missions across 5 Acts involving all Port City major NPCs.
 // Data-driven - the engine lives in systems/Missions.js.
 //
-// Objective types: goto, talk, collect, event, defeat, observe, script, losewanted, choice, unlock, tail, ending, interactAt
+// Objective types: goto, talk, collect, event, defeat, observe, script, losewanted, choice, unlock, tail, ending, interactAt, vehicleChase
 // A mission starts when the player talks to its `giver` (or from the mission menu); `intro` plays first.
 // `if(s)` on an objective skips it unless true; s = { flag(k), rep, done(id), money }.
 
@@ -58,7 +58,15 @@ export const STORY = [
       { type: 'goto', place: 'kenny', radius: 120, text: "Meet Kenny Aquiles at his weapons hideout" },
       { type: 'talk', npc: 'kenny', dialogue: 'm3_kenny', text: 'Acquire tactical firearms and armor from Kenny' },
       { type: 'goto', place: 'yard', radius: 180, text: 'Infiltrate the North Industrial Warehouse district' },
-      { type: 'defeat', place: 'yard', spawn: [{ role: 'criminal', type: 'pistol', dx: -70, dy: 20 }, { role: 'criminal', type: 'shotgun', dx: 80, dy: -20 }, { role: 'criminal', type: 'pistol', dx: 20, dy: 80 }, { role: 'criminal', type: 'pistol', dx: -30, dy: -60 }], text: 'Neutralize the Harbor Syndicate warehouse guards' },
+      { type: 'defeat', place: 'yard', triggerRadius: 280, alertCue: 'HARBOR GUARDS PATROLLING WAREHOUSE PERIMETER',
+        spawn: [
+          { role: 'syndicate_brawler', type: 'brawler', dx: -70, dy: 20, name: 'Warehouse Brawler', say: "Intruder at the perimeter!" },
+          { role: 'syndicate_enforcer', type: 'smg', dx: 80, dy: -20, name: 'Warehouse Patrol' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: 20, dy: 70, name: 'Warehouse Lookout' },
+          { role: 'syndicate_enforcer', type: 'pistol', dx: -30, dy: -50, name: 'Dock Guard' }
+        ],
+        text: 'Neutralize the Harbor Syndicate warehouse guards'
+      },
       { type: 'collect', item: 'q_package', label: 'Hardware lockbox & munitions', tex: 'q_package', at: 'yardInside', text: "Retrieve Gus's Master Key and Kenny's stolen munitions" },
       { type: 'talk', npc: 'kenny', dialogue: 'm3_kenny_return', text: 'Return the munitions crate to Kenny' },
       { type: 'talk', npc: 'gus', dialogue: 'm3_end', text: 'Return the Master Warehouse Key to Gus Marlowe' }
@@ -76,7 +84,15 @@ export const STORY = [
       { type: 'collect', item: 'q_ledger', label: 'Encrypted microchip', tex: 'q_ledger', at: 'yosen', off: [20, 0], text: 'Accept the cartel microchip from Yosen' },
       { type: 'goto', place: 'diner', radius: 120, text: 'Take the microchip to Marla Voss at the diner' },
       { type: 'talk', npc: 'marla', dialogue: 'm4_marla', text: 'Analyze the cipher at the diner terminal' },
-      { type: 'defeat', place: 'diner', spawn: [{ role: 'criminal', type: 'pistol', dx: -60, dy: 40, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 70, dy: 50, hostile: true }, { role: 'criminal', type: 'pistol', dx: 10, dy: 90, hostile: true }], text: 'Survive the surprise cartel ambush outside Voss Diner' },
+      { type: 'goto', place: 'alley', radius: 120, text: 'Step into the alley behind Voss Diner' },
+      { type: 'defeat', place: 'alley', triggerRadius: 240, alertCue: 'CARTEL AMBUSH SQUAD SPOTTED IN THE ALLEY',
+        spawn: [
+          { role: 'syndicate_enforcer', type: 'flanker', dx: -60, dy: 40, name: 'Cartel Hitman', say: "There's the informant's runner!" },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 70, dy: 40, name: 'Cartel Bruiser' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: 10, dy: 80, name: 'Alley Marksman' }
+        ],
+        text: 'Survive the cartel ambush in the alley'
+      },
       { type: 'goto', place: 'yosen', radius: 120, text: 'Regroup with Yosen Blackthorn in the alley' },
       { type: 'talk', npc: 'yosen', dialogue: 'm4_end', text: 'Debrief with Yosen on the syndicate connection' }
     ]
@@ -91,7 +107,16 @@ export const STORY = [
       { type: 'talk', npc: 'yosen', dialogue: 'm5_yosen', text: 'Receive the commercial district dossier from Yosen' },
       { type: 'goto', place: 'wise', radius: 120, text: 'Head to WISE SOLE boutique downtown' },
       { type: 'talk', npc: 'ezekiel', dialogue: 'm5_ezekiel', text: 'Confront Ezekiel Blackwell about syndicate drops' },
-      { type: 'defeat', place: 'wise', spawn: [{ role: 'criminal', type: 'shotgun', dx: -80, dy: 40, hostile: true }, { role: 'criminal', type: 'smg', dx: 70, dy: 30, hostile: true }, { role: 'criminal', type: 'pistol', dx: -30, dy: -50, hostile: true }, { role: 'criminal', type: 'pistol', dx: 50, dy: 70, hostile: true }], text: 'Defend WISE SOLE from 4 armed syndicate enforcers' },
+      { type: 'goto', place: 'wise', off: [0, 80], radius: 110, text: 'Intercept the shakedown crew outside WISE SOLE' },
+      { type: 'defeat', place: 'wise', off: [0, 80], triggerRadius: 260, alertCue: 'SHAKEDOWN CREW CONVERGING ON THE STORE FRONT',
+        spawn: [
+          { role: 'syndicate_brawler', type: 'brawler', dx: -50, dy: 30, name: 'Shakedown Enforcer', say: "Pay up or we torch the boutique!" },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 50, dy: 20, name: 'Syndicate Gunman' },
+          { role: 'syndicate_enforcer', type: 'pistol', dx: -20, dy: 60, name: 'Syndicate Scout' },
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: 30, dy: 70, name: 'Shakedown Chief' }
+        ],
+        text: 'Defend WISE SOLE from 4 armed syndicate enforcers'
+      },
       { type: 'collect', item: 'q_ledger', label: 'Cash routing ledger', tex: 'q_ledger', at: 'wise', off: [-30, 20], text: 'Pick up the enforcer cash routing ledger' },
       { type: 'talk', npc: 'ezekiel', dialogue: 'm5_ezekiel_end', text: 'Calm Ezekiel down and secure the money trail' },
       { type: 'goto', place: 'gas', radius: 120, text: 'Bring the ledger to Dex at the gas station' },
@@ -100,7 +125,7 @@ export const STORY = [
   },
   {
     id: 'm6', chapter: 2, title: 'High-Octane Intercept', giver: 'dex', requires: ['m5'],
-    desc: 'The ledger reveals a VIP courier heading for Meridian Casino with security transponders. Mark Sterling at TOTOYA can install a frequency tracker, and Gordy has the pursuit muscle.',
+    desc: 'The ledger reveals a VIP courier heading for Meridian Casino with security transponders. Mark Sterling at TOTOYA equips a tracking antenna, and Gordy provides pursuit muscle to chase down the fleeing vehicle.',
     reward: { money: 1250, rep: 25, weapon: 'mac10', ammo: { acp45: 90 }, plates: 1 },
     objectives: [
       { type: 'talk', npc: 'dex', dialogue: 'm6_dex', text: 'Receive courier telemetry from Dex' },
@@ -108,10 +133,15 @@ export const STORY = [
       { type: 'talk', npc: 'mark', dialogue: 'm6_mark', text: 'Have Mark Sterling equip a frequency scanner' },
       { type: 'goto', place: 'dealer', radius: 130, text: "Visit Gordy's Used Cars lot" },
       { type: 'talk', npc: 'gordy', dialogue: 'm6_gordy', text: 'Pick up Gordy’s pursuit-tuned vehicle' },
-      { type: 'script', run: 'm6_chase', text: 'The syndicate courier vehicle has been spotted!' },
-      { type: 'goto', place: 'yard2', radius: 220, text: 'Pursue and corner the courier vehicle at Loading Yard 2' },
-      { type: 'defeat', place: 'yard2', spawn: [{ role: 'criminal', type: 'smg', dx: -60, dy: 20, hostile: true }, { role: 'criminal', type: 'pistol', dx: 70, dy: -20, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 10, dy: 60, hostile: true }], text: 'Eliminate the courier bodyguard escort' },
-      { type: 'collect', item: 'q_package', label: 'VIP Casino Transponder', tex: 'q_package', at: 'yard2', off: [40, 10], text: 'Seize the VIP Casino Transponder' },
+      { type: 'vehicleChase', from: 'dealer', to: 'yard2', vtype: 'sports', variant: 1, tag: 'm6_courier',
+        occupants: [
+          { role: 'syndicate_driver', type: 'courier_driver', targetName: 'Syndicate VIP Courier', say: "They're on our tail! Floor it!" },
+          { role: 'syndicate_brawler', type: 'brawler', targetName: 'Courier Bodyguard', say: "I'll blow 'em off the road!" }
+        ],
+        dropItem: 'q_package',
+        text: 'Pursue and disable the courier vehicle before it escapes'
+      },
+      { type: 'collect', item: 'q_package', label: 'VIP Casino Transponder', tex: 'q_package', at: 'yard2', off: [20, 10], text: 'Seize the VIP Casino Transponder' },
       { type: 'talk', npc: 'mark', dialogue: 'm6_end', text: 'Deliver the transponder to Mark Sterling at TOTOYA' }
     ]
   },
@@ -125,7 +155,16 @@ export const STORY = [
       { type: 'talk', npc: 'yosen', dialogue: 'm7_yosen', text: 'Receive Yosen’s radio scrambler frequency' },
       { type: 'goto', place: 'jansenn', radius: 140, text: 'Enter The Neon Chord live music bar in Westend' },
       { type: 'talk', npc: 'jansenn', dialogue: 'm7_jansenn', text: 'Talk to Jansenn on the live stage' },
-      { type: 'defeat', place: 'jansenn', spawn: [{ role: 'criminal', type: 'pistol', dx: -90, dy: 60, hostile: true }, { role: 'criminal', type: 'bat', dx: 80, dy: 50, hostile: true }, { role: 'criminal', type: 'pistol', dx: 120, dy: 80, hostile: true }, { role: 'criminal', type: 'shotgun', dx: -40, dy: 90, hostile: true }], text: 'Defend the stage rear exits from syndicate spotters' },
+      { type: 'goto', place: 'musicBar', off: [0, 80], radius: 110, text: 'Check the venue rear stage exits in the alley' },
+      { type: 'defeat', place: 'musicBar', off: [0, 80], triggerRadius: 250, alertCue: 'SYNDICATE HITMEN CAMPING OUTSIDE BACKSTAGE',
+        spawn: [
+          { role: 'syndicate_enforcer', type: 'smg', dx: -70, dy: 40, name: 'Backstage Spotter', say: "Musician's friend is here! Take him out!" },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 60, dy: 30, name: 'Syndicate Bruiser' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: 90, dy: 60, name: 'Alley Lookout' },
+          { role: 'syndicate_enforcer', type: 'shotgun', dx: -30, dy: 70, name: 'Syndicate Hitman' }
+        ],
+        text: 'Defend the venue rear exits from syndicate spotters'
+      },
       { type: 'talk', npc: 'jansenn', dialogue: 'm7_jansenn_end', text: 'Collect the decoded VIP Casino Pass from Jansenn' }
     ]
   },
@@ -158,7 +197,16 @@ export const STORY = [
       { type: 'talk', npc: 'kenny', dialogue: 'm9_kenny', text: 'Acquire tactical entry equipment from Kenny' },
       { type: 'goto', place: 'school_principal', radius: 130, text: 'Infiltrate Lincoln High School after hours' },
       { type: 'talk', npc: 'principal', dialogue: 'm9_principal', text: 'Confront Principal Arthur Vance in his office' },
-      { type: 'defeat', place: 'school_principal', spawn: [{ role: 'criminal', type: 'shotgun', dx: -80, dy: 40, hostile: true }, { role: 'criminal', type: 'pistol', dx: 70, dy: 30, hostile: true }, { role: 'criminal', type: 'smg', dx: 20, dy: -50, hostile: true }, { role: 'criminal', type: 'pistol', dx: -30, dy: 80, hostile: true }], text: 'Neutralize the syndicate guards in the school courtyard' },
+      { type: 'goto', place: 'school', off: [0, 80], radius: 120, text: 'Move into the school courtyard and transit shed' },
+      { type: 'defeat', place: 'school', off: [0, 80], triggerRadius: 260, alertCue: 'SYNDICATE GUARDS PATROLLING TRANSIT SHED',
+        spawn: [
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: -60, dy: 30, name: 'Archive Guard Captain', say: "No witnesses! Lock the courtyard!" },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 70, dy: 20, name: 'Courtyard Enforcer' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 20, dy: -40, name: 'Transit SMG' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: -30, dy: 60, name: 'Courtyard Lookout' }
+        ],
+        text: 'Neutralize the syndicate guards in the school courtyard'
+      },
       { type: 'collect', item: 'q_documents', label: 'Lincoln High Contraband Manifest', tex: 'q_documents', at: 'school_principal', off: [40, 20], text: 'Seize the Lincoln High Contraband Manifest' },
       { type: 'talk', npc: 'hale', dialogue: 'm9_end', text: 'Deliver the contraband manifest to Detective Hale' }
     ]
@@ -173,7 +221,16 @@ export const STORY = [
       { type: 'talk', npc: 'rico', dialogue: 'm10_rico', text: 'Debrief with Rico on Victor Vance’s movements' },
       { type: 'goto', place: 'yard2', radius: 180, text: 'Travel with Rico to South Loading Yard 2' },
       { type: 'script', run: 'm10_ambush', text: 'Trap! Victor Vance has sprung a deadly ambush!' },
-      { type: 'defeat', place: 'yard2', spawn: [{ role: 'criminal', type: 'rifle', dx: -90, dy: 20, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 80, dy: -30, hostile: true }, { role: 'criminal', type: 'smg', dx: 40, dy: 70, hostile: true }, { role: 'criminal', type: 'rifle', dx: -40, dy: -60, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 110, dy: 30, hostile: true }], text: 'Survive and eliminate all 5 elite Harbor mercenaries' },
+      { type: 'defeat', place: 'yard2', triggerRadius: 280, alertCue: 'HARBOR MERCENARIES FLANKING BEHIND CARGO CONTAINERS',
+        spawn: [
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: -90, dy: 20, name: 'Mercenary Squad Leader', say: "Box them between the containers!" },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 80, dy: -30, name: 'Breacher Mercenary' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 40, dy: 70, name: 'Flank Rifleman' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: -40, dy: -60, name: 'Crane Marksman' },
+          { role: 'syndicate_enforcer', type: 'rifle', dx: 110, dy: 30, name: 'Support Gunner' }
+        ],
+        text: 'Survive and eliminate all 5 elite Harbor mercenaries'
+      },
       { type: 'talk', npc: 'rico', dialogue: 'm10_rico_after', text: 'Take Rico’s safehouse key and discuss the escape' },
       { type: 'goto', place: 'safehouse', radius: 120, text: 'Travel to the designated safehouse' },
       { type: 'unlock', place: 'safehouse', text: 'Unlock the safehouse door with Rico’s key (F)' }
@@ -189,7 +246,14 @@ export const STORY = [
       { type: 'goto', place: 'yosen', radius: 120, text: 'Seek out Yosen Blackthorn in the Market Street alley' },
       { type: 'talk', npc: 'yosen', dialogue: 'm11_yosen', text: 'Receive Yosen’s surveillance coordinates' },
       { type: 'goto', place: 'park', radius: 240, text: 'Travel stealthily to Greenfield Park' },
-      { type: 'observe', place: 'park', radius: 280, ms: 5000, spawn: [{ role: 'gang', type: 'pistol', dx: -50, dy: 10 }, { role: 'guard', type: 'pistol', dx: 50, dy: -10 }, { role: 'gang', type: 'shotgun', dx: 10, dy: 60 }], text: 'Observe the corrupt precinct exchange from concealment' },
+      { type: 'observe', place: 'park', radius: 280, ms: 5000,
+        spawn: [
+          { role: 'gang', type: 'pistol', dx: -50, dy: 10, name: 'Syndicate Payoff Man' },
+          { role: 'copcmd2', type: 'pistol', dx: 50, dy: -10, name: 'Corrupt Lieutenant' },
+          { role: 'gang2', type: 'shotgun', dx: 10, dy: 60, name: 'Syndicate Guard' }
+        ],
+        text: 'Observe the corrupt precinct exchange from concealment'
+      },
       { type: 'collect', item: 'q_wallet', label: 'Corrupt officers payoff ledger', tex: 'q_wallet', at: 'park', off: [20, 10], text: 'Snatch the dropped payoff envelope' },
       { type: 'script', run: 'm11_chase', text: 'Police sirens! Corrupt units have called in a pursuit!' },
       { type: 'losewanted', limit: 300000, text: 'Lose the corrupt police pursuit (break line of sight)' },
@@ -210,7 +274,17 @@ export const STORY = [
       { type: 'goto', place: 'kenny', radius: 120, text: 'Equip heavy assault rifles at Kenny’s hideout' },
       { type: 'talk', npc: 'kenny', dialogue: 'm12_kenny', text: 'Arm yourself with high-caliber munitions' },
       { type: 'goto', place: 'yardInside', radius: 160, text: 'Storm the fortified Harbor Distribution Warehouse' },
-      { type: 'defeat', place: 'yardInside', spawn: [{ role: 'criminal', type: 'rifle', dx: -80, dy: 30, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 90, dy: -20, hostile: true }, { role: 'criminal', type: 'rifle', dx: -30, dy: -60, hostile: true }, { role: 'criminal', type: 'smg', dx: 60, dy: 60, hostile: true }, { role: 'criminal', type: 'rifle', dx: 20, dy: 90, hostile: true }, { role: 'criminal', type: 'shotgun', dx: -90, dy: -20, hostile: true }], text: 'Eliminate all 6 heavily armored syndicate enforcers' },
+      { type: 'defeat', place: 'yardInside', triggerRadius: 260, alertCue: 'DEPOT COMMANDER VANCE DEFENDING THE VAULT',
+        spawn: [
+          { role: 'syndicate_boss', type: 'gang_leader', dx: 0, dy: 20, name: 'Depot Commander Vance', say: "Reyes pays for results! Defend the records!" },
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: -80, dy: 30, name: 'Heavy Juggernaut' },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 90, dy: -20, name: 'Vault Enforcer' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: -30, dy: -60, name: 'Gantry Sniper' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 60, dy: 60, name: 'Patrol SMG' },
+          { role: 'syndicate_enforcer', type: 'rifle', dx: -90, dy: -20, name: 'Tactical Rifleman' }
+        ],
+        text: 'Eliminate Depot Commander Vance and his fortified syndicate enforcers'
+      },
       { type: 'collect', item: 'q_documents', label: 'Reyes Extortion Tapes', tex: 'q_documents', at: 'yardInside', off: [50, 10], text: 'Cut the security vault padlock and seize the Extortion Tapes' },
       { type: 'goto', place: 'diner', radius: 120, text: 'Deliver the extortion files to Marla Voss at the diner' },
       { type: 'talk', npc: 'marla', dialogue: 'm12_end', text: 'Review the high-level corruption evidence with Marla' }
@@ -257,7 +331,17 @@ export const STORY = [
       { type: 'talk', npc: 'adrian', dialogue: 'm15_start', text: 'Adrian warns you that security terminals are alerting' },
       { type: 'goto', place: 'cityhall_security', radius: 120, text: 'Approach the Central Security Desk on Floor 1' },
       { type: 'talk', npc: 'cortez', dialogue: 'm15_cortez', text: 'Confront Security Chief Daniel Cortez' },
-      { type: 'defeat', place: 'cityhall_security', spawn: [{ role: 'guard', type: 'rifle', dx: -80, dy: 30, hostile: true }, { role: 'guard', type: 'smg', dx: 70, dy: -20, hostile: true }, { role: 'guard', type: 'rifle', dx: 30, dy: 70, hostile: true }, { role: 'guard', type: 'shotgun', dx: -40, dy: -50, hostile: true }, { role: 'guard', type: 'rifle', dx: 90, dy: 40, hostile: true }], text: 'Eliminate the 5 Reyes private military contractors' },
+      { type: 'goto', place: 'cityhall_security', off: [0, 80], radius: 110, text: 'Breach the PMC security checkpoint barricade' },
+      { type: 'defeat', place: 'cityhall_security', off: [0, 80], triggerRadius: 260, alertCue: 'REYES CONTRACTORS LOCKING DOWN CORRIDOR',
+        spawn: [
+          { role: 'reyes_contractor', type: 'heavy_enforcer', dx: -60, dy: 20, name: 'PMC Contractor Lead', say: "Total building lockdown! Eliminate the intruder!" },
+          { role: 'reyes_contractor', type: 'flanker', dx: 70, dy: -20, name: 'PMC CQB Specialist' },
+          { role: 'reyes_contractor', type: 'rifle', dx: 30, dy: 50, name: 'PMC Rifleman' },
+          { role: 'reyes_contractor', type: 'brawler', dx: -40, dy: -40, name: 'PMC Breacher' },
+          { role: 'reyes_contractor', type: 'marksman', dx: 90, dy: 30, name: 'PMC Overwatch' }
+        ],
+        text: 'Eliminate the 5 Reyes private military contractors'
+      },
       { type: 'interactAt', place: 'cityhall_security', label: 'Override security laser grid' },
       { type: 'goto', place: 'totoya', radius: 140, text: 'Escape the lockdown perimeter and reach TOTOYA Auto Repair' },
       { type: 'talk', npc: 'mark', dialogue: 'm15_end', text: 'Deliver the structural blueprints to Mark Sterling' }
@@ -272,8 +356,17 @@ export const STORY = [
       { type: 'goto', place: 'kenny', radius: 120, text: 'Visit Kenny Aquiles for elite ballistic vests and heavy munitions' },
       { type: 'talk', npc: 'kenny', dialogue: 'm16_kenny', text: 'Arm yourself for an executive suite assault' },
       { type: 'goto', place: 'cityhall_mayor', radius: 130, text: 'Infiltrate City Hall Floor 3 Executive Penthouse' },
-      { type: 'defeat', place: 'cityhall_mayor', spawn: [{ role: 'criminal', type: 'rifle', dx: -80, dy: 30, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 80, dy: 20, hostile: true }, { role: 'criminal', type: 'rifle', dx: -30, dy: -60, hostile: true }, { role: 'criminal', type: 'smg', dx: 60, dy: -40, hostile: true }, { role: 'criminal', type: 'rifle', dx: 10, dy: 80, hostile: true }], text: 'Eliminate the 5 hit-squad mercenaries surrounding the Mayor' },
-      { type: 'talk', npc: 'salcedo', dialogue: 'm16_salcedo', text: 'Confront Mayor Elena Salcedo in her office' },
+      { type: 'defeat', place: 'cityhall_mayor', triggerRadius: 280, alertCue: 'HIT SQUAD SURROUNDING THE MAYOR SUITE',
+        spawn: [
+          { role: 'syndicate_boss', type: 'gang_leader', dx: -30, dy: 20, name: 'Hit-Squad Commander', say: "Execute the Mayor before they breach the door!" },
+          { role: 'reyes_contractor', type: 'heavy_enforcer', dx: 60, dy: 10, name: 'Reyes Black-Ops Heavy' },
+          { role: 'syndicate_brawler', type: 'brawler', dx: -70, dy: -40, name: 'Hitman Breacher' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 50, dy: -30, name: 'Hitman SMG' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: 10, dy: 60, name: 'Overwatch Marksman' }
+        ],
+        text: 'Eliminate the 5 hit-squad mercenaries surrounding the Mayor'
+      },
+      { type: 'talk', npc: 'salcedo', dialogue: 'm16_salcedo', text: 'Rescue and speak with Mayor Elena Salcedo in her office' },
       { type: 'collect', item: 'q_tape', label: 'Master blackmail recordings', tex: 'q_tape', at: 'cityhall_mayor', off: [30, 10], text: 'Secure Mayor Salcedo’s master blackmail audio recordings' },
       { type: 'goto', place: 'station', radius: 120, text: 'Escort the evidence safely to Detective Hale at PCPD' },
       { type: 'talk', npc: 'hale', dialogue: 'm16_end', text: 'Present the Mayor’s formal confession to Hale' }
@@ -303,10 +396,29 @@ export const STORY = [
     reward: { money: 8000, rep: 110, weapon: 'scar', ammo: { r556: 180, belt: 200 }, plates: 3 },
     objectives: [
       { type: 'goto', place: 'tower', radius: 130, text: 'Breach the grand lobby of Reyes Holdings Tower' },
-      { type: 'defeat', place: 'tower', spawn: [{ role: 'guard', type: 'rifle', dx: -90, dy: 30, hostile: true }, { role: 'guard', type: 'shotgun', dx: 80, dy: -20, hostile: true }, { role: 'guard', type: 'rifle', dx: -20, dy: -70, hostile: true }, { role: 'guard', type: 'smg', dx: 50, dy: 60, hostile: true }, { role: 'guard', type: 'rifle', dx: 100, dy: 20, hostile: true }, { role: 'guard', type: 'shotgun', dx: -60, dy: 80, hostile: true }], text: 'Eliminate the 6 elite private military guards in the lobby' },
+      { type: 'defeat', place: 'tower', triggerRadius: 260, alertCue: 'REYES TOWER LOBBY DEFENSE FORCE DEPLOYED',
+        spawn: [
+          { role: 'reyes_contractor', type: 'heavy_enforcer', dx: -80, dy: 20, name: 'Lobby PMC Commander', say: "Intruder at the lobby gates! Hold the elevators!" },
+          { role: 'reyes_contractor', type: 'rifle', dx: 70, dy: -20, name: 'PMC Rifleman' },
+          { role: 'reyes_contractor', type: 'brawler', dx: -20, dy: -60, name: 'PMC Shotgun Breacher' },
+          { role: 'reyes_contractor', type: 'flanker', dx: 50, dy: 50, name: 'PMC Subgunner' },
+          { role: 'reyes_contractor', type: 'marksman', dx: 90, dy: 20, name: 'Lobby Overwatch' },
+          { role: 'reyes_guard', type: 'pistol', dx: -50, dy: 70, name: 'Tower Security Guard' }
+        ],
+        text: 'Eliminate the 6 elite private military guards in the lobby'
+      },
       { type: 'goto', place: 'reyes_office', radius: 130, text: 'Ride the executive elevator to Councilman Reyes\' Penthouse Office' },
       { type: 'talk', npc: 'reyes', dialogue: 'm18_reyes', text: 'Confront Councilman Aurelio Reyes at his desk' },
-      { type: 'defeat', place: 'reyes_office', spawn: [{ role: 'guard', type: 'rifle', dx: -70, dy: 30, hostile: true }, { role: 'guard', type: 'shotgun', dx: 70, dy: 30, hostile: true }, { role: 'guard', type: 'rifle', dx: 0, dy: 80, hostile: true }, { role: 'guard', type: 'smg', dx: -40, dy: -50, hostile: true }], text: 'Defeat Reyes’ personal bodyguard detachment' },
+      { type: 'goto', place: 'reyes_office', off: [0, 60], radius: 100, text: 'Defeat Reyes’ personal executive bodyguard detachment' },
+      { type: 'defeat', place: 'reyes_office', off: [0, 60], triggerRadius: 240, alertCue: 'REYES EXECUTIVE BODYGUARDS ENGAGING',
+        spawn: [
+          { role: 'reyes_contractor', type: 'gang_leader', dx: 0, dy: 30, name: 'Executive Security Lead', say: "Nobody touches Councilman Reyes!" },
+          { role: 'reyes_contractor', type: 'heavy_enforcer', dx: -60, dy: 20, name: 'Penthouse Heavy Guard' },
+          { role: 'reyes_contractor', type: 'flanker', dx: 60, dy: 20, name: 'Executive SMG' },
+          { role: 'reyes_contractor', type: 'marksman', dx: 0, dy: 70, name: 'Penthouse Marksman' }
+        ],
+        text: 'Defeat Reyes’ personal bodyguard detachment'
+      },
       { type: 'collect', item: 'q_documents', label: 'Reyes master server backups', tex: 'q_documents', at: 'reyes_office', off: [40, 20], text: 'Seize Reyes’ master server backups and offshore ledger' },
       { type: 'goto', place: 'station', radius: 120, text: 'Deliver the server archives to Detective Hale at PCPD' },
       { type: 'talk', npc: 'hale', dialogue: 'm18_end', text: 'Report the fall of Councilman Reyes to Detective Hale' }
@@ -323,8 +435,28 @@ export const STORY = [
       { type: 'goto', place: 'dealer', radius: 130, text: 'Collect an armored pursuit truck from Gordy' },
       { type: 'talk', npc: 'gordy', dialogue: 'm19_gordy', text: 'Acquire Gordy’s fortified combat rig' },
       { type: 'goto', place: 'fort', radius: 220, text: 'Drive to the fortified gates of Fort Merrow docks' },
-      { type: 'defeat', place: 'fort', spawn: [{ role: 'criminal', type: 'rifle', dx: -100, dy: 30, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 90, dy: -40, hostile: true }, { role: 'criminal', type: 'rifle', dx: -30, dy: 80, hostile: true }, { role: 'criminal', type: 'rifle', dx: 60, dy: 70, hostile: true }, { role: 'criminal', type: 'shotgun', dx: -60, dy: -60, hostile: true }, { role: 'criminal', type: 'smg', dx: 110, dy: 10, hostile: true }], text: 'Breach and eliminate the outer perimeter fortress guards' },
-      { type: 'defeat', place: 'fort', spawn: [{ role: 'criminal', type: 'rifle', dx: -80, dy: 20, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 70, dy: 30, hostile: true }, { role: 'criminal', type: 'rifle', dx: 0, dy: 70, hostile: true }, { role: 'criminal', type: 'smg', dx: -40, dy: -40, hostile: true }, { role: 'criminal', type: 'shotgun', dx: 50, dy: -50, hostile: true }], text: 'Defeat Victor Vance’s elite syndicate captains' },
+      { type: 'defeat', place: 'fort', triggerRadius: 280, alertCue: 'FORT MERROW OUTER GATE DEFENSE FORCE ENGAGING',
+        spawn: [
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: -90, dy: 20, name: 'Gate Defense Captain', say: "Manning the barricades! Open fire!" },
+          { role: 'syndicate_brawler', type: 'brawler', dx: 80, dy: -30, name: 'Bunker Breacher' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: -20, dy: 70, name: 'Watchtower Sniper' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 50, dy: 60, name: 'Perimeter SMG' },
+          { role: 'syndicate_enforcer', type: 'rifle', dx: -50, dy: -50, name: 'Dock Rifleman' },
+          { role: 'syndicate_driver', type: 'courier_driver', dx: 100, dy: 10, name: 'Harbor Flanker' }
+        ],
+        text: 'Breach and eliminate the outer perimeter fortress guards'
+      },
+      { type: 'goto', place: 'fort', off: [80, 0], radius: 140, text: 'Assault Victor Vance\'s inner command bunker' },
+      { type: 'defeat', place: 'fort', off: [80, 0], triggerRadius: 250, alertCue: 'WARLORD VICTOR VANCE DEFENDING INNER SANCTUM',
+        spawn: [
+          { role: 'syndicate_boss', type: 'gang_leader', dx: 0, dy: 10, name: 'Warlord Victor Vance', say: "Port City is MINE! You won't leave these docks alive!" },
+          { role: 'syndicate_heavy', type: 'heavy_enforcer', dx: -70, dy: 20, name: 'Vance Praetorian Guard' },
+          { role: 'syndicate_marksman', type: 'marksman', dx: 60, dy: -30, name: 'Elite Sharpshooter' },
+          { role: 'syndicate_brawler', type: 'brawler', dx: -30, dy: 60, name: 'Fortress Brawler' },
+          { role: 'syndicate_enforcer', type: 'flanker', dx: 40, dy: 50, name: 'Vance Lieutenant' }
+        ],
+        text: 'Defeat Victor Vance and his elite syndicate inner circle'
+      },
       { type: 'talk', npc: 'vance', dialogue: 'm19_vance_end', text: 'Confront the defeated Victor Vance at gunpoint' }
     ]
   },

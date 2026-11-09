@@ -119,12 +119,16 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.unloaded = false;
     this.sirenOn = false;
     this.cmd = { throttle: 0, steer: 0, handbrake: false };
+    this.chaseTarget = !!spec.chaseTarget;
+    this.chaseDest = spec.chaseDest || null;
+    this.chaseOccupants = spec.chaseOccupants || null;
+    this.bailedOut = false;
     this.uid = ++UID; this.kv = { x: 0, y: 0 }; this.hitAt = 0; this.noFeedbackUntil = 0; this.lastDriverAt = 0;
     this.inObstacleContact = false; this.obstacleBlockedThisFrame = false; this.lastCrashTime = 0; this.prevSpeed = 0;
     this.body.pushable = false;                      // people and scenery can never shove a car; only the vehicle collision layer moves cars
     this.refreshView(true);
     this.body.setImmovable(this.mode === 'parked');
-    if (this.mode === 'patrol' || this.mode === 'traffic') this.driver = 'ai';
+    if (this.mode === 'patrol' || this.mode === 'traffic' || this.mode === 'flee' || this.chaseTarget) this.driver = 'ai';
     if (cfg.police && !cfg.military) {
       this.lightR = scene.add.sprite(0, 0, 'siren_r').setVisible(false);
       this.lightB = scene.add.sprite(0, 0, 'siren_b').setVisible(false);
@@ -226,6 +230,9 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     if (this.wrecked) return;
     this.hp = Math.max(0, this.hp - n);
     this.scene.events.emit('vehicle-damage', this);
+    if ((this.mode === 'flee' || this.chaseTarget) && !this.bailedOut && this.hp <= this.maxHp * 0.28) {
+      this.bailOutOccupants();
+    }
     if (this.hp <= 0) this.wreck();
   }
 
@@ -240,7 +247,62 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     this.body.setImmovable(true);
     this.setTint(0x333333);
     this.sirenOn = false;
+    if ((this.mode === 'flee' || this.chaseTarget) && !this.bailedOut) {
+      this.bailOutOccupants();
+    }
     if (!silent) this.scene.onVehicleWrecked(this);
+  }
+
+  bailOutOccupants() {
+    if (this.bailedOut) return;
+    this.bailedOut = true;
+    this.mode = 'parked';
+    this.driver = null;
+    this.speed = 0;
+    this.cmd = { throttle: 0, steer: 0, handbrake: true };
+    if (this.body) {
+      this.body.setVelocity(0, 0);
+      this.body.setImmovable(true);
+    }
+    const sc = this.scene;
+    const occupants = (this.chaseOccupants && this.chaseOccupants.length) ? this.chaseOccupants : [
+      { role: 'syndicate_driver', type: 'smg', targetName: 'Syndicate Courier' },
+      { role: 'syndicate_brawler', type: 'shotgun', targetName: 'Courier Bodyguard' }
+    ];
+
+    const cosH = Math.cos(this.heading), sinH = Math.sin(this.heading);
+    const perpX = -sinH, perpY = cosH;
+    const spawned = [];
+
+    occupants.forEach((occ, idx) => {
+      const side = idx % 2 === 0 ? -1 : 1;
+      const offsetDist = 32 + (Math.floor(idx / 2) * 18);
+      const sx = this.x + perpX * offsetDist * side + cosH * (idx * 6);
+      const sy = this.y + perpY * offsetDist * side + sinH * (idx * 6);
+      const free = sc.freeSpotNear(sx, sy, 50) || { x: sx, y: sy };
+
+      const e = sc.spawnMissionEnemy({
+        x: free.x,
+        y: free.y,
+        role: occ.role || 'syndicate_enforcer',
+        type: occ.type || 'smg',
+        name: occ.targetName || occ.name || 'Courier Henchman',
+        targetName: occ.targetName || occ.name || null,
+        hostile: true
+      });
+      if (e) {
+        e.angry = true;
+        e.angryUntil = 1e12;
+        e.enterAlert(sc.gt, true);
+        if (occ.say) e.say(occ.say, 2500);
+        else if (idx === 0) e.say("Vehicle's disabled! Fight on foot!", 2500);
+        spawned.push(e);
+        if (sc.missions) sc.missions.track('enemies', e);
+      }
+    });
+
+    sc.events.emit('vehicle-target-bailed', this, spawned);
+    sc.events.emit('banner', { title: 'VEHICLE DISABLED!', sub: 'TARGET HAS BAILED OUT TO FIGHT ON FOOT', color: '#ff6a3a' });
   }
 
   /* ----------------------------------------------------------- driving */
@@ -563,6 +625,28 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
         // close and clear: drive straight at the target instead of the road centre line
         if (!P.locked && d < 260 && !P.rec && nav.clearLine(this.cx, this.cy, pt.x, pt.y, 14) && sc.hasLOS(this.cx, this.cy, pt.x, pt.y)) P.wp = [{ x: pt.x, y: pt.y, node: -1 }];
       }
+    } else if (this.mode === 'flee') {
+      cruise = 0.98;
+      const p = sc.player;
+      const dPlayer = Math.hypot(p.x - this.cx, p.y - this.cy);
+      if (!this.bailedOut && (this.hp <= this.maxHp * 0.3 || this.wrecked || (this.stuckT > 2500 && dPlayer < 200))) {
+        this.bailOutOccupants();
+        return;
+      }
+      let dest = this.chaseDest;
+      if (!dest) {
+        const fleeAngle = Math.atan2(this.cy - p.y, this.cx - p.x);
+        dest = sc.nav.nodeAhead(this.cx, this.cy, fleeAngle, 500);
+      }
+      finalTarget = dest;
+      const dDest = Math.hypot(dest.x - this.cx, dest.y - this.cy);
+      if (dDest < 90 && !this.bailedOut) {
+        this.bailOutOccupants();
+        return;
+      }
+      if (!P.locked && (!P.wp.length || now > P.nextPlan)) {
+        this.planChase(now, dest);
+      }
     } else { this.cmd = { throttle: 0, steer: 0, handbrake: true }; return; }
 
     if (wander && !P.locked) {
@@ -622,7 +706,7 @@ export default class Vehicle extends Phaser.Physics.Arcade.Sprite {
     const o = this.probeAhead(now);
     const f = o.front;
     let blockedStill = false;
-    const civil = this.mode !== 'chase';
+    const civil = this.mode !== 'chase' && this.mode !== 'flee';
     // ---- intersections: wait outside the crossing while somebody is going through it, and give way to the cross traffic that has priority
     if (civil && wander && wp.node >= 0 && dist < 200 && dist > 76) {
       if (now >= (P.yieldT || 0)) { P.yieldT = now + 110; P.yielding = this.mustYield(this.scene.nav.nodes[wp.node]); }

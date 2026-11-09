@@ -15,6 +15,12 @@ export const ENEMY_TYPES = {
   shotgun: { weapon: 'shotgun', hp: 80, walk: 50, run: 112, sight: 260, half: 0.85, range: 170, fireRate: 1500, burst: 1, pause: 1300, spread: 0.12, reduce: 0 },
   sniper: { weapon: 'sniper', hp: 50, walk: 40, run: 85, sight: 520, half: 0.55, range: 480, fireRate: 3000, burst: 1, pause: 700, spread: 0.035, reduce: 0 },
   heavy: { weapon: 'rifle', hp: 150, walk: 44, run: 85, sight: 320, half: 0.8, range: 280, fireRate: 210, burst: 4, pause: 2100, spread: 0.17, reduce: 0.35 },
+  brawler: { weapon: 'shotgun', melee: 'bat', hp: 95, walk: 55, run: 125, sight: 250, half: 0.85, range: 140, fireRate: 1100, burst: 1, pause: 900, spread: 0.14, reduce: 0.1 },
+  flanker: { weapon: 'uzi', hp: 60, walk: 62, run: 122, sight: 290, half: 0.85, range: 220, fireRate: 320, burst: 5, pause: 1400, spread: 0.18, reduce: 0 },
+  marksman: { weapon: 'sniper', hp: 55, walk: 42, run: 90, sight: 440, half: 0.6, range: 400, fireRate: 2600, burst: 1, pause: 600, spread: 0.04, reduce: 0 },
+  heavy_enforcer: { weapon: 'm4', hp: 180, walk: 42, run: 82, sight: 320, half: 0.8, range: 270, fireRate: 200, burst: 5, pause: 1800, spread: 0.16, reduce: 0.35 },
+  gang_leader: { weapon: 'scar', hp: 260, walk: 52, run: 108, sight: 350, half: 0.85, range: 300, fireRate: 220, burst: 4, pause: 1500, spread: 0.12, reduce: 0.25 },
+  courier_driver: { weapon: 'mac10', hp: 75, walk: 60, run: 128, sight: 280, half: 0.85, range: 200, fireRate: 300, burst: 4, pause: 1300, spread: 0.19, reduce: 0.05 },
   bat: { weapon: 'pistol', melee: 'bat', hp: 60, walk: 55, run: 115, sight: 240, half: 0.9, range: 40, fireRate: 900, burst: 1, pause: 700, spread: 0.1, reduce: 0 },
   knife: { weapon: 'pistol', melee: 'knife', hp: 50, walk: 58, run: 120, sight: 240, half: 0.9, range: 36, fireRate: 700, burst: 1, pause: 600, spread: 0.1, reduce: 0 },
   crowbar: { weapon: 'pistol', melee: 'crowbar', hp: 55, walk: 54, run: 112, sight: 240, half: 0.9, range: 40, fireRate: 850, burst: 1, pause: 700, spread: 0.1, reduce: 0 }
@@ -53,6 +59,13 @@ police: { tex: 'npc_police', hostility: 'wanted', preset: 'pistol' },
   gang2: { tex: 'npc_gang2', hostility: 'provoked', preset: 'pistol' },
   gang3: { tex: 'npc_gang3', hostility: 'provoked', preset: 'pistol' },
   gang4: { tex: 'npc_gang4', hostility: 'provoked', preset: 'shotgun' },
+  syndicate_enforcer: { tex: 'npc_syndicate_enforcer', hostility: 'provoked', preset: 'smg' },
+  syndicate_brawler: { tex: 'npc_syndicate_brawler', hostility: 'provoked', preset: 'brawler' },
+  syndicate_marksman: { tex: 'npc_syndicate_marksman', hostility: 'provoked', preset: 'marksman' },
+  syndicate_heavy: { tex: 'npc_syndicate_heavy', hostility: 'provoked', preset: 'heavy_enforcer' },
+  syndicate_driver: { tex: 'npc_syndicate_driver', hostility: 'provoked', preset: 'courier_driver' },
+  syndicate_boss: { tex: 'npc_syndicate_boss', hostility: 'provoked', preset: 'gang_leader' },
+  reyes_contractor: { tex: 'npc_reyes_contractor', hostility: 'provoked', preset: 'rifle' },
   military: { tex: 'npc_military', hostility: 'zone', preset: 'rifle' },
   mheavy: { tex: 'npc_mheavy', hostility: 'zone', preset: 'heavy' },
   msniper: { tex: 'npc_msniper', hostility: 'zone', preset: 'sniper' }
@@ -84,6 +97,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.role = spec.role || 'criminal';
     this.hostility = roleCfg.hostility;
     this.gang = spec.gang || null; this.boss = spec.boss || null; this.bossName = spec.bossName || null; this.crew = spec.crew || spec.gang || null;
+    this.targetName = spec.targetName || spec.name || null;
     this.melee = (cfg.melee && MELEE[cfg.melee]) ? MELEE[cfg.melee] : null; this.meleeId = cfg.melee || null; this.foe = null; this.warUntil = 0; this.raidUntil = 0; this.copFoeUntil = 0; this.firedUntil = 0;
     this.isPolice = /^(police|copcmd|swat|army)/.test(this.role);
     this.softCop = /^(police|copcmd)/.test(this.role);          // patrol / command officers: warn and cuff at up to 3 stars (SWAT and soldiers never do)
@@ -158,6 +172,12 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.flash = scene.add.sprite(spec.x, spec.y, 'flash').setDepth(5001).setVisible(false);
     this.flashUntil = 0;
     this.icon = null;
+    this.nameTag = null;
+    if (this.boss || this.targetName) {
+      const tagText = this.targetName || this.bossName || this.boss;
+      const col = (this.gang && GANGS[this.gang]) ? GANGS[this.gang].css : '#ff8a3a';
+      this.nameTag = scene.add.text(spec.x, spec.y, tagText, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: col, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000).setVisible(false);
+    }
     this.setVisible(false);
     this.gun.setVisible(false);
     this.shadow.setVisible(false);
@@ -331,6 +351,36 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.destroy();
   }
 
+  say(text, ms = 2200) {
+    if (this.dead || !this.scene) return;
+    this.sayUntil = this.scene.gt + ms;
+    if (!this.sayTxt) {
+      this.sayTxt = this.scene.add.text(0, 0, text, {
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        backgroundColor: '#111827dd',
+        padding: { x: 5, y: 3 },
+        stroke: '#000000',
+        strokeThickness: 2
+      }).setOrigin(0.5, 1).setDepth(6002);
+    } else {
+      this.sayTxt.setText(text);
+      this.sayTxt.setVisible(true);
+    }
+  }
+
+  updateSay(time) {
+    if (!this.sayTxt) return;
+    if (time > (this.sayUntil || 0) || this.dead || !this.visible) {
+      this.sayTxt.setVisible(false);
+      return;
+    }
+    const to = this.scene.elev(72);
+    this.sayTxt.setPosition(this.x + to.x, this.y + to.y).setRotation(-this.scene.camRot).setScale(1, this.scene.upY).setVisible(true);
+  }
+
   goCover(time) {
     const c = this.scene.findCover(this);
     if (!c) return false;
@@ -450,9 +500,13 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.flash.visible && time > this.flashUntil) this.flash.setVisible(false);
     if (this.sayTxt) this.updateSay(time);
-    if (this.boss) {                                           // bosses wear a name tag
-      if (!this.nameTag) this.nameTag = sc.add.text(0, 0, this.bossName || this.boss, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: GANGS[this.gang].css, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
-      const near = vis && Math.hypot(sc.player.x - this.x, sc.player.y - this.y) < 300, to = sc.elev(60);
+    if (this.boss || this.targetName) {                                           // bosses and targets wear a name tag
+      if (!this.nameTag) {
+        const tagText = this.targetName || this.bossName || this.boss;
+        const col = this.gang && GANGS[this.gang] ? GANGS[this.gang].css : '#ff8a3a';
+        this.nameTag = sc.add.text(0, 0, tagText, { fontFamily: '"Courier New", monospace', fontSize: '13px', fontStyle: 'bold', color: col, stroke: '#000', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(6000);
+      }
+      const near = vis && Math.hypot(sc.player.x - this.x, sc.player.y - this.y) < 360, to = sc.elev(60);
       this.nameTag.setVisible(near).setPosition(this.x + to.x, this.y + to.y).setRotation(-sc.camRot).setScale(1, sc.upY);
     }
 
