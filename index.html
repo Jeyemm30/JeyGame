@@ -12,10 +12,59 @@
     <meta http-equiv="Expires" content="0" />
     <title>CITY OF CHAOS</title>
     <link rel="stylesheet" href="/src/style.css" />
+    <style>
+      @keyframes pulseBar {
+        0% { opacity: 0.7; transform: scaleX(0.96); }
+        50% { opacity: 1; transform: scaleX(1); }
+        100% { opacity: 0.7; transform: scaleX(0.96); }
+      }
+    </style>
   </head>
   <body>
+    <!-- Immediate HTML loading screen so mobile players never see a black screen -->
+    <div id="preloader" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#080b12;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif;color:#fff;user-select:none;transition:opacity 0.4s ease;">
+      <div style="font-family:Impact,Arial Black,sans-serif;font-size:clamp(30px, 8vw, 54px);color:#ff8a3a;letter-spacing:3px;text-shadow:0 0 24px rgba(255,138,58,0.45);margin-bottom:6px;text-align:center;">CITY OF CHAOS</div>
+      <div style="font-size:clamp(10px, 2.8vw, 13px);color:#8fd8e0;font-weight:bold;letter-spacing:4px;margin-bottom:28px;text-align:center;">OPEN-WORLD CITY SANDBOX</div>
+      
+      <div style="width:min(80vw, 320px);height:8px;background:#141a24;border-radius:4px;overflow:hidden;position:relative;margin-bottom:14px;border:1px solid #263346;">
+        <div id="p-bar" style="width:15%;height:100%;background:linear-gradient(90deg, #ff6a2a, #facc15);border-radius:4px;transition:width 0.4s ease;animation:pulseBar 1.5s infinite ease-in-out;"></div>
+      </div>
+      
+      <div id="p-status" style="font-size:12px;color:#94a3b8;font-family:monospace;letter-spacing:1px;text-align:center;padding:0 16px;">Connecting & downloading assets...</div>
+    </div>
+
+    <!-- Error diagnostics banner -->
     <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;padding:12px;background:#b91c1c;color:#fff;font-family:monospace;font-size:12px;z-index:99999;word-break:break-all;"></div>
     <script>
+      (function() {
+        var progress = 15;
+        var pBar = document.getElementById('p-bar');
+        var pStatus = document.getElementById('p-status');
+        var downloadTimer = setInterval(function() {
+          if (!pBar || !document.getElementById('preloader')) {
+            clearInterval(downloadTimer);
+            return;
+          }
+          if (progress < 60) {
+            progress += Math.floor(Math.random() * 8) + 4;
+            if (progress > 60) progress = 60;
+            pBar.style.width = progress + '%';
+          }
+        }, 300);
+
+        setTimeout(function() {
+          if (pStatus && document.getElementById('preloader') && progress < 70) {
+            pStatus.innerText = 'Downloading game files (slow connection)...';
+          }
+        }, 7000);
+
+        setTimeout(function() {
+          if (pStatus && document.getElementById('preloader') && progress < 70) {
+            pStatus.innerText = 'Almost ready, finalizing download...';
+          }
+        }, 15000);
+      })();
+
       window.addEventListener('error', function(e) {
         var el = document.getElementById('err-overlay');
         if (el) {

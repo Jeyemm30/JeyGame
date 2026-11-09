@@ -8,6 +8,7 @@ export default defineConfig({
     open: false
   },
   build: {
+    target: 'es2018',
     chunkSizeWarningLimit: 2000
   }
 });

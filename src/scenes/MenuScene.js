@@ -12,6 +12,11 @@ export default class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
   create() {
+    const preloader = document.getElementById('preloader');
+    if (preloader) {
+      preloader.style.opacity = '0';
+      setTimeout(() => { try { preloader.remove(); } catch (e) {} }, 400);
+    }
     music.set('menu');
     this.input.setDefaultCursor('default');
     this.cameras.main.setBackgroundColor('#080b12');

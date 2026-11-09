@@ -8,9 +8,29 @@ export default class BootScene extends Phaser.Scene {
   preload() { this.load.image('wise_logo_src', wiseLogoUrl); }
 
   create() {
-    this.add.text(640, 330, 'CITY OF CHAOS', { fontFamily: 'Impact, Arial Black, sans-serif', fontSize: '58px', color: '#ff8a3a', stroke: '#000000', strokeThickness: 8 }).setOrigin(0.5);
-    this.add.text(640, 400, 'Loading...', { fontFamily: 'monospace', fontSize: '20px', color: '#8a8d96' }).setOrigin(0.5);
-    generateTextures(this);
-    this.scene.start('Menu');
+    const pStatus = document.getElementById('p-status');
+    const pBar = document.getElementById('p-bar');
+    if (pStatus) pStatus.innerText = 'Building Port City...';
+    if (pBar) pBar.style.width = '70%';
+
+    // Yield a frame so mobile browsers can render the update before generating procedural canvas textures
+    requestAnimationFrame(() => {
+      try {
+        generateTextures(this);
+      } catch (err) {
+        console.error('Texture generation error:', err);
+      }
+      if (pBar) pBar.style.width = '100%';
+      if (pStatus) pStatus.innerText = 'Welcome to Port City!';
+
+      this.time.delayedCall(120, () => {
+        const preloader = document.getElementById('preloader');
+        if (preloader) {
+          preloader.style.opacity = '0';
+          setTimeout(() => { try { preloader.remove(); } catch (e) {} }, 400);
+        }
+        this.scene.start('Menu');
+      });
+    });
   }
 }
