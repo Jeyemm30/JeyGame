@@ -53,7 +53,7 @@ const config = {
 window.__game = new Phaser.Game(config);
 
 // Responsive canvas refitting when rotating or resizing on mobile (Android & iOS)
-export const refit = () => {
+const refit = () => {
   if (!window.__game || !window.__game.scale) return;
   const gameEl = document.getElementById('game');
   const w = window.visualViewport ? Math.round(window.visualViewport.width) : (window.innerWidth || document.documentElement.clientWidth);
@@ -69,7 +69,7 @@ export const refit = () => {
   window.__game.scale.refresh();
 };
 
-export const triggerRefit = () => {
+const triggerRefit = () => {
   refit();
   requestAnimationFrame(refit);
   setTimeout(refit, 50);
