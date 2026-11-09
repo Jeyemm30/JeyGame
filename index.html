@@ -7,9 +7,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#080a0f" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <title>CITY OF CHAOS</title>
     <link rel="stylesheet" href="/src/style.css" />
     <style>
@@ -19,6 +16,23 @@
         100% { opacity: 0.7; transform: scaleX(0.96); }
       }
     </style>
+    <!-- Diagnostic error handler in head so any error during module parsing is captured -->
+    <script>
+      window.addEventListener('error', function(e) {
+        var el = document.getElementById('err-overlay');
+        if (el) {
+          el.style.display = 'block';
+          el.innerText = 'Launch error: ' + (e.message || (e.error && e.error.message) || e);
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        var el = document.getElementById('err-overlay');
+        if (el) {
+          el.style.display = 'block';
+          el.innerText = 'Promise rejection: ' + (e.reason && e.reason.message || e.reason);
+        }
+      });
+    </script>
   </head>
   <body>
     <!-- Immediate HTML loading screen so mobile players never see a black screen -->
@@ -64,31 +78,22 @@
           }
         }, 15000);
 
-        // Safety fallback: if Menu is already active, ensure preloader is removed
+        // Safety fallback: if Menu is active, ensure preloader is removed cleanly
         setInterval(function() {
           var p = document.getElementById('preloader');
-          if (p && window.__game && window.__game.scene && (window.__game.scene.isActive('Menu') || window.__game.scene.isActive('Game'))) {
-            p.style.pointerEvents = 'none';
-            p.style.opacity = '0';
-            setTimeout(function() { try { p.remove(); } catch(e) {} }, 300);
+          if (p && window.__game && window.__game.scene && window.__game.scene.scenes) {
+            var menuScene = window.__game.scene.scenes.find(function(s) {
+              return s && s.scene && s.scene.key === 'Menu' && s.scene.settings && s.scene.settings.status === 5;
+            });
+            if (menuScene) {
+              p.style.pointerEvents = 'none';
+              p.style.opacity = '0';
+              p.style.display = 'none';
+              try { p.remove(); } catch(e) {}
+            }
           }
-        }, 500);
+        }, 200);
       })();
-
-      window.addEventListener('error', function(e) {
-        var el = document.getElementById('err-overlay');
-        if (el) {
-          el.style.display = 'block';
-          el.innerText = 'Launch error: ' + (e.message || (e.error && e.error.message) || e);
-        }
-      });
-      window.addEventListener('unhandledrejection', function(e) {
-        var el = document.getElementById('err-overlay');
-        if (el) {
-          el.style.display = 'block';
-          el.innerText = 'Promise rejection: ' + (e.reason && e.reason.message || e.reason);
-        }
-      });
     </script>
     <div id="game"></div>
     <script type="module" src="/src/main.js"></script>

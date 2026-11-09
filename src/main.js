@@ -55,17 +55,6 @@ window.__game = new Phaser.Game(config);
 // Responsive canvas refitting when rotating or resizing on mobile (Android & iOS)
 const refit = () => {
   if (!window.__game || !window.__game.scale) return;
-  const gameEl = document.getElementById('game');
-  const w = window.visualViewport ? Math.round(window.visualViewport.width) : (window.innerWidth || document.documentElement.clientWidth);
-  const h = window.visualViewport ? Math.round(window.visualViewport.height) : (window.innerHeight || document.documentElement.clientHeight);
-  
-  if (w > 0 && h > 0) {
-    if (gameEl) {
-      gameEl.style.width = w + 'px';
-      gameEl.style.height = h + 'px';
-    }
-    window.__game.scale.setParentSize(w, h);
-  }
   window.__game.scale.refresh();
 };
 
