@@ -44,6 +44,8 @@ export const audioCore = () => { const c = ac(); return c ? { c, bus, noiseBuf }
 if (typeof window !== 'undefined') {
   const wake = () => { ac(); };
   window.addEventListener('pointerdown', wake, { passive: true });
+  window.addEventListener('touchstart', wake, { passive: true });
+  window.addEventListener('touchend', wake, { passive: true });
   window.addEventListener('keydown', wake, { passive: true });
   document.addEventListener('visibilitychange', () => { if (!ctx) return; if (document.hidden) ctx.suspend(); else ctx.resume(); });
 }
