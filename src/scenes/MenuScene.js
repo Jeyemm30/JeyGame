@@ -35,7 +35,8 @@ export default class MenuScene extends Phaser.Scene {
     const save = latestSlot();
     const money = save?.data?.summary?.money ?? save?.data?.profile?.money ?? 0;
     const completed = save?.data?.summary?.completed ?? Object.keys(save?.data?.profile?.missions?.completed || {}).length ?? 0;
-    const sub = save ? `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}  -  $${money}  -  ${completed}/21 missions` : '';
+    const tod = save?.data?.summary?.timeOfDay ? `  -  ${save.data.summary.timeOfDay}` : '';
+    const sub = save ? `${save.slot === 0 ? 'Autosave' : 'Slot ' + save.slot}  -  $${money}${tod}  -  ${completed}/21 missions` : '';
     const startNew = () => {
       sfx.unlock();
       resetProfile();

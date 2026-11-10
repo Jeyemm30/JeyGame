@@ -374,7 +374,12 @@ export default class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     this.initCamera(cam);
     cam.setBackgroundColor('#0b0f0b');
-    this.atmo = new Atmosphere(this, this.startHour ?? 9.5);
+    const savedHour = load ? (load.timeOfDay ?? load.profile?.timeOfDay ?? profile.timeOfDay) : null;
+    const hour = (typeof savedHour === 'number' && !isNaN(savedHour)) ? savedHour : (this.startHour ?? 9.5);
+    this.atmo = new Atmosphere(this, hour);
+    if (load?.weather && this.atmo.setWeather) {
+      this.atmo.setWeather(load.weather);
+    }
     // opening cutscene: only for a brand-new game (never a loaded save) that has not shown it yet; the flag lives in profile.flags so it is saved
     this.cine = !load && this.startData.newGame && !profile.flags.introDone ? { t: 0, dur: INTRO_MS, zEnd: this.zoomTarget } : null;
     cam.fadeIn(this.cine ? 1600 : 500);

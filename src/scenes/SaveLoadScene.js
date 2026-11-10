@@ -34,7 +34,8 @@ export default class SaveLoadScene extends Phaser.Scene {
       this.objs.push(label(this, 200, y + 12, slot === 0 ? 'AUTOSAVE (updates after every mission)' : `SLOT ${slot}`, 22, '#ffb070'));
       if (data) {
         const s = data.summary;
-        this.objs.push(label(this, 200, y + 48, `Play time ${fmtTime(s.time)}   Money $${s.money}   ${repTitle(s.rep)} (${s.rep >= 0 ? '+' : ''}${s.rep})`, 16, '#ffffff'));
+        const tod = s.timeOfDay ? `   Time ${s.timeOfDay}` : '';
+        this.objs.push(label(this, 200, y + 48, `Play time ${fmtTime(s.time)}   Money $${s.money}   ${repTitle(s.rep)} (${s.rep >= 0 ? '+' : ''}${s.rep})${tod}`, 16, '#ffffff'));
         this.objs.push(label(this, 200, y + 74, `Story missions completed: ${s.completed}/15   Saved ${new Date(data.savedAt).toLocaleString()}`, 14, '#9db890'));
       } else this.objs.push(label(this, 200, y + 56, 'Empty slot', 17, '#7f9a72'));
       if (this.mode === 'save') {

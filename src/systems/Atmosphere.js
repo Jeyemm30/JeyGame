@@ -43,7 +43,7 @@ export default class Atmosphere {
     this.hideLights = [...((scene.wd.hideout && scene.wd.hideout.lights) || []), ...((scene.wd.wise && scene.wd.wise.lights) || []), ...((scene.wd.casino && scene.wd.casino.lights) || []), ...((scene.wd.bank && scene.wd.bank.lights) || []), ...((scene.wd.fire && scene.wd.fire.lights) || []), ...((scene.wd.totoya && scene.wd.totoya.lights) || []), ...((scene.wd.reyes && scene.wd.reyes.lights) || []), ...Object.values(scene.wd.gangs || {}).flatMap((g) => g.lights || [])].map((l, i) => ({ ...l, ph: i * 1.7 }));
     this.flash = 0;
     // Light pool images for smooth, seamless ground illumination without harsh stepped ovals
-    this.lightPool = Array.from({ length: 64 }, () =>
+    this.lightPool = Array.from({ length: 120 }, () =>
       scene.add.image(0, 0, 'light_radial')
         .setDepth(4997)
         .setBlendMode(Phaser.BlendModes.ADD)
@@ -125,10 +125,13 @@ export default class Atmosphere {
     const g = this.glow, ll = gq().lightLevel;
     g.clear();
     let poolIdx = 0;
-    const putLight = (x, y, sx, sy, col, a) => {
+    const UPY = this.scene.upY || (1 / (this.scene.TILT || 0.62));
+    const camRot = this.scene.camRot || 0;
+    const putCircleLight = (x, y, radius, col, a) => {
       if (poolIdx >= this.lightPool.length) return;
       const img = this.lightPool[poolIdx++];
-      img.setPosition(x, y).setScale(sx, sy).setTint(col).setAlpha(a).setVisible(true);
+      const s = radius / 128;
+      img.setPosition(x, y).setScale(s, s * UPY).setRotation(-camRot).setTint(col).setAlpha(a).setVisible(true);
     };
 
     if (ll <= 0) {
@@ -149,19 +152,16 @@ export default class Atmosphere {
         const s = (L.steady ? 0.35 + 0.65 * nt : 0.55 + 0.45 * nt) * on * (L.fire ? 0.85 + 0.15 * Math.sin(k / 60 + L.ph) : 1);
         const col = L.col || (L.neon ? 0xff4a8a : L.fire ? 0xff8a30 : 0xffc870);
 
-        // Smooth circular radial light pool on the ground
-        const rad = L.fire ? 1.5 : (L.neon ? 1.3 : 1.1);
-        putLight(L.x, L.y, rad, rad * 0.95, col, (L.fire ? 0.42 : 0.36) * s);
+        // Smooth circular radial light on the ground (no oval, no cone)
+        const rad = L.fire ? 105 : (L.neon ? 90 : 75);
+        putCircleLight(L.x, L.y, rad, col, (L.fire ? 0.45 : 0.38) * s);
         if (ll >= 2) {
-          putLight(L.x, L.y, rad * 1.8, rad * 1.7, col, 0.15 * s);
+          putCircleLight(L.x, L.y, rad * 1.6, col, 0.16 * s);
         }
 
         // Hot incandescent bulb or fire flare core
-        g.fillStyle(0xffffff, 0.9 * s).fillCircle(L.x, L.y, 2.5);
-        g.fillStyle(col, 0.5 * s).fillCircle(L.x, L.y, 6);
-        if (L.fire) {
-          g.fillStyle(0xffaa20, 0.25 * s).fillCircle(L.x, L.y, 12);
-        }
+        putCircleLight(L.x, L.y, L.fire ? 20 : 12, col, 0.65 * s);
+        g.fillStyle(0xffffff, 0.9 * s).fillRect(Math.round(L.x - 1), Math.round(L.y - 1), 2, 2);
       }
     }
 
@@ -170,34 +170,24 @@ export default class Atmosphere {
     if (night >= 0.12) {
       const v = this.scene.viewRect(120);
       const x0 = v.x, x1 = v.right, y0 = v.y, y1 = v.bottom;
-      const flick = 0.92 + 0.08 * Math.sin(this.clock / 90);
+      const flick = 0.94 + 0.06 * Math.sin(this.clock / 90);
       for (const p of this.lamps) {
         if (p.down || p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;           // a knocked-down streetlight gives no light
         const a = night * flick;
-        const ho = this.scene.fromScreen(4, -42);
+        const ho = this.scene.fromScreen(-6, -58);
         const bulbX = p.x + ho.x, bulbY = p.y + ho.y;
-        const groundX = p.x, groundY = p.y + 4;
+        const go = this.scene.fromScreen(-6, 0);
+        const groundX = p.x + go.x, groundY = p.y + go.y;
 
-        // Smooth natural circular light pool on sidewalk/street (NO stepped concentric rings)
-        putLight(groundX, groundY, 1.8, 1.6, 0xffd880, 0.45 * a);
+        // Natural smooth circular ground illumination (zero cone lines, zero oval distortion)
+        putCircleLight(groundX, groundY, 115, 0xffd270, 0.42 * a);
         if (ll >= 2) {
-          putLight(groundX, groundY, 2.8, 2.4, 0xffbf58, 0.18 * a);
+          putCircleLight(groundX, groundY, 60, 0xffe890, 0.28 * a);
         }
 
-        // Volumetric downward light cone from lantern head to ground pool
-        g.fillStyle(0xffe890, 0.04 * a);
-        g.beginPath();
-        g.moveTo(bulbX - 3, bulbY);
-        g.lineTo(bulbX + 3, bulbY);
-        g.lineTo(groundX + 36, groundY);
-        g.lineTo(groundX - 36, groundY);
-        g.closePath();
-        g.fillPath();
-
-        // Intense lantern head bulb & flare
-        g.fillStyle(0xffffff, 0.95 * a).fillCircle(bulbX, bulbY, 3);
-        g.fillStyle(0xffd27a, 0.45 * a).fillCircle(bulbX, bulbY, 7);
-        g.fillStyle(0xffa830, 0.18 * a).fillCircle(bulbX, bulbY, 14);
+        // Natural glowing lantern bulb at the fixture (circular flare + crisp filament)
+        putCircleLight(bulbX, bulbY, 14, 0xffea80, 0.70 * a);
+        g.fillStyle(0xffffff, 0.95 * a).fillRect(Math.round(bulbX - 1), Math.round(bulbY - 1), 2, 2);
       }
 
       // 3. Soft natural ambient illumination around player
@@ -205,7 +195,7 @@ export default class Atmosphere {
       if (p && !p.dead) {
         const f = night * (p.vehicle ? 0.4 : 0.85);
         const po = this.scene.elev(12);
-        putLight(p.x + po.x, p.y + po.y, 1.5, 1.35, 0xb8d4ff, 0.16 * f);
+        putCircleLight(p.x + po.x, p.y + po.y, 95, 0xb8d4ff, 0.18 * f);
       }
     }
 

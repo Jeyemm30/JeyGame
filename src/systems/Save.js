@@ -36,10 +36,14 @@ export function deleteSlot(slot) {
 export function snapshot(gs) {
   const p = gs.player;
   const pv = p.vehicle;
+  const atmo = gs.atmo;
+  if (atmo) profile.timeOfDay = atmo.hour;
   return {
     v: VERSION,
     savedAt: Date.now(),
     appearance: gs.registry.get('appearance') || null,
+    timeOfDay: atmo ? atmo.hour : null,
+    weather: atmo ? atmo.weather : null,
     player: {
       x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp), armor: Math.round(p.armor), stamina: Math.round(p.stamina),
       armorTier: p.armorTier || 'none', armors: { ...(p.armors || { none: true }) },
@@ -53,11 +57,13 @@ export function snapshot(gs) {
       money: Math.round(profile.money), rep: profile.rep, flags: profile.flags, missions: profile.missions,
       ownedVehicles: gs.collectOwnedVehicles(), outfits: profile.outfits, safehouse: profile.safehouse,
       searched: profile.searched, opened: profile.opened, killedSpawns: profile.killedSpawns, takenItems: profile.takenItems,
-      stats: { ...profile.stats, time: Math.round(gs.gt), kills: gs.kills }, lastVehicleId: profile.lastVehicleId, bank: profile.bank
+      stats: { ...profile.stats, time: Math.round(gs.gt), kills: gs.kills }, lastVehicleId: profile.lastVehicleId, bank: profile.bank,
+      timeOfDay: atmo ? atmo.hour : null
     },
     summary: {
       time: Math.round(gs.gt / 1000), money: Math.round(profile.money), rep: profile.rep,
-      completed: Object.keys(profile.missions.completed).filter((id) => id.startsWith('m')).length
+      completed: Object.keys(profile.missions.completed).filter((id) => id.startsWith('m')).length,
+      timeOfDay: atmo ? atmo.timeText : null
     }
   };
 }
