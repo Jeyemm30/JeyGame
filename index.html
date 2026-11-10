@@ -35,50 +35,36 @@
     </script>
   </head>
   <body>
-    <!-- Immediate HTML loading screen so mobile players never see a black screen -->
-    <div id="preloader" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#080b12;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif;color:#fff;user-select:none;transition:opacity 0.4s ease;">
+    <!-- Immediate HTML loading screen so players never see a black void while bundle downloads -->
+    <div id="preloader" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#080b12;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:system-ui,-apple-system,sans-serif;color:#fff;user-select:none;pointer-events:none;">
       <div style="font-family:Impact,Arial Black,sans-serif;font-size:clamp(30px, 8vw, 54px);color:#ff8a3a;letter-spacing:3px;text-shadow:0 0 24px rgba(255,138,58,0.45);margin-bottom:6px;text-align:center;">CITY OF CHAOS</div>
       <div style="font-size:clamp(10px, 2.8vw, 13px);color:#8fd8e0;font-weight:bold;letter-spacing:4px;margin-bottom:28px;text-align:center;">OPEN-WORLD CITY SANDBOX</div>
       
-      <div style="width:min(80vw, 320px);height:8px;background:#141a24;border-radius:4px;overflow:hidden;position:relative;margin-bottom:14px;border:1px solid #263346;">
-        <div id="p-bar" style="width:15%;height:100%;background:linear-gradient(90deg, #ff6a2a, #facc15);border-radius:4px;transition:width 0.4s ease;animation:pulseBar 1.5s infinite ease-in-out;"></div>
+      <div style="width:min(80vw, 320px);height:6px;background:#141a24;border-radius:3px;overflow:hidden;position:relative;margin-bottom:14px;border:1px solid #263346;">
+        <div style="width:100%;height:100%;background:linear-gradient(90deg, #ff6a2a, #facc15);border-radius:3px;animation:pulseBar 1.2s infinite ease-in-out;"></div>
       </div>
       
-      <div id="p-status" style="font-size:12px;color:#94a3b8;font-family:monospace;letter-spacing:1px;text-align:center;padding:0 16px;">Connecting & downloading assets...</div>
+      <div id="p-status" style="font-size:12px;color:#94a3b8;font-family:monospace;letter-spacing:1px;text-align:center;padding:0 16px;">Loading game...</div>
     </div>
 
     <!-- Error diagnostics banner -->
     <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;padding:12px;background:#b91c1c;color:#fff;font-family:monospace;font-size:12px;z-index:99999;word-break:break-all;"></div>
     <script>
       (function() {
-        var progress = 15;
-        var pBar = document.getElementById('p-bar');
         var pStatus = document.getElementById('p-status');
-        var downloadTimer = setInterval(function() {
-          if (!pBar || !document.getElementById('preloader')) {
-            clearInterval(downloadTimer);
-            return;
+        setTimeout(function() {
+          if (pStatus && document.getElementById('preloader')) {
+            pStatus.innerText = 'Connecting & downloading game...';
           }
-          if (progress < 60) {
-            progress += Math.floor(Math.random() * 8) + 4;
-            if (progress > 60) progress = 60;
-            pBar.style.width = progress + '%';
-          }
-        }, 300);
+        }, 3000);
 
         setTimeout(function() {
-          if (pStatus && document.getElementById('preloader') && progress < 70) {
-            pStatus.innerText = 'Downloading game files (slow connection)...';
+          if (pStatus && document.getElementById('preloader')) {
+            pStatus.innerText = 'Still downloading (slow connection detected)...';
           }
-        }, 7000);
+        }, 12000);
 
-        setTimeout(function() {
-          if (pStatus && document.getElementById('preloader') && progress < 70) {
-            pStatus.innerText = 'Almost ready, finalizing download...';
-          }
-        }, 15000);
-
-        // Safety fallback: if Menu is active, ensure preloader is removed cleanly
+        // Immediate cleanup watcher: if Menu is active, delete preloader immediately
         setInterval(function() {
           var p = document.getElementById('preloader');
           if (p && window.__game && window.__game.scene && window.__game.scene.scenes) {
@@ -86,13 +72,10 @@
               return s && s.scene && s.scene.key === 'Menu' && s.scene.settings && s.scene.settings.status === 5;
             });
             if (menuScene) {
-              p.style.pointerEvents = 'none';
-              p.style.opacity = '0';
-              p.style.display = 'none';
               try { p.remove(); } catch(e) {}
             }
           }
-        }, 200);
+        }, 100);
       })();
     </script>
     <div id="game"></div>
