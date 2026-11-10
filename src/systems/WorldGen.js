@@ -1745,13 +1745,17 @@ export function generateWorld(seed = 20240) {
     prop(20, 12); decor('atm', cx(20), M(12) * TILE + 38); stations.push({ game: 'atm', x: cx(19), y: cy(12), name: 'VIP banking terminal', casinoFloor: 2 });
 
     // ---- Jiro's VIP Management Office (bottom-left private suite)
-    wallV(5, 12, 16); wallH(1, 5, 12); fObj2[12][3] = T.doorOpen;
-    for (let ly = 13; ly <= 16; ly++) for (let lx = 1; lx <= 4; lx++) fGround2[ly][lx] = T.tileFloor;
-    solid(2, 14, T.desk); solid(3, 14, T.desk); solid(4, 14, T.desk);
+    wallV(6, 12, 16); wallH(1, 2, 12); wallH(4, 6, 12); fObj2[12][3] = -1;
+    for (let ly = 12; ly <= 16; ly++) for (let lx = 1; lx <= 5; lx++) fGround2[ly][lx] = T.tileFloor;
+    solid(1, 13, T.cabinet);
+    solid(2, 14, T.desk); solid(3, 14, T.desk);
     decor('desk_pc_1', cx(3), M(14) * TILE + 34);
-    solid(1, 13, T.cabinet); solid(4, 13, T.locker); prop(1, 16); decor('palm_pot', cx(1), M(16) * TILE + 34);
+    solid(5, 14, T.locker);
+    prop(1, 16); decor('palm_pot', cx(1), M(16) * TILE + 34);
+    solid(2, 16, T.shelf); solid(4, 16, T.cabinet);
+    prop(5, 16); decor('palm_pot', cx(5), M(16) * TILE + 34);
     prop(20, 16); decor('palm_pot', cx(20), M(16) * TILE + 34); prop(14, 16); decor('casino_poster0', cx(14), M(16) * TILE + 30); prop(17, 16); decor('casino_poster2', cx(17), M(16) * TILE + 30);
-    prop(6, 16); decor('palm_pot', cx(6), M(16) * TILE + 34);
+    prop(7, 16); decor('palm_pot', cx(7), M(16) * TILE + 34);
 
     cs.wing = { X, Y, W, H, interior: { x0: L(1), y0: M(1), x1: L(20), y1: M(16) } };
     cs.stairsDown = { x: cx(18), y: cy(5), at: stationDown };
@@ -1761,7 +1765,7 @@ export function generateWorld(seed = 20240) {
     // ---- people upstairs
     const guard = (lx, ly, role, extra = {}) => out.enemies.push({ x: cx(lx), y: cy(ly), role, type: 'pistol', mode: extra.route ? 'patrol' : 'guard', radius: extra.route ? 0 : 20, route: extra.route || null, hostility: 'provoked', hideout: true, crew: 'casino', casinoFloor: 2, ...extra });
     const pt = (lx, ly) => ({ x: cx(lx), y: cy(ly) });
-    guard(5, 14, 'casino_guard', { fixedFace: 0 }); guard(18, 10, 'casino_guard2', { fixedFace: Math.PI }); guard(8, 6, 'casino_guard', { fixedFace: Math.PI / 2 });
+    guard(7, 14, 'casino_guard', { fixedFace: Math.PI }); guard(18, 10, 'casino_guard2', { fixedFace: Math.PI }); guard(8, 6, 'casino_guard', { fixedFace: Math.PI / 2 });
     guard(10, 7, 'casino_guard2', { route: [pt(10, 7), pt(10, 11), pt(6, 11), pt(6, 7)] });
     const pat = (lx, ly, act, extra = {}) => out.civilians.push({ x: cx(lx), y: cy(ly), kind: 'patron', act, casinoFloor: 2, ...extra });
     const UP = -Math.PI / 2, DOWN = Math.PI / 2;
@@ -1783,7 +1787,7 @@ export function generateWorld(seed = 20240) {
     cs.neons.push(
       { key: 'neon_private', x: cx(3), y: M(5) * TILE + 30, sy: -46, casinoFloor: 2 },
       { key: 'neon_private', x: cx(8), y: M(5) * TILE + 30, sy: -46, casinoFloor: 2 },
-      { key: 'neon_office', x: cx(3), y: M(12) * TILE + 30, sy: -46, casinoFloor: 2 },
+      { key: 'neon_office', x: cx(3), y: M(12) * TILE + 16, sy: -72, casinoFloor: 2 },
       { key: 'neon_viplounge', x: cx(13), y: M(1) * TILE + 20, sy: -10, casinoFloor: 2 },
       { key: 'neon_vipcash', x: cx(20), y: M(6) * TILE + 20, sy: -30, casinoFloor: 2 },
       { key: 'neon_atm', x: cx(20), y: M(11) * TILE + 20, sy: -40, casinoFloor: 2 }

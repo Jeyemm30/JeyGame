@@ -2810,7 +2810,8 @@ export default class GameScene extends Phaser.Scene {
       }
       if (want && !this.storyNpcs[id]) {
         const flr = id === 'sean' ? 1 : id === 'jiro' ? 2 : undefined;
-        const c = this.spawnCivilian({ x: want.x, y: want.y, kind: 'story', npcId: id, casinoFloor: flr });
+        const fixedFace = id === 'jiro' ? -Math.PI / 2 : undefined;
+        const c = this.spawnCivilian({ x: want.x, y: want.y, kind: 'story', npcId: id, casinoFloor: flr, fixedFace });
         c.placeKey = want.place;
         if (flr) {
           c.casinoFloor = flr;
@@ -3409,7 +3410,7 @@ export default class GameScene extends Phaser.Scene {
         if (this.lowH && this.lowH.has(oIdx)) {
           this.isLow[i] = 1;
           this.wallFace[i] = oIdx;
-        } else if (WALL_FAMILY.has(oIdx)) {
+        } else if (WALL_FAMILY.has(oIdx) && oIdx !== T.doorOpen) {
           this.isWall[i] = 1;
           this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
         }
@@ -4225,7 +4226,7 @@ export default class GameScene extends Phaser.Scene {
         if (this.lowH && this.lowH.has(oIdx)) {
           this.isLow[i] = 1;
           this.wallFace[i] = oIdx;
-        } else if (WALL_FAMILY.has(oIdx)) {
+        } else if (WALL_FAMILY.has(oIdx) && oIdx !== T.doorOpen) {
           this.isWall[i] = 1;
           this.wallFace[i] = FACE.get(oIdx) ?? oIdx;
         }
@@ -5891,7 +5892,7 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     this.civilians.children.iterate((c) => {
       if (!c || c.dead || c.sleeping || c.state === 'inside' || c.state === 'flee' || c.state === 'phone') return;
       const d = Math.hypot(c.x - p.x, c.y - p.y);
-      const isDeskStory = c.npcId === 'mark' || c.npcId === 'reyes' || c.npcId === 'salcedo' || c.npcId === 'cortez' || c.npcId === 'sofia' || c.npcId === 'adrian' || c.npcId === 'principal';
+      const isDeskStory = c.npcId === 'mark' || c.npcId === 'reyes' || c.npcId === 'salcedo' || c.npcId === 'cortez' || c.npcId === 'sofia' || c.npcId === 'adrian' || c.npcId === 'principal' || c.npcId === 'jiro';
       if (d > (c.npcId === 'ezekiel' ? 74 : (isDeskStory || c.isReceptionist) ? 84 : c.kind === 'shopkeeper' ? 92 : 50) || !c.visible) return;
       if (c.kind === 'story') {
         if (c.npcId === 'fare') return;
@@ -5902,14 +5903,15 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         const isSofia = c.npcId === 'sofia';
         const isAdrian = c.npcId === 'adrian';
         const isPrincipal = c.npcId === 'principal';
-        const label = isMark ? 'Talk to Mark' : isReyes ? 'Talk to Councilman Reyes' : isSalcedo ? 'Talk to Mayor Salcedo' : isCortez ? 'Talk to Chief Cortez' : isSofia ? 'Talk to Sofia Ramirez' : isAdrian ? 'Talk to Adrian Villanueva' : isPrincipal ? 'Talk to Principal Arthur Vance' : `Talk to ${this.npcName(c.npcId)}`;
+        const isJiro = c.npcId === 'jiro';
+        const label = isMark ? 'Talk to Mark' : isReyes ? 'Talk to Councilman Reyes' : isSalcedo ? 'Talk to Mayor Salcedo' : isCortez ? 'Talk to Chief Cortez' : isSofia ? 'Talk to Sofia Ramirez' : isAdrian ? 'Talk to Adrian Villanueva' : isPrincipal ? 'Talk to Principal Arthur Vance' : isJiro ? 'Talk to Jiro Kurogane' : `Talk to ${this.npcName(c.npcId)}`;
         consider(d + 4, {
           kind: 'story',
           ref: c,
           x: c.x,
           y: c.y,
           label,
-          rawLabel: (isMark || isReyes || isSalcedo || isCortez || isSofia || isAdrian || isPrincipal) ? `Press E to ${label}` : undefined
+          rawLabel: (isMark || isReyes || isSalcedo || isCortez || isSofia || isAdrian || isPrincipal || isJiro) ? `Press E to ${label}` : undefined
         });
       } else if (c.isReceptionist) {
         if (d < 84) {
