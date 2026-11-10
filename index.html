@@ -41,7 +41,7 @@
       <div style="font-size:clamp(10px, 2.8vw, 13px);color:#8fd8e0;font-weight:bold;letter-spacing:4px;margin-bottom:28px;text-align:center;">OPEN-WORLD CITY SANDBOX</div>
       
       <div style="width:min(80vw, 320px);height:6px;background:#141a24;border-radius:3px;overflow:hidden;position:relative;margin-bottom:14px;border:1px solid #263346;">
-        <div style="width:100%;height:100%;background:linear-gradient(90deg, #ff6a2a, #facc15);border-radius:3px;animation:pulseBar 1.2s infinite ease-in-out;"></div>
+        <div id="p-bar" style="width:10%;height:100%;background:linear-gradient(90deg, #ff6a2a, #facc15);border-radius:3px;transition:width 0.25s ease;"></div>
       </div>
       
       <div id="p-status" style="font-size:12px;color:#94a3b8;font-family:monospace;letter-spacing:1px;text-align:center;padding:0 16px;">Loading game...</div>
@@ -49,35 +49,6 @@
 
     <!-- Error diagnostics banner -->
     <div id="err-overlay" style="display:none;position:fixed;top:0;left:0;right:0;padding:12px;background:#b91c1c;color:#fff;font-family:monospace;font-size:12px;z-index:99999;word-break:break-all;"></div>
-    <script>
-      (function() {
-        var pStatus = document.getElementById('p-status');
-        setTimeout(function() {
-          if (pStatus && document.getElementById('preloader')) {
-            pStatus.innerText = 'Connecting & downloading game...';
-          }
-        }, 3000);
-
-        setTimeout(function() {
-          if (pStatus && document.getElementById('preloader')) {
-            pStatus.innerText = 'Still downloading (slow connection detected)...';
-          }
-        }, 12000);
-
-        // Immediate cleanup watcher: if Menu is active, delete preloader immediately
-        setInterval(function() {
-          var p = document.getElementById('preloader');
-          if (p && window.__game && window.__game.scene && window.__game.scene.scenes) {
-            var menuScene = window.__game.scene.scenes.find(function(s) {
-              return s && s.scene && s.scene.key === 'Menu' && s.scene.settings && s.scene.settings.status === 5;
-            });
-            if (menuScene) {
-              try { p.remove(); } catch(e) {}
-            }
-          }
-        }, 100);
-      })();
-    </script>
     <div id="game"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

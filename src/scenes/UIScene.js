@@ -221,7 +221,7 @@ export default class UIScene extends Phaser.Scene {
     this.prompt = label(this, 640, 560, '', this.touchMode ? 16 : 22, '#ffffff', 0.5, 0.5).setDepth(3);
     this.toastText = label(this, 640, this.touchMode ? 140 : 90, '', this.touchMode ? 18 : 22, '#f2e08a', 0.5, 0.5).setDepth(3);
     this.toastUntil = 0;
-    this.reloadLabel = label(this, 640, 400, '', 16, '#ffffff', 0.5, 0.5).setDepth(3);
+    this.reloadLabel = label(this, 640, 480, '', 16, '#ffffff', 0.5, 0.5).setDepth(3);
     this.hitMarker = this.add.graphics().setDepth(3);
 
     this.buildInventory();
@@ -1244,12 +1244,12 @@ export default class UIScene extends Phaser.Scene {
 
     if (p.usingItem) {
       const frac = Phaser.Math.Clamp((g.gt - p.usingItem.start) / p.usingItem.dur, 0, 1);
-      bar(540, 420, 200, 10, frac, 0x60d070);
-      this.reloadLabel.setText(p.usingItem.label.toUpperCase()).setPosition(640, 406);
+      bar(540, 496, 200, 10, frac, 0x60d070);
+      this.reloadLabel.setText(p.usingItem.label.toUpperCase()).setPosition(640, 480);
     } else if (p.reloading) {
       const frac = Phaser.Math.Clamp((g.gt - p.reloadStart) / (p.reloadEnd - p.reloadStart), 0, 1);
-      bar(540, 420, 200, 10, frac, 0xf2e08a);
-      this.reloadLabel.setText('RELOADING').setPosition(640, 406);
+      bar(540, 496, 200, 10, frac, 0xf2e08a);
+      this.reloadLabel.setText('RELOADING').setPosition(640, 480);
     } else this.reloadLabel.setText('');
 
     // top-left

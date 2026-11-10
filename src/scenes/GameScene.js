@@ -1471,9 +1471,9 @@ export default class GameScene extends Phaser.Scene {
     wd.publicDoors.forEach((d, i) => { if (STORE_STYLES[d.name] || d.kind === 'bank' || d.name === 'Port City Trust' || d.kind === 'totoya' || d.name === 'Reyes Holdings Tower' || d.kind === 'cityhall' || d.name === 'City Hall Annex' || d.kind === 'hospital' || (d.name && d.name.includes('Hospital')) || (d.name && d.name.includes('Emergency')) || d.kind === 'school' || (d.name && d.name.includes('School'))) return; dec('awning' + ((i * 3 + 1) % 5), d.x, d.y - 32, 0, -8, 0.5, 0, 12); });
     // window flower boxes + shutters on house fronts, balconies on apartment blocks
     wd.buildings.forEach((b) => {
-      if (b.kind !== 'house' || b.broken) return;
+      if ((b.kind !== 'house' && b.kind !== 'apartments') || b.broken) return;
       const ty = b.y + b.h - 1;
-      const apt = b.style === 'metal' && b.w >= 14;
+      const apt = b.kind === 'apartments' || (b.w >= 14 && b.h >= 10);
       for (let x = b.x; x < b.x + b.w; x++) {
         const hsh = (x * 31 + b.id * 17) % 10;
         if (wd.obj[ty][x] === T.window && !apt) {
@@ -1494,13 +1494,23 @@ export default class GameScene extends Phaser.Scene {
     });
     this.lastBillRot = undefined;                      // the scene object is reused on a new game / load: force the roof depths to be recomputed for the new roofs
     this.roofs = wd.buildings.map((b) => {
+      const isPitched = b.style === 'shingle' || b.style === 'spanish' || b.style === 'slate' || b.style === 'cedar' || b.style === 'standingseam';
       const key = b.style === 'shingle' ? 'roofpat_shingle' + (b.colorIdx % 6) : 'roofpat_' + b.style;
       const x = b.x * TILE - 4, y = b.y * TILE, w = b.w * TILE + 8, h = b.h * TILE - 8;
       const parts = [];
       parts.push(this.add.tileSprite(x, y, w, h, key).setOrigin(0, 0));
       parts.push(this.add.rectangle(x, y, w, 2, 0xffffff, 0.25).setOrigin(0, 0));
       parts.push(this.add.rectangle(x + w - 2, y, 2, h, 0x000000, 0.3).setOrigin(0, 0));
-      if (b.style === 'shingle' || b.style === 'metal' || b.style === 'tent' || b.style === 'totoya') parts.push(this.add.rectangle(x, y + h / 2 - 2, w, 4, 0x000000, 0.28).setOrigin(0, 0));
+      if (isPitched || b.style === 'metal' || b.style === 'tent' || b.style === 'totoya') {
+        const ridgeY = Math.floor(h * 0.44);
+        parts.push(this.add.rectangle(x, y + ridgeY - 2, w, 4, 0x000000, 0.32).setOrigin(0, 0));
+        parts.push(this.add.rectangle(x, y + ridgeY - 3, w, 1, 0xffffff, 0.22).setOrigin(0, 0));
+      }
+      if (isPitched) {
+        const trimCol = b.style === 'spanish' ? 0x9a3c26 : b.style === 'standingseam' ? 0x242830 : 0xe8e4d8;
+        parts.push(this.add.rectangle(x, y, 3, h, trimCol, 0.75).setOrigin(0, 0));
+        parts.push(this.add.rectangle(x + w - 3, y, 3, h, trimCol, 0.75).setOrigin(0, 0));
+      }
       parts.push(this.add.rectangle(x, y + h - 3, w, 3, 0x000000, 0.5).setOrigin(0, 0));
       this.decorateRoof(parts, b, x, y, w, h);
       if (b.tint) parts[0].setTint(b.tint);                          // store roofs take their business colour
@@ -1994,18 +2004,104 @@ export default class GameScene extends Phaser.Scene {
     if (b.look === 'cityhall' || b.look === 'school' || b.look === 'casino') return;
     const R = (rx, ry, rw, rh, col, a = 1) => parts.push(this.add.rectangle(rx, ry, rw, rh, col, a).setOrigin(0, 0));
     const hash = (n) => ((b.id * 2654435761 + n * 40503) >>> 0) % 1000 / 1000;
-    const pitched = b.style === 'shingle' || b.style === 'tent';
+    const isResidential = b.kind === 'house' || b.kind === 'apartments' || b.kind === 'home' || b.houseStyle;
+    const pitched = b.style === 'shingle' || b.style === 'spanish' || b.style === 'slate' || b.style === 'cedar' || b.style === 'standingseam' || b.style === 'tent';
+
     // overhanging eave + gutter along the front edge
-    R(x - 3, y + h - 1, w + 6, 4, 0x2a1d16);
+    const gutterCol = (b.style === 'spanish' || b.style === 'cedar') ? 0x3e2216 : 0x2a1d16;
+    R(x - 3, y + h - 1, w + 6, 4, gutterCol);
     R(x - 3, y + h - 1, w + 6, 1, 0x8a7a68);
     R(x - 3, y + h + 3, w + 6, 3, 0x000000, 0.18);
-    if (pitched) {
-      R(x + w / 2 - 1, y, 2, h - 3, 0xffffff, 0.12); // ridge highlight
-      if (w >= 96 && hash(1) < 0.8) {
-        const cx = x + 14 + Math.floor(hash(2) * (w - 40)), cy = y + 8 + Math.floor(hash(3) * Math.max(4, h * 0.3));
-        R(cx + 3, cy + 3, 16, 18, 0x000000, 0.28);
-        R(cx, cy, 14, 16, 0x4a4442); R(cx, cy, 14, 3, 0x8c8782); R(cx + 11, cy, 3, 16, 0x2e2a28); R(cx + 2, cy + 5, 4, 2, 0x6a625e);
-        R(cx - 2, cy - 2, 18, 5, 0xb8b2aa); R(cx + 2, cy, 10, 2, 0x100c0a);
+
+    if (isResidential || pitched) {
+      const ridgeY = Math.floor(h * 0.44);
+      // Horizontal roof ridge cap with 3D depth
+      R(x, y + ridgeY - 2, w, 4, 0x000000, 0.32);
+      R(x, y + ridgeY - 3, w, 1, 0xffffff, 0.22);
+
+      // 1. Brick / Stone Chimney with concrete crown cap & terracotta flue pots
+      if (w >= 64 && hash(1) < 0.85) {
+        const cx = x + 16 + Math.floor(hash(2) * (w - 48));
+        const cy = y + 6 + Math.floor(hash(3) * Math.max(4, ridgeY - 14));
+        const isStone = b.style === 'slate' || b.style === 'standingseam';
+        const chimCol = isStone ? 0x565c66 : 0x8a3a2a;
+        const chimHi = isStone ? 0x828a96 : 0xb85440;
+        const chimDk = isStone ? 0x32363e : 0x541e14;
+
+        // Chimney drop shadow on shingles
+        R(cx + 3, cy + 3, 18, 18, 0x000000, 0.32);
+        // Base flashing collar
+        R(cx - 1, cy + 14, 20, 3, 0x38383e, 0.9);
+        // Chimney masonry shaft
+        R(cx, cy, 18, 16, chimCol);
+        R(cx, cy, 18, 2, chimHi);
+        R(cx + 15, cy, 3, 16, chimDk);
+        // Brick / stone courses
+        for (let my = cy + 4; my < cy + 15; my += 4) {
+          R(cx, my, 15, 1, chimDk, 0.6);
+        }
+        // Concrete crown cap
+        R(cx - 2, cy - 3, 22, 4, 0xd0ccc4);
+        R(cx - 2, cy - 3, 22, 1, 0xffffff, 0.7);
+        R(cx - 2, cy, 22, 1, 0x8a847c);
+        // Twin terracotta flue pots
+        for (const px of [cx + 2, cx + 11]) {
+          R(px, cy - 7, 5, 5, 0xb85032);
+          R(px, cy - 7, 5, 1, 0xe07254);
+          R(px + 1, cy - 6, 3, 2, 0x22120a); // dark smoke flue opening
+        }
+      }
+
+      // 2. Gabled Attic Dormer Windows (projecting attic window on the roof)
+      if (w >= 96 && hash(5) < 0.8) {
+        const dormCount = (w >= 140 && hash(6) < 0.65) ? 2 : 1;
+        for (let d = 0; d < dormCount; d++) {
+          const dx = dormCount === 1
+            ? x + Math.floor(w / 2) - 10
+            : x + 20 + d * Math.floor((w - 56) / (dormCount - 1));
+          const dy = y + 8 + Math.floor(hash(7 + d) * Math.max(2, ridgeY - 18));
+          const dw = 20, dh = 18;
+          // Dormer drop shadow
+          R(dx + 2, dy + 2, dw, dh, 0x000000, 0.3);
+          // Dormer roof gable
+          R(dx, dy, dw, 5, 0x22262e);
+          R(dx + 1, dy + 1, dw - 2, 2, 0x444c56);
+          R(dx, dy + 4, dw, 1, 0xffffff, 0.5);
+          // Dormer white siding cheeks & face
+          R(dx + 2, dy + 5, dw - 4, dh - 5, 0xf0f4f0);
+          // Glazed attic windowpane
+          R(dx + 4, dy + 7, dw - 8, dh - 8, 0x76b4d8);
+          R(dx + 4, dy + 7, dw - 8, 2, 0xb2ddf2);
+          // Window sash cross
+          R(dx + Math.floor(dw / 2) - 1, dy + 7, 2, dh - 8, 0xffffff);
+          R(dx + 4, dy + 11, dw - 8, 1, 0xffffff);
+        }
+      }
+
+      // 3. Roof Skylight
+      if (w >= 80 && hash(15) < 0.65) {
+        const sx = x + 24 + Math.floor(hash(16) * (w - 60));
+        const sy = y + ridgeY + 4 + Math.floor(hash(17) * Math.max(2, (h - ridgeY) - 22));
+        // Aluminum beveled frame & shadow
+        R(sx + 2, sy + 2, 20, 14, 0x000000, 0.28);
+        R(sx, sy, 20, 14, 0x36404c);
+        R(sx, sy, 20, 1, 0x8a98a8);
+        R(sx + 1, sy + 1, 18, 12, 0x72aed4);
+        R(sx + 1, sy + 1, 18, 3, 0xb6e2f8);
+        // Diagonal sunlight reflection glint
+        R(sx + 4, sy + 4, 3, 6, 0xffffff, 0.4);
+      }
+
+      // 4. Plumbing Vent Stacks & TV Antenna
+      if (hash(25) < 0.65) {
+        const vx = x + w - 18, vy = y + 8 + Math.floor(hash(26) * (ridgeY - 6));
+        R(vx - 2, vy + 4, 6, 2, 0x3e444c); // flashing collar
+        R(vx, vy, 2, 6, 0x8a94a0);        // vent pipe
+        R(vx, vy, 2, 1, 0xced6de);
+      }
+      if (b.w >= 8 && hash(31) < 0.35) {
+        const ax = x + 12, ay = y + 6;
+        R(ax, ay, 2, 10, 0x30363a); R(ax - 4, ay, 10, 1, 0x30363a); R(ax - 3, ay + 3, 8, 1, 0x30363a);
       }
     } else if (b.style !== 'glass' && b.look !== 'home' && b.look !== 'bank') {
       const n = 1 + Math.floor(hash(4) * 3);
@@ -6086,7 +6182,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
   onBulletVehicle(b, v) {
     if (!b.active || !v.active || v.wrecked) return;
     const isPlayerInVehicle = v.driver === 'player' || this.player.vehicle === v;
-    const dmg = b.damage || 20;
+    const isPlayerBullet = b.owner === 'player';
+    const rawDmg = b.damage || 20;
 
     // Relative bullet hit coordinates in vehicle reference frame
     const dx = b.x - v.x, dy = b.y - v.y;
@@ -6098,17 +6195,22 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     const len = (v.cfg && v.cfg.len) || 54;
     const wid = (v.cfg && v.cfg.wid) || 24;
 
+    // Reduced bullet damage from player firearms to vehicles so cars don't explode in 3-4 shots
+    // Small arms fire does ~25% damage against heavy vehicle chassis (rockets keep full explosive damage)
+    const carDmgMul = isPlayerBullet ? (b.aoe ? 1.0 : 0.25) : 0.65;
+    const vDmg = rawDmg * carDmgMul;
+
     if (v.vtype === 'moto') {
       // 1. OPEN-AIR MOTORCYCLE: No cabin, doors, or windows. Rider is directly exposed.
       const hitRider = Math.abs(u) < len * 0.44;
       if (isPlayerInVehicle && hitRider) {
         // Bullet directly strikes the exposed player!
-        this.player.takeDamage(dmg);
-        v.takeDamage(dmg * 0.45);
+        this.player.takeDamage(rawDmg);
+        v.takeDamage(vDmg * 0.45);
         if (settings.shake) this.cameras.main.shake(90, 0.005);
       } else {
         // Bullet strikes the motorcycle frame / wheels / engine
-        v.takeDamage(dmg * 0.85);
+        v.takeDamage(vDmg * 0.85);
       }
       this.emitUp(this.fxSpark, b.x, b.y, CHEST, 3);
       this.combat.kill(b);
@@ -6123,8 +6225,8 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
     if (isHood || isTrunk) {
       // Bullets strike heavy sheet metal, engine block, or trunk:
-      // Vehicle takes full damage, and the solid bodywork shields the driver!
-      v.takeDamage(dmg * 0.85);
+      // Vehicle takes damage, and the solid bodywork shields the driver!
+      v.takeDamage(vDmg * 0.85);
       this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
     } else {
       // Passenger cabin zone: windows, glass, and driver seat
@@ -6133,15 +6235,15 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
 
       if (isPlayerInVehicle && isDriverSide) {
         // Bullet penetrates the windshield, driver's side window, or rear glass, hitting the player!
-        this.player.takeDamage(dmg);
+        this.player.takeDamage(rawDmg);
         // Vehicle also takes damage from window shatter & cabin penetration
-        v.takeDamage(dmg * 0.5);
+        v.takeDamage(vDmg * 0.5);
         this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
         if (settings.shake) this.cameras.main.shake(90, 0.005);
         if (sfx.crash) sfx.crash(0.2);
       } else {
         // Bullet strikes the passenger side or lower door panel without striking the driver directly
-        v.takeDamage(dmg * 0.85);
+        v.takeDamage(vDmg * 0.85);
         this.emitUp(this.fxSpark, b.x, b.y, CHEST, 4);
       }
     }

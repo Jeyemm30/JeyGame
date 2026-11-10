@@ -377,8 +377,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.swing = null;
     const dur = 2400;
     const gt = this.scene.gt;
+    sfx.medkit();
     this.usingItem = {
       type: 'medkit',
+      actionType: 'medkit',
       label: 'Applying Medkit...',
       icon: 'it_medkit',
       start: gt,
@@ -415,11 +417,35 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.swing = null;
     const dur = 1800;
     const gt = this.scene.gt;
-    const isDrink = ['water', 'soda', 'energy', 'coffee'].includes(id);
-    const verb = isDrink ? 'Drinking' : 'Eating';
+
+    let verb = 'Using';
+    let actionType = 'use';
+    if (['water', 'soda', 'energy', 'coffee'].includes(id)) {
+      verb = 'Drinking';
+      actionType = 'drink';
+      sfx.drink();
+    } else if (['sandwich', 'snack', 'apple', 'burger', 'pizza', 'donut'].includes(id)) {
+      verb = 'Eating';
+      actionType = 'eat';
+      sfx.eat();
+    } else if (id === 'bandage') {
+      verb = 'Applying';
+      actionType = 'bandage';
+      sfx.bandage();
+    } else if (id === 'painkillers') {
+      verb = 'Taking';
+      actionType = 'pills';
+      sfx.medkit();
+    } else if (id === 'adrenaline') {
+      verb = 'Injecting';
+      actionType = 'inject';
+      sfx.medkit();
+    }
+
     this.usingItem = {
       type: 'supply',
       id,
+      actionType,
       label: `${verb} ${sup.label}...`,
       icon: 'sp_' + id,
       start: gt,
@@ -612,7 +638,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
 
     const pose = poseFrame({
       moving: this.moving, sprint: this.sprinting, crouch: false, t: this.animT, now: time, moveBlend: this.moveBlend,
-      hurt: this.scene.gt < (this.hurtUntil || 0), pickup: this.scene.gt < (this.pickupUntil || 0) || (this.swing && this.swing.t < this.swing.dur * 0.45) || (this.reloading && !this.moving) || !!this.usingItem
+      hurt: this.scene.gt < (this.hurtUntil || 0), pickup: this.scene.gt < (this.pickupUntil || 0) || (this.swing && this.swing.t < this.swing.dur * 0.45)
     });
     this.setFrame((this.dir === 'l' ? 'r' : this.dir) + pose);
     this.setFlipX(this.dir === 'l');
@@ -648,15 +674,96 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.gun.setTexture(iconKey);
       this.gun.setOrigin(0.5, 0.5);
       this.gun.setFlipX(false).setFlipY(false);
-      const bob = Math.sin(time / 140) * 1.5;
+
       const sa = this.aim + rot;
-      const lift = baseLift + bob;
-      const off = 8;
+      const side = Math.cos(sa) < 0 ? -1 : 1;
+      const progress = Phaser.Math.Clamp((time - this.usingItem.start) / this.usingItem.dur, 0, 1);
+      const act = this.usingItem.actionType || (this.usingItem.type === 'medkit' ? 'medkit' : 'eat');
+
+      let lift = baseLift;
+      let off = 7;
+      let rotOffset = 0;
+      let scaleMod = 1;
+
+      if (act === 'eat') {
+        // Eating food (sandwich, apple, donut, burger, etc.): realistic bite cycle
+        const bitePhase = ((time - this.usingItem.start) / 440) % 1;
+        if (bitePhase < 0.45) {
+          const p = Math.sin((bitePhase / 0.45) * Math.PI);
+          lift = baseLift + 8 + p * 4;
+          rotOffset = -0.25 * side * p;
+          off = 5 - p * 1.5;
+          if (bitePhase > 0.2 && bitePhase < 0.28) {
+            lift += Math.sin(time / 20) * 1.2;
+            sfx.eat();
+            if (this.scene.fxSpark && Math.random() < 0.15) {
+              this.scene.emitUp(this.scene.fxSpark, this.x, this.y, CHEST + 8, 1);
+            }
+          }
+        } else {
+          lift = baseLift + 4 + Math.sin(time / 100) * 1;
+          rotOffset = Math.sin(time / 90) * 0.08 * side;
+          off = 6;
+        }
+      } else if (act === 'drink') {
+        // Drinking (water, soda, energy, coffee): tip can/bottle back to mouth
+        const swigPhase = ((time - this.usingItem.start) / 520) % 1;
+        const swig = Math.sin(swigPhase * Math.PI);
+        lift = baseLift + 9 + swig * 3;
+        rotOffset = (-0.45 - swig * 0.35) * side;
+        off = 5 - swig * 1.5;
+        if (swigPhase > 0.4 && swigPhase < 0.48) sfx.drink();
+      } else if (act === 'bandage') {
+        // Applying bandage: wrapping gauze around the arm/torso in an authentic orbit
+        const wrapPhase = (time - this.usingItem.start) / 140;
+        const wrapX = Math.cos(wrapPhase) * 6;
+        const wrapY = Math.sin(wrapPhase * 2) * 2.5;
+        lift = baseLift + 1 + wrapY;
+        off = 7 + wrapX * side;
+        rotOffset = Math.sin(wrapPhase) * 0.35 * side;
+        if (Math.floor(wrapPhase) % 4 === 0 && Math.random() < 0.08) {
+          sfx.bandage();
+          if (this.scene.fxSpark) {
+            this.scene.emitUp(this.scene.fxSpark, this.x, this.y, CHEST, 1);
+          }
+        }
+      } else if (act === 'medkit') {
+        // Applying medkit: holding paramedic trauma kit with focused dressing motion
+        const medPhase = Math.sin((time - this.usingItem.start) / 120);
+        lift = baseLift - 1 + medPhase * 1.8;
+        off = 9 + Math.cos((time - this.usingItem.start) / 160) * 2;
+        rotOffset = medPhase * 0.12 * side;
+        scaleMod = 1.05 + medPhase * 0.04;
+        if (Math.floor((time - this.usingItem.start) / 480) % 2 === 0 && Math.random() < 0.06) {
+          sfx.medkit();
+          if (this.scene.fxSpark) {
+            this.scene.emitUp(this.scene.fxSpark, this.x, this.y, CHEST + 2, 1);
+          }
+        }
+      } else if (act === 'pills') {
+        if (progress < 0.4) {
+          lift = baseLift + 8;
+          rotOffset = -0.5 * side;
+        } else {
+          lift = baseLift + 2;
+          rotOffset = 0.1 * side;
+        }
+      } else if (act === 'inject') {
+        if (progress < 0.6) {
+          lift = baseLift + 4;
+          rotOffset = 0.7 * side;
+          off = 4;
+        } else {
+          lift = baseLift + 2;
+          rotOffset = 0;
+        }
+      }
+
       const go = sc.fromScreen(Math.cos(sa) * off, Math.sin(sa) * off * 0.6 - lift);
       this.gun.setPosition(this.x + go.x, this.y + go.y);
-      this.gun.setRotation(bob * 0.12);
+      this.gun.setRotation(rotOffset);
       this.gun.setDepth(this.dir === 'u' ? depth - 0.02 : depth + 0.02);
-      this.gun.setScale(0.9, 0.9 * sc.upY);
+      this.gun.setScale(0.95 * scaleMod, 0.95 * scaleMod * sc.upY);
     } else if (this.swing) {
       this.gun.setScale(1, sc.upY);
       this.updateSwing(dt, depth, baseLift);
@@ -687,11 +794,80 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       if (this.reloading) {
         const p = Phaser.Math.Clamp((time - this.reloadStart) / (this.reloadEnd - this.reloadStart), 0, 1);
         switch (w.reloadStyle) {
-          case 'shell': lift -= 4 + Math.abs(Math.sin(p * Math.PI * Math.max(2, w.mag))) * 4; wob = -0.5 * side + Math.sin(p * Math.PI * Math.max(2, w.mag)) * 0.12; break;   // gun tilted up, shells fed in one by one
-          case 'revolver': lift -= Math.sin(p * Math.PI) * 4; wob = -0.9 * side * Math.sin(p * Math.PI) + Math.sin(p * Math.PI * 12) * 0.05; break;       // cylinder swung out, ratchet
-          case 'belt': lift -= Math.sin(p * Math.PI) * 10; wob = Math.sin(p * Math.PI * 6) * 0.1 + 0.4 * side * Math.sin(p * Math.PI); break;              // heavy, slow, shaking
-          case 'rocket': lift -= Math.sin(p * Math.PI) * 9; wob = -1.1 * side * Math.sin(p * Math.PI); break;                                              // tube tipped up to load
-          default: lift -= Math.sin(p * Math.PI) * 6; wob = Math.sin(p * Math.PI * 4) * 0.18 + Math.sin(p * Math.PI) * 0.5 * side;
+          case 'shell': {
+            wob = -0.52 * side;
+            lift -= 3;
+            if (p < 0.82) {
+              const shells = Math.max(2, Math.min(6, w.mag || 4));
+              const shellP = (p / 0.82 * shells) % 1;
+              const push = Math.sin(shellP * Math.PI);
+              rackBack = push * 4;
+              lift += push * 2;
+            } else {
+              const pumpP = (p - 0.82) / 0.18;
+              rackBack = Math.sin(pumpP * Math.PI) * 9;
+              wob = -0.52 * side * (1 - pumpP);
+            }
+            break;
+          }
+          case 'revolver': {
+            if (p < 0.3) {
+              const swingP = p / 0.3;
+              wob = -0.85 * side * Math.sin(swingP * Math.PI * 0.5);
+              lift -= 3 * swingP;
+            } else if (p < 0.55) {
+              wob = -0.85 * side;
+              lift += Math.sin((p - 0.3) / 0.25 * Math.PI) * 4;
+              rackBack = Math.sin((p - 0.3) / 0.25 * Math.PI) * 3;
+            } else if (p < 0.82) {
+              wob = -0.7 * side;
+              lift = baseLift - 2 + Math.sin((p - 0.55) / 0.27 * Math.PI * 2) * 2;
+            } else {
+              const shutP = (p - 0.82) / 0.18;
+              wob = -0.7 * side * (1 - shutP) + Math.sin(shutP * Math.PI) * 0.2 * side;
+              lift = baseLift;
+            }
+            break;
+          }
+          case 'belt': {
+            if (p < 0.28) {
+              lift -= Math.sin(p / 0.28 * Math.PI) * 6;
+              wob = -0.4 * side;
+            } else if (p < 0.65) {
+              lift -= 4;
+              wob = Math.sin((p - 0.28) / 0.37 * Math.PI * 3) * 0.1;
+            } else if (p < 0.82) {
+              lift -= 2;
+              wob = Math.sin((p - 0.65) / 0.17 * Math.PI) * 0.25 * side;
+            } else {
+              const charP = (p - 0.82) / 0.18;
+              rackBack = Math.sin(charP * Math.PI) * 8;
+            }
+            break;
+          }
+          case 'rocket': {
+            wob = -1.05 * side * Math.sin(p * Math.PI);
+            lift -= Math.sin(p * Math.PI) * 8;
+            rackBack = Math.sin(p * Math.PI * 2) * 3;
+            break;
+          }
+          default: {
+            if (p < 0.32) {
+              const dropP = p / 0.32;
+              wob = -0.42 * side * Math.sin(dropP * Math.PI * 0.5);
+              lift -= Math.sin(dropP * Math.PI) * 5;
+            } else if (p < 0.68) {
+              const insP = (p - 0.32) / 0.36;
+              wob = 0.32 * side * Math.sin(insP * Math.PI);
+              const slap = Math.sin(insP * Math.PI * 2);
+              lift += 2 + slap * 2;
+            } else {
+              const rackP = (p - 0.68) / 0.32;
+              rackBack = Math.sin(rackP * Math.PI) * 6;
+              wob = (1 - rackP) * 0.15 * side;
+            }
+            break;
+          }
         }
       } else if (w.rack && time < this.rackUntil) {                      // pump / bolt: slide the weapon back and forth
         const q = (time - this.rackStart) / Math.max(1, this.rackUntil - this.rackStart);

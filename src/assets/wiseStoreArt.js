@@ -136,11 +136,32 @@ export function drawWiseStoreArt(scene) {
   const logoBmp = (h) => {
     if (!scene.textures.exists('wise_logo_src')) return null;
     const img = scene.textures.get('wise_logo_src').getSourceImage();
+    if (!img || !img.width || !img.height) return null;
     const w = Math.max(1, Math.round(img.width * h / img.height));
     let cur = img, cw = img.width, ch = img.height;
-    while (cw / 2 >= w * 1.2) { const cv = document.createElement('canvas'); cv.width = Math.ceil(cw / 2); cv.height = Math.ceil(ch / 2); const g = cv.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(cur, 0, 0, cv.width, cv.height); cur = cv; cw = cv.width; ch = cv.height; }
-    const out = document.createElement('canvas'); out.width = w; out.height = h; const g = out.getContext('2d'); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-    g.beginPath(); g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); g.clip(); g.drawImage(cur, 0, 0, w, h);
+    let guard = 0;
+    while (cw / 2 >= w * 1.2 && guard++ < 20) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.ceil(cw / 2);
+      cv.height = Math.ceil(ch / 2);
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(cur, 0, 0, cv.width, cv.height);
+      cur = cv;
+      cw = cv.width;
+      ch = cv.height;
+    }
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const g = out.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.beginPath();
+    g.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    g.clip();
+    g.drawImage(cur, 0, 0, w, h);
     return out;
   };
   const LS = logoBmp(52), LP = logoBmp(42);

@@ -137,6 +137,10 @@ export const sfx = {
   doorClose() { if (!throttle('doorc', 150)) return; noise(0.1, { freq: 600, endFreq: 140, vol: 0.3 }); tone(120, 0.08, { type: 'sine', vol: 0.2, slideTo: 60 }); tone(1100, 0.02, { type: 'square', vol: 0.05, delay: 0.08 }); },
   crate() { noise(0.15, { freq: 900, endFreq: 150, vol: 0.4 }); },
   heal() { tone(440, 0.12, { type: 'sine', vol: 0.2 }); tone(660, 0.12, { type: 'sine', vol: 0.2, delay: 0.1 }); tone(880, 0.16, { type: 'sine', vol: 0.2, delay: 0.2 }); },
+  eat() { if (throttle('eat', 180)) { tone(190, 0.04, { type: 'square', vol: 0.12, slideTo: 130 }); noise(0.035, { freq: 1400, endFreq: 450, vol: 0.15 }); } },
+  drink() { if (throttle('drink', 240)) { tone(270, 0.07, { type: 'sine', vol: 0.16, slideTo: 350 }); noise(0.025, { freq: 900, endFreq: 350, vol: 0.1 }); } },
+  bandage() { if (throttle('bandage', 220)) { noise(0.08, { freq: 1600, endFreq: 650, vol: 0.14, type: 'bandpass' }); tone(310, 0.035, { type: 'sine', vol: 0.08 }); } },
+  medkit() { if (throttle('medkit', 260)) { tone(360, 0.045, { type: 'square', vol: 0.12 }); noise(0.07, { freq: 2100, endFreq: 850, vol: 0.15, delay: 0.03 }); } },
   // footsteps: a soft heel thud + a scuff; running is heavier and quicker. Called once per real step (see Player.js), never on a timer of its own.
   step(v = 1, run = false) {
     if (!throttle('step', 110)) return;

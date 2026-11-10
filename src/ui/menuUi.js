@@ -144,22 +144,402 @@ export function cityBackdrop(scene) {
   const mid = scene.add.tileSprite(0, GY - 340 + 30, 1280, 340, 'menu_mid').setOrigin(0, 0).setDepth(depthOf.mid);
   // street-level buildings made from the game's real wall / window / door tiles, tinted for night
   const lit = [];
-  const building = (x0, w, rows, doorCol) => {
+
+  const drawBuilding = ({
+    x0, w, rows, doorCol = -1, tint = 0x5a6374, style = 'standard',
+    hasWaterTower = false, hasAntenna = false, hasHvac = false,
+    hasFireEscape = false, fireEscapeBay = 4,
+    hasCanopy = false, hasStorefront = false, hasStairBulkhead = false,
+  }) => {
     const top = GY - rows * S;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < w; c++) {
-      let idx = T.wall;
-      if (r === rows - 1) idx = c === doorCol ? T.doorClosed : (c % 2 === 1 ? T.window : T.wall);
-      else if (c % 2 === 1 && r % 2 === 0) idx = T.window;
-      scene.add.image(x0 + c * S, top + r * S, 'tiles', frame(idx)).setOrigin(0, 0).setScale(2).setTint(0x7584a6).setDepth(depthOf.fac);
-      if (idx === T.window) { const g = scene.add.rectangle(x0 + c * S + 8, top + r * S + 8, 48, 36, rng() < 0.5 ? 0xffc86a : (rng() < 0.5 ? 0xff7ab0 : 0x8fe8ff), 0.5).setOrigin(0, 0).setDepth(depthOf.fac + 0.1); lit.push(g); }
+    const bWidth = w * S;
+
+    // 1. Facade tiles (walls, windows, doors)
+    for (let r = 0; r < rows; r++) {
+      const isGround = r === rows - 1;
+      for (let c = 0; c < w; c++) {
+        let isWindow = false;
+        let isDoor = false;
+
+        if (isGround) {
+          if (c === doorCol) isDoor = true;
+          else if (hasStorefront && (c === 1 || c === 2)) {
+            // ground-floor storefront display windows handled separately
+          } else if (c % 2 === 1 && c !== doorCol) {
+            isWindow = true;
+          }
+        } else {
+          // upper floors: windows in consistent bays
+          if (w >= 5 ? (c === 1 || c === 3 || (w >= 6 && c === 4)) : (c === 1 || (w === 4 && c === 2))) {
+            isWindow = true;
+          }
+        }
+
+        const idx = isDoor ? T.doorClosed : (isWindow ? T.window : T.wall);
+        scene.add.image(x0 + c * S, top + r * S, 'tiles', frame(idx))
+          .setOrigin(0, 0).setScale(2).setTint(tint).setDepth(depthOf.fac);
+
+        // Architectural Window Detailing
+        if (isWindow) {
+          const wx = x0 + c * S + 8;
+          const wy = top + r * S + 10;
+          const ww = 48;
+          const wh = 42;
+
+          // Window recess backing
+          scene.add.rectangle(wx, wy, ww, wh, 0x0c0f16).setOrigin(0, 0).setDepth(depthOf.fac + 0.04);
+
+          // Glass illumination
+          const p = rng();
+          let glassCol = 0x141a26;
+          let isLit = false;
+          let glowAlpha = 0.5;
+          if (p < 0.45) {
+            glassCol = rng() < 0.5 ? 0xffbf5a : 0xffa042;
+            isLit = true;
+          } else if (p < 0.65) {
+            glassCol = 0x88e2fc;
+            isLit = true;
+            glowAlpha = 0.4;
+          } else if (p < 0.78) {
+            glassCol = 0xfa78b0;
+            isLit = true;
+            glowAlpha = 0.4;
+          }
+
+          const glass = scene.add.rectangle(wx, wy, ww, wh, glassCol, isLit ? glowAlpha : 0.85)
+            .setOrigin(0, 0).setDepth(depthOf.fac + 0.06);
+          if (isLit) lit.push(glass);
+
+          // Window shades / pull-down blinds
+          const shadeP = rng();
+          if (shadeP < 0.75) {
+            const shadeH = Math.floor(10 + rng() * 22);
+            const shadeCol = isLit ? 0xebdcc4 : 0x242c38;
+            scene.add.rectangle(wx, wy, ww, shadeH, shadeCol, 0.95).setOrigin(0, 0).setDepth(depthOf.fac + 0.08);
+            scene.add.rectangle(wx, wy + shadeH - 1, ww, 2, 0x151a24).setOrigin(0, 0).setDepth(depthOf.fac + 0.09);
+          }
+
+          // 4-pane mullions (window crossbars)
+          scene.add.rectangle(wx, wy + Math.floor(wh / 2), ww, 2, 0x141822).setOrigin(0, 0).setDepth(depthOf.fac + 0.1);
+          scene.add.rectangle(wx + Math.floor(ww / 2), wy, 2, wh, 0x141822).setOrigin(0, 0).setDepth(depthOf.fac + 0.1);
+
+          // Stone Lintel (header above)
+          scene.add.rectangle(wx - 3, wy - 4, ww + 6, 4, 0x222a38).setOrigin(0, 0).setDepth(depthOf.fac + 0.12);
+          scene.add.rectangle(wx - 3, wy - 5, ww + 6, 1, 0x3d495e).setOrigin(0, 0).setDepth(depthOf.fac + 0.13);
+
+          // Stone Sill (ledge below)
+          scene.add.rectangle(wx - 4, wy + wh, ww + 8, 5, 0x2a3344).setOrigin(0, 0).setDepth(depthOf.fac + 0.12);
+          scene.add.rectangle(wx - 4, wy + wh, ww + 8, 1, 0x47566e).setOrigin(0, 0).setDepth(depthOf.fac + 0.13);
+
+          // Warm ambient sill glow beneath lit windows
+          if (isLit && rng() < 0.7) {
+            scene.add.ellipse(wx + ww / 2, wy + wh + 6, ww + 8, 10, glassCol, 0.16).setDepth(depthOf.fac + 0.03);
+          }
+        }
+      }
+
+      // Horizontal Stringcourses (stone ledges separating each story)
+      if (r > 0) {
+        const sy = top + r * S;
+        scene.add.rectangle(x0 - 2, sy - 2, bWidth + 4, 4, 0x232a38).setOrigin(0, 0).setDepth(depthOf.fac + 0.14);
+        scene.add.rectangle(x0 - 2, sy - 3, bWidth + 4, 1, 0x48556e).setOrigin(0, 0).setDepth(depthOf.fac + 0.15);
+        scene.add.rectangle(x0 - 2, sy + 2, bWidth + 4, 1, 0x0d1016).setOrigin(0, 0).setDepth(depthOf.fac + 0.14);
+      }
     }
-    scene.add.rectangle(x0 - 6, top - 12, w * S + 12, 14, 0x1b1e2a).setOrigin(0, 0).setDepth(depthOf.fac + 0.2);
-    scene.add.rectangle(x0 - 6, top - 14, w * S + 12, 2, TH.accent, 0.6).setOrigin(0, 0).setDepth(depthOf.fac + 0.3);
+
+    // Foundation Baseboard / Water Table along sidewalk
+    scene.add.rectangle(x0 - 4, GY - 8, bWidth + 8, 8, 0x151a24).setOrigin(0, 0).setDepth(depthOf.fac + 0.16);
+    scene.add.rectangle(x0 - 4, GY - 9, bWidth + 8, 2, 0x323d4f).setOrigin(0, 0).setDepth(depthOf.fac + 0.17);
+
+    // 2. Roof Cornice & Parapet
+    // Frieze band
+    scene.add.rectangle(x0 - 6, top - 8, bWidth + 12, 10, 0x1a202c).setOrigin(0, 0).setDepth(depthOf.fac + 0.2);
+    // Dentil blocks along the cornice
+    for (let dx = x0; dx < x0 + bWidth; dx += 14) {
+      scene.add.rectangle(dx, top - 6, 5, 6, 0x111620).setOrigin(0, 0).setDepth(depthOf.fac + 0.21);
+    }
+    // Main projecting roof cornice coping
+    scene.add.rectangle(x0 - 8, top - 16, bWidth + 16, 8, 0x222938).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+    scene.add.rectangle(x0 - 8, top - 18, bWidth + 16, 2, 0x47556d).setOrigin(0, 0).setDepth(depthOf.fac + 0.23);
+    // Dark coping shadow
+    scene.add.rectangle(x0 - 8, top - 8, bWidth + 16, 2, 0x0a0c10).setOrigin(0, 0).setDepth(depthOf.fac + 0.23);
+
+    // Stepped Pediment on Center Grand building
+    if (style === 'grand') {
+      const pedW = 100;
+      const pedX = x0 + Math.floor((bWidth - pedW) / 2);
+      scene.add.rectangle(pedX, top - 32, pedW, 16, 0x1a202c).setOrigin(0, 0).setDepth(depthOf.fac + 0.24);
+      scene.add.rectangle(pedX - 3, top - 34, pedW + 6, 3, 0x3d495d).setOrigin(0, 0).setDepth(depthOf.fac + 0.25);
+      // Architectural center medallion / crest
+      scene.add.circle(pedX + pedW / 2, top - 24, 7, 0x111620).setDepth(depthOf.fac + 0.26);
+      scene.add.circle(pedX + pedW / 2, top - 24, 5, 0x2c3546).setDepth(depthOf.fac + 0.27);
+    }
+
+    // 3. Ground Floor Entrance Canopy & Lighting
+    if (hasCanopy && doorCol >= 0) {
+      const doorX = x0 + doorCol * S;
+      const doorY = GY - 64;
+
+      // Double Glass Entrance Doors
+      scene.add.rectangle(doorX + 2, doorY + 6, 60, 58, 0x121620).setOrigin(0, 0).setDepth(depthOf.fac + 0.15);
+      // Transom window above doors
+      scene.add.rectangle(doorX + 6, doorY + 8, 52, 10, 0xffd07a, 0.85).setOrigin(0, 0).setDepth(depthOf.fac + 0.16);
+      // Double door glass panels
+      scene.add.rectangle(doorX + 6, doorY + 22, 23, 40, 0x203042).setOrigin(0, 0).setDepth(depthOf.fac + 0.16);
+      scene.add.rectangle(doorX + 33, doorY + 22, 23, 40, 0x203042).setOrigin(0, 0).setDepth(depthOf.fac + 0.16);
+      // Warm interior lobby glow through doors
+      scene.add.rectangle(doorX + 8, doorY + 24, 19, 36, 0xffbe58, 0.6).setOrigin(0, 0).setDepth(depthOf.fac + 0.17);
+      scene.add.rectangle(doorX + 35, doorY + 24, 19, 36, 0xffbe58, 0.6).setOrigin(0, 0).setDepth(depthOf.fac + 0.17);
+      // Brass push bars
+      scene.add.rectangle(doorX + 26, doorY + 40, 3, 10, 0xd8a444).setOrigin(0, 0).setDepth(depthOf.fac + 0.19);
+      scene.add.rectangle(doorX + 33, doorY + 40, 3, 10, 0xd8a444).setOrigin(0, 0).setDepth(depthOf.fac + 0.19);
+
+      // Sleek Cantilevered Canopy
+      const canW = 96;
+      const canH = 7;
+      const canX = doorX + 32 - canW / 2;
+      const canY = doorY - 4;
+
+      scene.add.rectangle(canX, canY, canW, canH, 0x151a24).setOrigin(0, 0).setDepth(depthOf.fac + 0.28);
+      scene.add.rectangle(canX, canY + canH - 2, canW, 2, 0x3ad0e0, 0.85).setOrigin(0, 0).setDepth(depthOf.fac + 0.29);
+      scene.add.rectangle(canX, canY - 2, canW, 2, 0x2a3344).setOrigin(0, 0).setDepth(depthOf.fac + 0.29);
+
+      // Steel suspension tension rods
+      const rodL = scene.add.graphics().setDepth(depthOf.fac + 0.28);
+      rodL.lineStyle(2, 0x364254, 0.95);
+      rodL.lineBetween(canX + 6, canY, canX + 14, canY - 38);
+      rodL.lineBetween(canX + canW - 6, canY, canX + canW - 14, canY - 38);
+      // Anchors
+      scene.add.rectangle(canX + 14, canY - 38, 5, 5, 0x1f2633).setOrigin(0.5).setDepth(depthOf.fac + 0.29);
+      scene.add.rectangle(canX + canW - 14, canY - 38, 5, 5, 0x1f2633).setOrigin(0.5).setDepth(depthOf.fac + 0.29);
+
+      // Warm Conical Downlight Beam
+      const cone = scene.add.graphics().setDepth(depthOf.fac + 0.27);
+      cone.fillGradientStyle(0xffc860, 0xffc860, 0xffa040, 0xffa040, 0.35, 0.35, 0.02, 0.02);
+      cone.beginPath();
+      cone.moveTo(canX + 16, canY + canH);
+      cone.lineTo(canX + canW - 16, canY + canH);
+      cone.lineTo(canX + canW + 12, GY);
+      cone.lineTo(canX - 12, GY);
+      cone.closePath();
+      cone.fillPath();
+
+      // Soft amber entrance pool on sidewalk
+      scene.add.ellipse(doorX + 32, GY + 2, 90, 16, 0xffc860, 0.22).setDepth(depthOf.gnd + 0.05);
+    }
+
+    // 4. Ground Floor Storefront (Building 3)
+    if (hasStorefront) {
+      const sfX = x0 + 1 * S;
+      const sfY = GY - 62;
+      const sfW = 2 * S;
+      const sfH = 54;
+
+      // Recessed shop window
+      scene.add.rectangle(sfX + 4, sfY + 4, sfW - 8, sfH - 4, 0x121822).setOrigin(0, 0).setDepth(depthOf.fac + 0.15);
+      // Lit boutique display interior
+      const shopLit = scene.add.rectangle(sfX + 8, sfY + 8, sfW - 16, sfH - 12, 0xffd480, 0.65).setOrigin(0, 0).setDepth(depthOf.fac + 0.16);
+      lit.push(shopLit);
+      // Large display pane crossbars
+      scene.add.rectangle(sfX + 4, sfY + 28, sfW - 8, 2, 0x161c26).setOrigin(0, 0).setDepth(depthOf.fac + 0.17);
+      scene.add.rectangle(sfX + sfW / 2, sfY + 4, 2, sfH - 4, 0x161c26).setOrigin(0, 0).setDepth(depthOf.fac + 0.17);
+
+      // Striped Awning above storefront
+      const awnX = sfX - 4;
+      const awnY = sfY - 6;
+      const awnW = sfW + 8;
+      const awnH = 18;
+      const stripeW = 12;
+
+      for (let sx = 0; sx < awnW; sx += stripeW) {
+        const isDarkStripe = Math.floor(sx / stripeW) % 2 === 0;
+        const curW = Math.min(stripeW, awnW - sx);
+        const col = isDarkStripe ? 0x242a38 : 0x8f2626;
+        scene.add.rectangle(awnX + sx, awnY, curW, awnH, col).setOrigin(0, 0).setDepth(depthOf.fac + 0.28);
+        scene.add.circle(awnX + sx + curW / 2, awnY + awnH, curW / 2, col).setDepth(depthOf.fac + 0.28);
+      }
+      scene.add.rectangle(awnX, awnY - 2, awnW, 2, 0x121620).setOrigin(0, 0).setDepth(depthOf.fac + 0.29);
+      scene.add.rectangle(awnX, awnY + awnH, awnW, 2, 0xffd588, 0.7).setOrigin(0, 0).setDepth(depthOf.fac + 0.29);
+      scene.add.ellipse(sfX + sfW / 2, GY + 2, sfW, 14, 0xffc860, 0.18).setDepth(depthOf.gnd + 0.05);
+    }
+
+    // 5. Classic Urban Fire Escape (Building 2)
+    if (hasFireEscape) {
+      const feX = x0 + fireEscapeBay * S + 6;
+      const feW = 52;
+
+      for (let r = 1; r <= 3; r++) {
+        const platY = top + r * S + 50;
+
+        // Platform grating
+        scene.add.rectangle(feX, platY, feW, 5, 0x141822).setOrigin(0, 0).setDepth(depthOf.fac + 0.25);
+        scene.add.rectangle(feX, platY - 1, feW, 1, 0x364254).setOrigin(0, 0).setDepth(depthOf.fac + 0.26);
+        // Cantilever brackets underneath
+        scene.add.triangle(feX + 8, platY + 5, 0, 0, 0, 10, 8, 0, 0x121620).setDepth(depthOf.fac + 0.24);
+        scene.add.triangle(feX + feW - 8, platY + 5, 0, 0, 0, 10, -8, 0, 0x121620).setDepth(depthOf.fac + 0.24);
+
+        // Safety Railings
+        scene.add.rectangle(feX, platY - 18, feW, 2, 0x1e2634).setOrigin(0, 0).setDepth(depthOf.fac + 0.26);
+        scene.add.rectangle(feX, platY - 9, feW, 1, 0x161d28).setOrigin(0, 0).setDepth(depthOf.fac + 0.26);
+        for (let bx = feX + 4; bx < feX + feW - 2; bx += 8) {
+          scene.add.rectangle(bx, platY - 18, 1, 18, 0x141822).setOrigin(0, 0).setDepth(depthOf.fac + 0.26);
+        }
+
+        // Connecting Angled Stair Ladders between platforms
+        if (r < 3) {
+          const nextPlatY = top + (r + 1) * S + 50;
+          const stairG = scene.add.graphics().setDepth(depthOf.fac + 0.25);
+          stairG.lineStyle(2, 0x1a212e, 0.95);
+          const xStart = r % 2 === 1 ? feX + feW - 8 : feX + 8;
+          const xEnd = r % 2 === 1 ? feX + 8 : feX + feW - 8;
+          stairG.lineBetween(xStart, platY, xEnd, nextPlatY - 18);
+          stairG.lineBetween(xStart + 3, platY, xEnd + 3, nextPlatY - 18);
+          for (let step = 1; step <= 5; step++) {
+            const t = step / 6;
+            const rx = Phaser.Math.Linear(xStart, xEnd, t);
+            const ry = Phaser.Math.Linear(platY, nextPlatY - 18, t);
+            stairG.lineBetween(rx - 3, ry, rx + 3, ry);
+          }
+        }
+      }
+
+      // Drop ladder hanging down from bottom platform toward the sidewalk
+      const botY = top + 3 * S + 55;
+      const dropLadder = scene.add.graphics().setDepth(depthOf.fac + 0.25);
+      dropLadder.lineStyle(2, 0x181e2a, 0.95);
+      dropLadder.lineBetween(feX + 12, botY, feX + 12, botY + 36);
+      dropLadder.lineBetween(feX + 26, botY, feX + 26, botY + 36);
+      for (let ly = botY + 6; ly < botY + 36; ly += 7) {
+        dropLadder.lineBetween(feX + 12, ly, feX + 26, ly);
+      }
+    }
+
+    // 6. Rooftop Industrial Features
+    // A. Rooftop Water Tower (Building 1)
+    if (hasWaterTower) {
+      const wtX = x0 + Math.floor(bWidth * 0.58);
+      const legH = 34;
+      const tankW = 44;
+      const tankH = 36;
+      const tankY = top - 18 - legH - tankH;
+
+      const legsG = scene.add.graphics().setDepth(depthOf.fac + 0.21);
+      legsG.lineStyle(2, 0x1a202c, 0.95);
+      legsG.lineBetween(wtX - 16, top - 18, wtX - 12, tankY + tankH);
+      legsG.lineBetween(wtX + 16, top - 18, wtX + 12, tankY + tankH);
+      legsG.lineBetween(wtX - 15, top - 18, wtX + 13, tankY + tankH);
+      legsG.lineBetween(wtX + 15, top - 18, wtX - 13, tankY + tankH);
+
+      scene.add.rectangle(wtX - tankW / 2, tankY, tankW, tankH, 0x3a2b24).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+      scene.add.rectangle(wtX - tankW / 2, tankY + 6, tankW, 2, 0x181e28).setOrigin(0, 0).setDepth(depthOf.fac + 0.23);
+      scene.add.rectangle(wtX - tankW / 2, tankY + 18, tankW, 2, 0x181e28).setOrigin(0, 0).setDepth(depthOf.fac + 0.23);
+      scene.add.rectangle(wtX - tankW / 2, tankY + 30, tankW, 2, 0x181e28).setOrigin(0, 0).setDepth(depthOf.fac + 0.23);
+      scene.add.triangle(wtX, tankY - 14, 0, 0, -tankW / 2 - 4, 14, tankW / 2 + 4, 14, 0x242d3c).setDepth(depthOf.fac + 0.23);
+      scene.add.rectangle(wtX, tankY - 20, 2, 8, 0x364254).setOrigin(0.5).setDepth(depthOf.fac + 0.24);
+    }
+
+    // B. Industrial HVAC Chiller (Building 2)
+    if (hasHvac) {
+      const hvacX = x0 + 44;
+      const hvacW = 60;
+      const hvacH = 28;
+      const hvacY = top - 18 - hvacH;
+
+      scene.add.rectangle(hvacX, hvacY, hvacW, hvacH, 0x1f2736).setOrigin(0, 0).setDepth(depthOf.fac + 0.21);
+      scene.add.rectangle(hvacX, hvacY, hvacW, 2, 0x3a485e).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+      for (let ly = hvacY + 6; ly < hvacY + 22; ly += 4) {
+        scene.add.rectangle(hvacX + 6, ly, 30, 2, 0x111620).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+      }
+      scene.add.circle(hvacX + 46, hvacY + 12, 8, 0x131822).setDepth(depthOf.fac + 0.22);
+      scene.add.circle(hvacX + 46, hvacY + 12, 5, 0x242d3c).setDepth(depthOf.fac + 0.23);
+      const pipe = scene.add.graphics().setDepth(depthOf.fac + 0.22);
+      pipe.lineStyle(2, 0x364254, 0.9);
+      pipe.lineBetween(hvacX + hvacW, hvacY + 16, hvacX + hvacW + 12, hvacY + 16);
+      pipe.lineBetween(hvacX + hvacW + 12, hvacY + 16, hvacX + hvacW + 12, top - 18);
+    }
+
+    // C. Communications Antenna Mast with Pulsing Aviation Beacon (Building 2)
+    if (hasAntenna) {
+      const antX = x0 + Math.floor(bWidth / 2);
+      const antBaseY = (style === 'grand') ? top - 34 : top - 18;
+      const antTipY = antBaseY - 68;
+
+      const mast = scene.add.graphics().setDepth(depthOf.fac + 0.3);
+      mast.lineStyle(2, 0x2a3548, 0.95);
+      mast.lineBetween(antX - 4, antBaseY, antX, antTipY);
+      mast.lineBetween(antX + 4, antBaseY, antX, antTipY);
+      for (let my = antBaseY - 14; my > antTipY + 8; my -= 14) {
+        mast.lineBetween(antX - 3, my, antX + 3, my);
+      }
+      mast.lineBetween(antX - 12, antTipY + 16, antX + 12, antTipY + 16);
+
+      const beaconGlow = scene.add.circle(antX, antTipY - 2, 11, 0xff2828, 0.35).setDepth(depthOf.fac + 0.34);
+      const beacon = scene.add.circle(antX, antTipY - 2, 4, 0xff3b3b, 0.95).setDepth(depthOf.fac + 0.35);
+
+      scene.tweens.add({
+        targets: [beacon, beaconGlow],
+        alpha: 0.12,
+        duration: 950,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut'
+      });
+    }
+
+    // D. Rooftop Stair Bulkhead Penthouse + Exhaust Vents (Building 3)
+    if (hasStairBulkhead) {
+      const bhX = x0 + Math.floor(bWidth * 0.52);
+      const bhW = 54;
+      const bhH = 32;
+      const bhY = top - 18 - bhH;
+
+      scene.add.rectangle(bhX, bhY, bhW, bhH, 0x242d3c).setOrigin(0, 0).setDepth(depthOf.fac + 0.21);
+      scene.add.rectangle(bhX - 2, bhY - 2, bhW + 4, 3, 0x3d4b5f).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+      scene.add.rectangle(bhX + 8, bhY + 8, 18, bhH - 8, 0x141822).setOrigin(0, 0).setDepth(depthOf.fac + 0.22);
+
+      const ventG = scene.add.graphics().setDepth(depthOf.fac + 0.21);
+      ventG.lineStyle(3, 0x2c384a, 0.95);
+      ventG.beginPath();
+      ventG.moveTo(bhX + bhW + 12, top - 18);
+      ventG.lineTo(bhX + bhW + 12, top - 38);
+      ventG.lineTo(bhX + bhW + 4, top - 38);
+      ventG.strokePath();
+      ventG.beginPath();
+      ventG.moveTo(bhX + bhW + 26, top - 18);
+      ventG.lineTo(bhX + bhW + 26, top - 46);
+      ventG.lineTo(bhX + bhW + 18, top - 46);
+      ventG.strokePath();
+    }
+
     return top;
   };
-  building(250, 5, 6, 2); const t1 = building(620, 6, 5, 3); building(1030, 4, 6, 1); building(1300, 3, 5, 1);
-  if (scene.textures.exists('wise_sign')) scene.add.image(620 + 3 * S + 32, t1 + (5 - 1) * S - 30, 'wise_sign').setOrigin(0.5, 1).setScale(0.62).setDepth(depthOf.fac + 0.5);       // the shop sign from the game world
-  lit.forEach((g) => { if (rng() < 0.4) scene.tweens.add({ targets: g, alpha: 0.12 + rng() * 0.2, duration: 600 + rng() * 2400, yoyo: true, repeat: -1, delay: rng() * 3000 }); });
+
+  // 1. Industrial warehouse / loft building (left, behind menu)
+  drawBuilding({
+    x0: 250, w: 5, rows: 6, doorCol: 2, tint: 0x545e72, style: 'warehouse',
+    hasWaterTower: true
+  });
+
+  // 2. Centerpiece Grand Apartment / Commercial Building (center focal point)
+  drawBuilding({
+    x0: 620, w: 6, rows: 5, doorCol: 2, tint: 0x645048, style: 'grand',
+    hasCanopy: true, hasAntenna: true, hasHvac: true,
+    hasFireEscape: true, fireEscapeBay: 4
+  });
+
+  // 3. Classic Brick Walk-Up with Ground-Floor Storefront (right, under moon)
+  drawBuilding({
+    x0: 1030, w: 4, rows: 6, doorCol: 0, tint: 0x68463e, style: 'storefront',
+    hasStorefront: true, hasStairBulkhead: true
+  });
+
+  // 4. Narrow Corner Townhouse (far right)
+  drawBuilding({
+    x0: 1300, w: 3, rows: 5, doorCol: 1, tint: 0x505666, style: 'standard'
+  });
+
+  lit.forEach((g) => { if (rng() < 0.45) scene.tweens.add({ targets: g, alpha: 0.15 + rng() * 0.25, duration: 600 + rng() * 2400, yoyo: true, repeat: -1, delay: rng() * 3000 }); });
   // sidewalk + road, also real tiles
   for (let x = 0; x < 1280; x += S) {
     scene.add.image(x, GY, 'tiles', frame(T.sidewalk)).setOrigin(0, 0).setScale(2).setTint(0x8e98b0).setDepth(depthOf.gnd);
@@ -195,12 +575,79 @@ export function cityBackdrop(scene) {
     glow.clear();
     lamps.forEach((l) => {
       const f = l.bad ? (Math.sin(time / 90 + l.ph) * Math.sin(time / 37) > -0.5 ? 1 : 0.25) : 0.85 + 0.15 * Math.sin(time / 300 + l.ph);
-      glow.fillStyle(0xffc070, 0.05 * f).fillEllipse(l.x, l.y + 60, 260, 150); glow.fillStyle(0xffc070, 0.09 * f).fillEllipse(l.x, l.y + 40, 110, 70); glow.fillStyle(0xfff0c8, 0.2 * f).fillCircle(l.x, l.y + 6, 9);
+      const bulbX = l.x - 18;
+      const bulbY = l.y + 6;
+      const groundY = GY + 48;
+
+      // Volumetric downward light cone from lantern head to ground
+      glow.fillStyle(0xffb850, 0.04 * f);
+      glow.beginPath();
+      glow.moveTo(bulbX - 4, bulbY);
+      glow.lineTo(bulbX + 4, bulbY);
+      glow.lineTo(bulbX + 80, groundY);
+      glow.lineTo(bulbX - 80, groundY);
+      glow.closePath();
+      glow.fillPath();
+
+      glow.fillStyle(0xffd070, 0.065 * f);
+      glow.beginPath();
+      glow.moveTo(bulbX - 2, bulbY);
+      glow.lineTo(bulbX + 2, bulbY);
+      glow.lineTo(bulbX + 45, groundY);
+      glow.lineTo(bulbX - 45, groundY);
+      glow.closePath();
+      glow.fillPath();
+
+      // Bright lantern fixture bulb
+      glow.fillStyle(0xfff8d0, 0.85 * f).fillCircle(bulbX, bulbY, 4);
+      glow.fillStyle(0xffd870, 0.35 * f).fillCircle(bulbX, bulbY, 10);
+      glow.fillStyle(0xffaa40, 0.12 * f).fillCircle(bulbX, bulbY, 20);
+
+      // Pavement reflection pool flat on the sidewalk/street
+      glow.fillStyle(0xffc060, 0.18 * f).fillEllipse(bulbX, groundY, 150, 28);
+      glow.fillStyle(0xffe890, 0.22 * f).fillEllipse(bulbX, groundY, 70, 14);
+      glow.fillStyle(0xffffff, 0.12 * f).fillEllipse(bulbX, groundY, 30, 7);
     });
-    cars.forEach((c) => {                                              // head and tail lights
-      const dir = c.v > 0 ? 1 : -1, hx = c.s.x + dir * 58, tx = c.s.x - dir * 58;
-      glow.fillStyle(0xfff0c0, 0.16).fillEllipse(hx + dir * 36, c.y - 16, 110, 30); glow.fillStyle(0xfff6d8, 0.5).fillCircle(hx, c.y - 20, 4);
-      glow.fillStyle(0xff3a2a, 0.45).fillCircle(tx, c.y - 20, 4); glow.fillStyle(0xff3a2a, 0.1).fillEllipse(tx, c.y - 20, 40, 20);
+
+    cars.forEach((c) => {
+      const dir = c.v > 0 ? 1 : -1;
+      const hx = c.s.x + dir * 56;
+      const hy = c.y - 18;
+      const tx = c.s.x - dir * 56;
+      const ty = c.y - 18;
+
+      // Headlight: forward-projecting volumetric light wedge onto the road
+      glow.fillStyle(0xfff0c0, 0.08);
+      glow.beginPath();
+      glow.moveTo(hx, hy - 2);
+      glow.lineTo(hx + dir * 170, hy - 14);
+      glow.lineTo(hx + dir * 185, c.y + 2);
+      glow.lineTo(hx, hy + 4);
+      glow.closePath();
+      glow.fillPath();
+
+      glow.fillStyle(0xfffae0, 0.16);
+      glow.beginPath();
+      glow.moveTo(hx, hy - 1);
+      glow.lineTo(hx + dir * 105, hy - 7);
+      glow.lineTo(hx + dir * 115, c.y + 2);
+      glow.lineTo(hx, hy + 3);
+      glow.closePath();
+      glow.fillPath();
+
+      // Headlight lens hot spot
+      glow.fillStyle(0xffffff, 0.9).fillCircle(hx, hy, 3);
+      glow.fillStyle(0xfff5d0, 0.4).fillCircle(hx, hy, 7);
+
+      // Road pavement reflection pool in front of car
+      glow.fillStyle(0xfff0b0, 0.14).fillEllipse(hx + dir * 75, c.y, 110, 10);
+      glow.fillStyle(0xfffae8, 0.2).fillEllipse(hx + dir * 35, c.y, 50, 6);
+
+      // Taillight: small glowing red bulb & road reflection (no floating oval)
+      glow.fillStyle(0xff2211, 0.9).fillCircle(tx, ty, 3);
+      glow.fillStyle(0xff3a1a, 0.45).fillCircle(tx, ty, 6);
+      glow.fillStyle(0xff2211, 0.15).fillEllipse(tx - dir * 8, c.y, 24, 6);
+      glow.fillStyle(0xff1808, 0.08).fillEllipse(tx - dir * 12, ty, 18, 10);
     });
   };
   scene.events.on('update', upd);

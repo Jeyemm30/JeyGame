@@ -5,16 +5,13 @@ export default defineConfig({
     host: 'localhost',
     port: 5173,
     strictPort: true,
-    open: false
+    open: false,
+    watch: {
+      ignored: ['**/.edge*/**', '**/dist/**']
+    }
   },
   build: {
     target: 'es2018',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          phaser: ['phaser']
-        }
-      }
-    }
+    assetsInlineLimit: 65536
   }
 });

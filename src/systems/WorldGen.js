@@ -563,7 +563,9 @@ export function generateWorld(seed = 20240) {
     for (let xx = x + 1; xx < x + w - 1; xx++) if (obj[y + h - 2][xx] === -1) fc.push(xx);
     const fdx = o.frontDoor !== undefined ? o.frontDoor : fc[ri(0, fc.length - 1)];
     addDoor(fdx, y + h - 1, ab && rng() < 0.6);
-    if (o.wideDoor && obj[y + h - 1][fdx + 1] === wallT && obj[y + h - 2][fdx + 1] === -1) addDoor(fdx + 1, y + h - 1, false);
+    if (o.wideDoor && obj[y + h - 1][fdx + 1] === wallT && obj[y + h - 2][fdx + 1] === -1) {
+      addDoor(fdx + 1, y + h - 1, false);
+    }
     const entry = { x: fdx, y: y + h - 2 };
 
     const inRoom = (r, tx, ty) => tx >= r.x0 && tx <= r.x1 && ty >= r.y0 && ty <= r.y1;
@@ -665,7 +667,7 @@ export function generateWorld(seed = 20240) {
         if (obj[ty][tx] === -1 && !nearDoor(tx, ty)) obj[ty][tx] = T.rubble;
       }
     }
-    placeWindows(x, y, w, h, { windowChance: o.windowChance ?? 0.55, abandoned: ab });
+    placeWindows(x, y, w, h, { windowChance: o.windowChance ?? 0.55, abandoned: ab, winT: o.winT });
     if (ab) {
       for (let k = 0; k < 3; k++) {
         const xx = ri(x + 1, x + w - 2), row = rng() < 0.5 ? y : y + h - 1;
@@ -709,7 +711,10 @@ export function generateWorld(seed = 20240) {
         out.items.push({ x: px(t.x) + ri(-6, 6), y: px(t.y) + ri(-6, 6), id: pick(ids) });
       }
     }
-    registerBuilding(x, y, w, h, o.roof || 'shingle', { abandoned: ab, lift: o.lift || 0, kind: o.kind || (ab ? 'abandoned' : 'house'), look: o.look || null, dark: !!o.dark });
+    registerBuilding(x, y, w, h, o.roof || 'shingle', {
+      abandoned: ab, lift: o.lift || 0, kind: o.kind || (ab ? 'abandoned' : 'house'),
+      look: o.look || null, dark: !!o.dark, colorIdx: o.colorIdx, facade: o.facade || 0
+    });
     if (!o.office) out.houseDoors.push({ x: px(fdx), y: px(y + h), abandoned: ab });
     return { x, y, w, h, free, doorX: fdx, doorY: y + h - 1 };
   }
@@ -1228,7 +1233,9 @@ export function generateWorld(seed = 20240) {
           const y = row.bottom - h + 1;
           if (y < iy0) { x += w + 4; continue; }
           const ab = rng() < abandonedChance;
-          const hs = house(x, y, w, h, { abandoned: ab, roof: 'shingle' });
+          const wall = ab ? (rng() < 0.5 ? T.wall : T.wall2) : (rng() < 0.55 ? T.wall : T.wall2);
+          const roof = ab ? 'metal' : (rng() < 0.65 ? 'shingle' : (rng() < 0.4 ? 'spanish' : (rng() < 0.5 ? 'slate' : 'cedar')));
+          const hs = house(x, y, w, h, { abandoned: ab, wall, roof, colorIdx: ri(0, 5) });
           addPoi(ab ? 'house' : 'house', ab ? 'Abandoned house' : 'House', x, y, w, h);
           if (ab) { if (rng() < 0.6) enemy(hs.free[0]?.x ?? x + 2, hs.free[0]?.y ?? y + 2, 'gang', rng() < 0.5 ? 'pistol' : 'shotgun', 'guard', 50); }
           else if (rng() < 0.45) civ(hs.doorX, hs.doorY + 2, 'stand');
@@ -3878,9 +3885,11 @@ export function generateWorld(seed = 20240) {
       }
       // Single well-spaced primary row of two apartment buildings with a central courtyard & resident parking lot in front
       const bottom = iy0 + 14, h2 = 12, w2 = 14;
-      [ix0 + 1, ix1 - w2].forEach((x) => {
+      [ix0 + 1, ix1 - w2].forEach((x, idx) => {
         const y = bottom - h2 + 1;
-        const t = house(x, y, w2, h2, { roof: 'metal', wall: T.wall2 });
+        const wall = (idx + b.c + b.r) % 2 === 0 ? T.wall : T.wall2;
+        const roof = idx === 0 ? 'slate' : 'shingle';
+        const t = house(x, y, w2, h2, { roof, wall, colorIdx: (b.c * 3 + idx) % 6, kind: 'apartments' });
         addPoi('house', 'Apartments', t.x, t.y, t.w, t.h);
         // Paved entrance path connecting apartment door to the courtyard promenade
         for (let py = bottom + 1; py <= bottom + 3; py++) {
@@ -4168,7 +4177,7 @@ export function generateWorld(seed = 20240) {
     addPoi('tower', 'Offices', off.x, off.y, off.w, off.h);
     publicDoor(off.doorX, off.doorY, 'office', 'Office');
 
-    const apt = house(ix1 - 14, iy0 + 1, 14, 10, { roof: 'metal', wall: T.wall2 });
+    const apt = house(ix1 - 14, iy0 + 1, 14, 10, { roof: 'slate', wall: T.wall2, kind: 'apartments' });
     addPoi('house', 'Apartments', apt.x, apt.y, apt.w, apt.h);
     if (rng() < 0.6) civ(apt.doorX, apt.doorY + 2, 'stand');
 

@@ -1289,12 +1289,90 @@ function drawQuestIcons(scene) {
 export const ROOF_COLORS = ['#7a4636', '#5b6a78', '#4f5d3f', '#6e5a4a', '#8a3a32', '#55504a'];
 function drawRoofPatterns(scene) {
   const mk = (key, w, h, fn) => makeCanvas(scene, key, w, h, fn);
+  // Enhanced 3D architectural asphalt shingles with shadow drops, bevels & multi-hue keyways
   ROOF_COLORS.forEach((col, i) => mk('roofpat_shingle' + i, 56, 32, (c) => {
     R(c, 0, 0, 56, 32, col);
-    const line = shade(col, -0.3), hi = shade(col, 0.18);
-    for (let y = 0; y < 32; y += 8) { R(c, 0, y, 56, 1, line); R(c, 0, y + 1, 56, 1, hi); const off = (y / 8) % 2 ? 0 : 7; for (let x = off; x < 56; x += 14) R(c, x, y, 1, 8, line); }
-    for (let k = 0; k < 20; k++) R(c, (k * 37) % 56, (k * 53) % 32, 3, 2, k % 2 ? shade(col, -0.12) : shade(col, 0.1));
+    const line = shade(col, -0.32), hi = shade(col, 0.22), shadow = shade(col, -0.42);
+    for (let y = 0; y < 32; y += 8) {
+      R(c, 0, y, 56, 1, line);
+      R(c, 0, y + 1, 56, 1, hi);
+      R(c, 0, y + 7, 56, 1, shadow);
+      const off = (y / 8) % 2 ? 0 : 7;
+      for (let x = off; x < 56; x += 14) {
+        R(c, x, y, 1, 8, line);
+        R(c, x + 1, y, 1, 8, hi);
+      }
+    }
+    for (let k = 0; k < 24; k++) {
+      const rx = (k * 37) % 54, ry = (k * 53) % 30;
+      R(c, rx, ry, 3, 2, k % 3 === 0 ? shade(col, 0.12) : k % 3 === 1 ? shade(col, -0.15) : shade(col, 0.05));
+    }
   }));
+  // Spanish curved terracotta barrel tile (curved scalloped ribs)
+  mk('roofpat_spanish', 32, 32, (c) => {
+    R(c, 0, 0, 32, 32, '#9a3c26');
+    for (let x = 0; x < 32; x += 8) {
+      R(c, x, 0, 2, 32, '#561e12');     // dark shadow trough
+      R(c, x + 2, 0, 4, 32, '#9e4028'); // tile crest base
+      R(c, x + 3, 0, 2, 32, '#d86644'); // highlight ridge
+      R(c, x + 5, 0, 2, 32, '#b84e32');
+    }
+    // Staggered horizontal tile course overlaps
+    for (let y = 0; y < 32; y += 16) {
+      R(c, 0, y, 32, 2, 'rgba(0,0,0,0.38)');
+      R(c, 0, y + 2, 32, 1, 'rgba(255,255,255,0.22)');
+    }
+  });
+  // Architectural cut rectangular slate tiles
+  mk('roofpat_slate', 48, 32, (c) => {
+    R(c, 0, 0, 48, 32, '#3f4752');
+    for (let y = 0; y < 32; y += 8) {
+      R(c, 0, y, 48, 1, '#232932');
+      R(c, 0, y + 1, 48, 1, '#5e6876');
+      R(c, 0, y + 7, 48, 1, '#1a1f26');
+      const off = (y / 8) % 2 ? 0 : 8;
+      for (let x = off; x < 48; x += 16) {
+        R(c, x, y, 1, 8, '#232932');
+        R(c, x + 1, y, 1, 8, '#6a7482');
+      }
+    }
+    for (let k = 0; k < 16; k++) {
+      const rx = (k * 29) % 46, ry = (k * 41) % 30;
+      R(c, rx, ry, 4, 2, k % 2 ? '#343c46' : '#4d5764');
+    }
+  });
+  // Rustic split cedar wood shakes
+  mk('roofpat_cedar', 48, 32, (c) => {
+    R(c, 0, 0, 48, 32, '#6a523a');
+    for (let y = 0; y < 32; y += 8) {
+      R(c, 0, y, 48, 1, '#3e2e1e');
+      R(c, 0, y + 1, 48, 1, '#8e7254');
+      R(c, 0, y + 7, 48, 1, '#2a1e12');
+      const off = (y / 8) % 2 ? 0 : 6;
+      for (let x = off; x < 48; x += 12) {
+        R(c, x, y, 1, 8, '#3e2e1e');
+        R(c, x + 2, y + 1, 1, 6, '#82684c');
+        R(c, x + 7, y + 1, 1, 6, '#56402a');
+      }
+    }
+    for (let k = 0; k < 18; k++) {
+      const rx = (k * 31) % 46, ry = (k * 47) % 30;
+      R(c, rx, ry, 3, 2, k % 2 ? '#543e2a' : '#7c6248');
+    }
+  });
+  // Modern standing seam architectural metal panels
+  mk('roofpat_standingseam', 48, 32, (c) => {
+    R(c, 0, 0, 48, 32, '#3e444c');
+    for (let x = 0; x < 48; x += 12) {
+      R(c, x, 0, 1, 32, '#1e2226');     // seam groove shadow
+      R(c, x + 1, 0, 2, 32, '#66707c'); // raised seam batten
+      R(c, x + 2, 0, 1, 32, '#96a2b0'); // highlight reflection
+      R(c, x + 5, 0, 4, 32, '#48505a'); // subtle panel center reflection
+    }
+    // Top & bottom perimeter shadow
+    R(c, 0, 0, 48, 1, '#66707c');
+    R(c, 0, 31, 48, 1, '#1e2226');
+  });
   mk('roofpat_modern', 232, 168, (c) => {                                                    // calm flat roof, drawn big so it does not repeat like a facade: one solar array, one skylight, a vent
     R(c, 0, 0, 232, 168, '#cfd4d8'); R(c, 0, 0, 232, 2, '#e6eaed'); R(c, 0, 166, 232, 2, '#a9aeb3');
     for (let i = 0; i < 3; i++) { R(c, 18 + i * 38, 22, 34, 46, '#26384c'); R(c, 18 + i * 38, 22, 34, 2, '#46627f'); R(c, 34 + i * 38, 22, 2, 46, '#46627f'); R(c, 18 + i * 38, 44, 34, 2, '#46627f'); }
