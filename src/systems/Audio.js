@@ -133,6 +133,20 @@ export const sfx = {
   hurt() { if (throttle('hurt', 80)) { tone(140, 0.2, { type: 'sawtooth', vol: 0.25, slideTo: 60 }); noise(0.12, { freq: 800, endFreq: 200, vol: 0.4 }); } },
   kill() { if (throttle('kill', 50)) tone(520, 0.1, { type: 'triangle', vol: 0.15, slideTo: 200 }); },
   pickup() { tone(660, 0.06, { type: 'triangle', vol: 0.2 }); tone(990, 0.09, { type: 'triangle', vol: 0.2, delay: 0.06 }); },
+  cash() {
+    tone(988, 0.06, { type: 'triangle', vol: 0.16 });
+    tone(1318, 0.12, { type: 'triangle', vol: 0.2, delay: 0.04 });
+    tone(1976, 0.16, { type: 'sine', vol: 0.14, delay: 0.08 });
+    noise(0.04, { freq: 3600, endFreq: 1100, vol: 0.1, type: 'bandpass', delay: 0.04 });
+  },
+  error() {
+    tone(160, 0.1, { type: 'sawtooth', vol: 0.14, slideTo: 110 });
+    tone(130, 0.12, { type: 'sawtooth', vol: 0.12, delay: 0.08, slideTo: 80 });
+  },
+  item() {
+    tone(880, 0.04, { type: 'triangle', vol: 0.14 });
+    tone(1320, 0.08, { type: 'triangle', vol: 0.16, delay: 0.035 });
+  },
   door() { if (!throttle('door', 150)) return; noise(0.22, { freq: 700, endFreq: 260, vol: 0.12, type: 'bandpass', q: 4 }); tone(170, 0.22, { type: 'sawtooth', vol: 0.04, slideTo: 240 }); tone(900, 0.025, { type: 'square', vol: 0.05, delay: 0.2 }); noise(0.05, { freq: 1800, endFreq: 600, vol: 0.18, delay: 0.21 }); },
   doorClose() { if (!throttle('doorc', 150)) return; noise(0.1, { freq: 600, endFreq: 140, vol: 0.3 }); tone(120, 0.08, { type: 'sine', vol: 0.2, slideTo: 60 }); tone(1100, 0.02, { type: 'square', vol: 0.05, delay: 0.08 }); },
   crate() { noise(0.15, { freq: 900, endFreq: 150, vol: 0.4 }); },

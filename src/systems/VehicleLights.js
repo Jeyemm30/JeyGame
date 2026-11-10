@@ -61,7 +61,14 @@ export function drawVehicleLamps(v, gl, ll, now) {
     const o = sc.fromScreen(sx * cr - sy * sr, sx * sr + sy * cr);
     return { x: v.x + o.x, y: v.y + o.y };
   };
-  const dot = (p, col, r, a) => { if (ll >= 2) gl.fillStyle(col, a * 0.22).fillCircle(p.x, p.y, r * 2.2); gl.fillStyle(col, a).fillCircle(p.x, p.y, r); };
+  const dot = (p, col, r, a) => {
+    if (ll >= 2) {
+      gl.fillStyle(col, a * 0.15).fillCircle(p.x, p.y, r * 3.5);
+      gl.fillStyle(col, a * 0.35).fillCircle(p.x, p.y, r * 2.0);
+    }
+    gl.fillStyle(col, a * 0.95).fillCircle(p.x, p.y, r);
+    gl.fillStyle(0xffffff, a * 0.7).fillCircle(p.x, p.y, r * 0.5);
+  };
   const showHead = view === 's' || view === 'f', showTail = view === 's' || view === 'b';
   const r0 = v.cfg.len > 70 ? 2.4 : 2;
   if (showTail) for (const uv of geo.tail) {
@@ -84,13 +91,33 @@ export function drawVehicleLamps(v, gl, ll, now) {
       const tx = Math.floor((v.x + c * (h + d)) / 32), ty = Math.floor((v.y + s * (h + d)) / 32);
       if (sc.blockLos && sc.blockLos[ty * MAP_W + tx]) { L = d; break; }
     }
-    const a = Math.min(1, dark) * (ll >= 2 ? 0.17 : 0.11);
+    const a = Math.min(1, dark) * (ll >= 2 ? 0.22 : 0.15);
     const px = v.x + c * (h - 2), py = v.y + s * (h - 2), nx = -s, ny = c;
-    for (const [len, wid, al] of [[L, w * 0.9, a * 0.55], [L * 0.62, w * 0.55, a * 0.8]]) {
-      gl.fillStyle(0xfff2c0, al);
-      gl.fillTriangle(px + nx * w * 0.2, py + ny * w * 0.2, px - nx * w * 0.2, py - ny * w * 0.2, px + c * len + nx * wid, py + s * len + ny * wid);
-      gl.fillTriangle(px - nx * w * 0.2, py - ny * w * 0.2, px + c * len - nx * wid, py + s * len - ny * wid, px + c * len + nx * wid, py + s * len + ny * wid);
+    const originHalfW = w * 0.25;
+
+    // Multi-segment feathered beam with soft exponential falloff toward the front
+    const segs = [
+      { t0: 0.0, t1: 0.25, w0: originHalfW, w1: w * 0.45, al: a * 0.65 },
+      { t0: 0.25, t1: 0.55, w0: w * 0.45, w1: w * 0.70, al: a * 0.42 },
+      { t0: 0.55, t1: 0.82, w0: w * 0.70, w1: w * 0.92, al: a * 0.22 },
+      { t0: 0.82, t1: 1.00, w0: w * 0.92, w1: w * 1.05, al: a * 0.08 }
+    ];
+
+    for (const seg of segs) {
+      const d0 = L * seg.t0, d1 = L * seg.t1;
+      const x0 = px + c * d0, y0 = py + s * d0;
+      const x1 = px + c * d1, y1 = py + s * d1;
+
+      gl.fillStyle(0xfff5d0, seg.al);
+      gl.fillTriangle(x0 - nx * seg.w0, y0 - ny * seg.w0, x0 + nx * seg.w0, y0 + ny * seg.w0, x1 + nx * seg.w1, y1 + ny * seg.w1);
+      gl.fillTriangle(x0 - nx * seg.w0, y0 - ny * seg.w0, x1 + nx * seg.w1, y1 + ny * seg.w1, x1 - nx * seg.w1, y1 - ny * seg.w1);
     }
+
+    // Soft asphalt reflection pool in front of the vehicle
+    const splashD = Math.min(L * 0.55, L - 10);
+    const spX = px + c * splashD, spY = py + s * splashD;
+    gl.fillStyle(0xfff0b0, a * 0.16).fillCircle(spX, spY, w * 0.55);
+    gl.fillStyle(0xfff8d8, a * 0.24).fillCircle(spX, spY, w * 0.3);
   }
 }
 

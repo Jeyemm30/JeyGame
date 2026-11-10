@@ -341,7 +341,8 @@ export default class ArmsScene extends Phaser.Scene {
   }
 
   done(pool, toast) {
-    sfx.cash();
+    if (sfx.cash) sfx.cash();
+    else if (sfx.pickup) sfx.pickup();
     this.say(pick(pool));
     this.gs.events.emit('toast', toast);
     this.build();

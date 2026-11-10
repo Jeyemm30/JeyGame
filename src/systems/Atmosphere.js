@@ -42,6 +42,14 @@ export default class Atmosphere {
     this.lamps = (scene.wd.props || []).filter((p) => p.kind === 'lamp');
     this.hideLights = [...((scene.wd.hideout && scene.wd.hideout.lights) || []), ...((scene.wd.wise && scene.wd.wise.lights) || []), ...((scene.wd.casino && scene.wd.casino.lights) || []), ...((scene.wd.bank && scene.wd.bank.lights) || []), ...((scene.wd.fire && scene.wd.fire.lights) || []), ...((scene.wd.totoya && scene.wd.totoya.lights) || []), ...((scene.wd.reyes && scene.wd.reyes.lights) || []), ...Object.values(scene.wd.gangs || {}).flatMap((g) => g.lights || [])].map((l, i) => ({ ...l, ph: i * 1.7 }));
     this.flash = 0;
+    // Light pool images for smooth, seamless ground illumination without harsh stepped ovals
+    this.lightPool = Array.from({ length: 64 }, () =>
+      scene.add.image(0, 0, 'light_radial')
+        .setDepth(4997)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setVisible(false)
+    );
+    scene.events.once('shutdown', () => this.destroy());
     // puddles on road tiles, drawn only while it is (or just was) raining
     this.puddleG = scene.add.graphics().setDepth(3.1);
     this.puddles = [];
@@ -106,11 +114,29 @@ export default class Atmosphere {
     }
   }
 
+  destroy() {
+    if (this.lightPool) {
+      this.lightPool.forEach((img) => img.destroy());
+      this.lightPool = [];
+    }
+  }
+
   drawGlow() {
     const g = this.glow, ll = gq().lightLevel;
     g.clear();
-    if (ll <= 0) return;                                  // Lighting Effects off: no lamp / hideout glow at all
-    // the hideout's bare bulbs, neon and fire barrel flicker day and night
+    let poolIdx = 0;
+    const putLight = (x, y, sx, sy, col, a) => {
+      if (poolIdx >= this.lightPool.length) return;
+      const img = this.lightPool[poolIdx++];
+      img.setPosition(x, y).setScale(sx, sy).setTint(col).setAlpha(a).setVisible(true);
+    };
+
+    if (ll <= 0) {
+      for (let i = 0; i < this.lightPool.length; i++) this.lightPool[i].setVisible(false);
+      return;
+    }
+
+    // 1. Hideout lights, neon, fire barrels, warehouse lamps
     if (this.hideLights.length) {
       const vv = this.scene.viewRect(260);
       const nt = this.scene.night || 0;
@@ -122,31 +148,70 @@ export default class Atmosphere {
         const on = L.fire || L.steady ? 1 : (Math.sin(k / 130 + L.ph) * Math.sin(k / 47 + L.ph * 2) > -0.6 ? 1 : 0.25);   // sputtering bulbs
         const s = (L.steady ? 0.35 + 0.65 * nt : 0.55 + 0.45 * nt) * on * (L.fire ? 0.85 + 0.15 * Math.sin(k / 60 + L.ph) : 1);
         const col = L.col || (L.neon ? 0xff4a8a : L.fire ? 0xff8a30 : 0xffc870);
-        if (ll >= 2) { g.fillStyle(col, 0.07 * s).fillEllipse(L.x, L.y, 210, 130); g.fillStyle(col, 0.11 * s).fillEllipse(L.x, L.y, 120, 74); }
-        g.fillStyle(col, 0.17 * s).fillEllipse(L.x, L.y, 52, 32);
+
+        // Smooth circular radial light pool on the ground
+        const rad = L.fire ? 1.5 : (L.neon ? 1.3 : 1.1);
+        putLight(L.x, L.y, rad, rad * 0.95, col, (L.fire ? 0.42 : 0.36) * s);
+        if (ll >= 2) {
+          putLight(L.x, L.y, rad * 1.8, rad * 1.7, col, 0.15 * s);
+        }
+
+        // Hot incandescent bulb or fire flare core
+        g.fillStyle(0xffffff, 0.9 * s).fillCircle(L.x, L.y, 2.5);
+        g.fillStyle(col, 0.5 * s).fillCircle(L.x, L.y, 6);
+        if (L.fire) {
+          g.fillStyle(0xffaa20, 0.25 * s).fillCircle(L.x, L.y, 12);
+        }
       }
     }
+
+    // 2. Streetlights
     const night = this.scene.night || 0;
-    if (night < 0.12) return;
-    const v = this.scene.viewRect(120);
-    const x0 = v.x, x1 = v.right, y0 = v.y, y1 = v.bottom;
-    const flick = 0.92 + 0.08 * Math.sin(this.clock / 90);
-    for (const p of this.lamps) {
-      if (p.down || p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;           // a knocked-down streetlight gives no light
-      const a = night * flick;
-      if (ll >= 2) { g.fillStyle(0xffd27a, 0.07 * a).fillEllipse(p.x, p.y - 4, 190, 120); g.fillStyle(0xffd27a, 0.10 * a).fillEllipse(p.x, p.y - 4, 120, 76); }
-      g.fillStyle(0xffe6a8, 0.16 * a).fillEllipse(p.x, p.y - 4, 56, 36);
-      const ho = this.scene.fromScreen(4, -42);
-      g.fillStyle(0xfff2c8, 0.9 * a).fillCircle(p.x + ho.x, p.y + ho.y, 3);
-      g.fillStyle(0xffd27a, 0.25 * a).fillCircle(p.x + ho.x, p.y + ho.y, 9);
+    if (night >= 0.12) {
+      const v = this.scene.viewRect(120);
+      const x0 = v.x, x1 = v.right, y0 = v.y, y1 = v.bottom;
+      const flick = 0.92 + 0.08 * Math.sin(this.clock / 90);
+      for (const p of this.lamps) {
+        if (p.down || p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;           // a knocked-down streetlight gives no light
+        const a = night * flick;
+        const ho = this.scene.fromScreen(4, -42);
+        const bulbX = p.x + ho.x, bulbY = p.y + ho.y;
+        const groundX = p.x, groundY = p.y + 4;
+
+        // Smooth natural circular light pool on sidewalk/street (NO stepped concentric rings)
+        putLight(groundX, groundY, 1.8, 1.6, 0xffd880, 0.45 * a);
+        if (ll >= 2) {
+          putLight(groundX, groundY, 2.8, 2.4, 0xffbf58, 0.18 * a);
+        }
+
+        // Volumetric downward light cone from lantern head to ground pool
+        g.fillStyle(0xffe890, 0.04 * a);
+        g.beginPath();
+        g.moveTo(bulbX - 3, bulbY);
+        g.lineTo(bulbX + 3, bulbY);
+        g.lineTo(groundX + 36, groundY);
+        g.lineTo(groundX - 36, groundY);
+        g.closePath();
+        g.fillPath();
+
+        // Intense lantern head bulb & flare
+        g.fillStyle(0xffffff, 0.95 * a).fillCircle(bulbX, bulbY, 3);
+        g.fillStyle(0xffd27a, 0.45 * a).fillCircle(bulbX, bulbY, 7);
+        g.fillStyle(0xffa830, 0.18 * a).fillCircle(bulbX, bulbY, 14);
+      }
+
+      // 3. Soft natural ambient illumination around player
+      const p = this.scene.player;
+      if (p && !p.dead) {
+        const f = night * (p.vehicle ? 0.4 : 0.85);
+        const po = this.scene.elev(12);
+        putLight(p.x + po.x, p.y + po.y, 1.5, 1.35, 0xb8d4ff, 0.16 * f);
+      }
     }
-    // soft light around the player so they stay readable in the dark
-    const p = this.scene.player;
-    if (p && !p.dead) {
-      const f = night * (p.vehicle ? 0.5 : 1);
-      const po = this.scene.elev(12);
-      g.fillStyle(0xcfe0ff, 0.05 * f).fillEllipse(p.x + po.x, p.y + po.y, 220, 150);
-      g.fillStyle(0xcfe0ff, 0.06 * f).fillEllipse(p.x + po.x, p.y + po.y, 120, 80);
+
+    // Hide any unused images in the pool
+    for (let i = poolIdx; i < this.lightPool.length; i++) {
+      this.lightPool[i].setVisible(false);
     }
   }
 

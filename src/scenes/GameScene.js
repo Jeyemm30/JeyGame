@@ -153,7 +153,7 @@ export default class GameScene extends Phaser.Scene {
     this.fxCig = this.add.particles(0, 0, 'smoke', { speedY: { min: -26, max: -14 }, speedX: { min: -7, max: 7 }, lifespan: 1500, scale: { start: 0.2, end: 0.62 }, alpha: { start: 0.5, end: 0 }, emitting: false, maxAliveParticles: 30 }).setDepth(5001);
     this.fxFire = this.add.particles(0, 0, 'fire', { speedY: { min: -50, max: -25 }, lifespan: 450, scale: { start: 1, end: 0 }, emitting: false, maxAliveParticles: 70 }).setDepth(5002);
     this.gfx = this.add.graphics().setDepth(5003);
-    this.lampGfx = this.add.graphics().setDepth(4997); // vehicle lamps / glow
+    this.lampGfx = this.add.graphics().setDepth(4997).setBlendMode(Phaser.BlendModes.ADD); // vehicle lamps / glow
     this.night = 0;
 
     // ---- entities

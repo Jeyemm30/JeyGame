@@ -1469,6 +1469,18 @@ function drawObjects(scene) {
     g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.55)');
     c.fillStyle = g; c.fillRect(0, 0, 640, 360);
   });
+  makeCanvas(scene, 'light_radial', 128, 128, (c) => {
+    const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    g.addColorStop(0.12, 'rgba(255, 255, 255, 0.85)');
+    g.addColorStop(0.28, 'rgba(255, 255, 255, 0.55)');
+    g.addColorStop(0.50, 'rgba(255, 255, 255, 0.25)');
+    g.addColorStop(0.72, 'rgba(255, 255, 255, 0.08)');
+    g.addColorStop(0.90, 'rgba(255, 255, 255, 0.02)');
+    g.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 128, 128);
+  });
 }
 
 export function generateTextures(scene) {
