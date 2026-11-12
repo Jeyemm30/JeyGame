@@ -20,6 +20,7 @@ export default class MapScene extends Phaser.Scene {
   create() {
     this.input.setDefaultCursor('default');
     this.gs = this.scene.get('Game');
+    if (this.gs?.missionEvent) this.gs.missionEvent('tut:map');
     this.wd = this.gs.wd;
     this.player = this.gs.player;
     this.mapW = W * MS;

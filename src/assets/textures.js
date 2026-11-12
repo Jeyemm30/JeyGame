@@ -64,6 +64,9 @@ Object.assign(T, {
   paving: 56,
   lamp: 28
 });
+
+export const LAMP_OFFSET_X = -8;
+export const LAMP_OFFSET_Y = -56;
 // LINCOLN HIGH SCHOOL: collegiate school wall (navy wainscot & gold chair rail), executive mahogany administrator wall, and exterior red brick school wall & windows
 Object.assign(T, {
   schoolWall: 165,
@@ -363,10 +366,34 @@ function drawTiles(scene) {
     // chair
     {
       const ox = T.chair * 32;
-      R(c, ox + 9, 26, 14, 3, 'rgba(0,0,0,0.25)');
-      R(c, ox + 9, 6, 14, 10, '#7a5230'); R(c, ox + 9, 6, 14, 1, '#a07848');
-      R(c, ox + 9, 16, 14, 8, '#9a6b3a'); R(c, ox + 9, 16, 14, 1, '#c08a4a');
-      R(c, ox + 10, 24, 2, 5, '#5e3d1f'); R(c, ox + 20, 24, 2, 5, '#5e3d1f');
+      // Soft ground shadow
+      R(c, ox + 8, 26, 16, 4, 'rgba(0,0,0,0.22)');
+      ellipse(c, ox + 10, 27, 3, 1.5, 'rgba(0,0,0,0.3)');
+      ellipse(c, ox + 21, 27, 3, 1.5, 'rgba(0,0,0,0.3)');
+
+      // Tapered wooden legs & back stiles
+      R(c, ox + 9, 21, 2, 6, '#4f2f18'); R(c, ox + 9, 21, 1, 6, '#7a4e28');
+      R(c, ox + 20, 21, 2, 6, '#4f2f18'); R(c, ox + 20, 21, 1, 6, '#7a4e28');
+      R(c, ox + 11, 18, 2, 8, '#3b2210');
+      R(c, ox + 18, 18, 2, 8, '#3b2210');
+      R(c, ox + 10, 24, 11, 1, '#4a2c16');
+
+      // Sculpted wooden seat with bullnose front
+      R(c, ox + 8, 15, 15, 6, '#966032');
+      R(c, ox + 8, 15, 15, 1, '#cca068');
+      R(c, ox + 8, 16, 15, 1, '#b57b42');
+      R(c, ox + 8, 20, 15, 1, '#563314');
+
+      // Backrest: contoured ladderback / spindle slats
+      R(c, ox + 9, 5, 2, 11, '#66401e'); R(c, ox + 9, 5, 1, 11, '#966032');
+      R(c, ox + 20, 5, 2, 11, '#66401e'); R(c, ox + 20, 5, 1, 11, '#966032');
+      R(c, ox + 9, 4, 2, 1, '#b57b42');
+      R(c, ox + 20, 4, 2, 1, '#b57b42');
+      R(c, ox + 8, 5, 15, 3, '#8c582c');
+      R(c, ox + 8, 5, 15, 1, '#c89255');
+      R(c, ox + 8, 7, 15, 1, '#563314');
+      R(c, ox + 10, 10, 11, 2, '#8c582c');
+      R(c, ox + 10, 10, 11, 1, '#ba844a');
     }
     // cabinet (kitchen)
     {
@@ -1000,10 +1027,81 @@ function drawObjects(scene) {
   makeCanvas(scene, 'tuft', 16, 14, (c) => {
     R(c, 3, 4, 2, 9, '#4d9248'); R(c, 7, 1, 2, 12, '#5aa653'); R(c, 11, 5, 2, 8, '#438040'); R(c, 5, 6, 2, 7, '#5aa653'); R(c, 9, 4, 2, 9, '#4d9248');
   });
-  makeCanvas(scene, 'lamp', 20, 68, (c) => {
-    ellipse(c, 10, 62, 7, 3, 'rgba(0,0,0,0.3)');
-    R(c, 8, 10, 4, 52, '#3b3f45'); R(c, 8, 10, 1, 52, '#5a5f66'); R(c, 6, 58, 8, 4, '#2a2d31');
-    R(c, 2, 6, 16, 4, '#3b3f45'); R(c, 1, 8, 6, 5, '#e9e3b0'); R(c, 1, 8, 6, 1, '#ffffff');
+
+  makeCanvas(scene, 'lamp', 26, 72, (c) => {
+    // 1. Soft ambient contact shadow on ground
+    ellipse(c, 13, 68, 10, 3.5, 'rgba(0,0,0,0.38)');
+    ellipse(c, 13, 68, 6, 2, 'rgba(0,0,0,0.25)');
+
+    // 2. Heavy cast-iron octagonal pedestal base
+    // Bottom flange plate
+    R(c, 7, 66, 12, 3, '#17202b');
+    R(c, 7, 65, 12, 1, '#475569');
+    R(c, 8, 65, 2, 2, '#94a3b8');
+    R(c, 16, 65, 2, 2, '#94a3b8');
+
+    // Tapered plinth body & service hatch
+    R(c, 9, 58, 8, 7, '#242e3d');
+    R(c, 9, 58, 2, 7, '#4b5b72');
+    R(c, 15, 58, 2, 7, '#141a24');
+    R(c, 11, 60, 4, 4, '#1b232f');
+    R(c, 11, 60, 4, 1, '#334155');
+    R(c, 14, 62, 1, 1, '#94a3b8');
+
+    // Transition collar ring
+    R(c, 10, 56, 6, 2, '#334155');
+    R(c, 10, 56, 1, 2, '#64748b');
+    R(c, 15, 56, 1, 2, '#18202c');
+
+    // 3. Sturdy cylindrical steel mast / pole
+    R(c, 11, 18, 4, 38, '#2d3748');
+    R(c, 11, 18, 1, 38, '#64748b');
+    R(c, 14, 18, 1, 38, '#18202c');
+
+    // Mid-mast decorative ring collar
+    R(c, 10, 36, 6, 2, '#384556');
+    R(c, 10, 36, 1, 2, '#718096');
+    R(c, 15, 36, 1, 2, '#17202b');
+    R(c, 15, 26, 2, 1, '#475569');
+
+    // 4. Curved Gooseneck Arch / Mast Arm
+    R(c, 11, 17, 4, 1, '#2d3748'); R(c, 11, 17, 1, 1, '#64748b'); R(c, 14, 17, 1, 1, '#18202c');
+    R(c, 11, 16, 4, 1, '#2f3a4c'); R(c, 11, 16, 1, 1, '#687991'); R(c, 14, 16, 1, 1, '#19222e');
+    R(c, 10, 15, 4, 1, '#323e51'); R(c, 10, 15, 1, 1, '#6d7f97'); R(c, 13, 15, 1, 1, '#1b2432');
+    R(c, 9, 14, 4, 1, '#344155'); R(c, 9, 14, 1, 1, '#72859e'); R(c, 12, 14, 1, 1, '#1c2635');
+    R(c, 8, 13, 4, 1, '#37455a'); R(c, 8, 13, 1, 1, '#788ca5'); R(c, 11, 13, 1, 1, '#1e2938');
+    R(c, 7, 12, 4, 1, '#3a495e'); R(c, 7, 12, 1, 1, '#7e93ac'); R(c, 10, 12, 1, 1, '#202b3c');
+    // Arch crest
+    R(c, 6, 11, 5, 1, '#3c4c62'); R(c, 6, 11, 3, 1, '#859bb5'); R(c, 10, 11, 1, 1, '#212d3e');
+    R(c, 5, 10, 5, 1, '#3e4f66'); R(c, 5, 10, 4, 1, '#8da3bd');
+
+    // Triangular inner support strut
+    R(c, 11, 14, 2, 2, '#1e2837');
+    R(c, 11, 14, 1, 1, '#334155');
+
+    // Pole apex decorative finial cap
+    R(c, 12, 9, 2, 2, '#475569');
+    R(c, 12, 8, 2, 1, '#64748b');
+
+    // 5. Luminaire / Cobra-Head Fixture (housing at x=2..8, y=10..14)
+    R(c, 2, 11, 6, 2, '#212a36');
+    R(c, 3, 10, 4, 1, '#62738a');
+    R(c, 2, 11, 1, 2, '#151c24');
+    R(c, 7, 11, 1, 2, '#2d3748');
+    // Photocell sensor
+    R(c, 4, 9, 2, 1, '#0f172a');
+    R(c, 4, 9, 1, 1, '#38bdf8');
+    // Bezel
+    R(c, 2, 13, 6, 1, '#18202c');
+
+    // 6. Radiant Refractor Lens & Glowing Filament Bulb (Center: x=5, y=16)
+    R(c, 2, 14, 6, 1, '#eab308');
+    R(c, 2, 15, 6, 2, '#fef08a');
+    R(c, 3, 14, 4, 3, '#fffbeb');
+    R(c, 4, 14, 2, 3, '#ffffff');
+    R(c, 3, 17, 4, 1, '#fde047');
+    R(c, 4, 17, 2, 1, '#ffffff');
+    R(c, 4, 18, 2, 1, 'rgba(254, 240, 138, 0.75)');
   });
   makeCanvas(scene, 'sign', 20, 52, (c) => {
     ellipse(c, 10, 47, 6, 3, 'rgba(0,0,0,0.3)');

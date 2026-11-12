@@ -6395,7 +6395,9 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     if (tm) {
       let a;
       if (touch.aiming) {
-        a = touch.aimAngle - this.camRot;
+        // touch.aimAngle is in screen coordinates; convert screen direction to world direction
+        const aimWv = this.fromScreen(Math.cos(touch.aimAngle), Math.sin(touch.aimAngle));
+        a = Math.atan2(aimWv.y, aimWv.x);
       } else {
         let targetEnemy = null, minDist = 360;
         if (touch.fire || touch.tapFire) {
@@ -6410,8 +6412,14 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
         if (targetEnemy) {
           a = Math.atan2(targetEnemy.y - p.y, targetEnemy.x - p.x);
         } else {
-          const moving = Math.hypot(touch.moveX, touch.moveY) > 0.15;
-          a = (moving ? Math.atan2(touch.moveY, touch.moveX) : p.aim + this.camRot) - this.camRot;
+          const stickMag = Math.hypot(touch.moveX, touch.moveY);
+          const moving = stickMag > 0.08;
+          if (moving) {
+            const moveWv = this.fromScreen(touch.moveX, touch.moveY);
+            a = Math.atan2(moveWv.y, moveWv.x);
+          } else {
+            a = p.aim;
+          }
         }
       }
       aimX = p.x + Math.cos(a) * 200;
@@ -6516,9 +6524,55 @@ const pk = p.dir === 'l' ? 'r' : p.dir;
     let throttle = 0, steer = 0;
     if (tm) {
       const buttonThrottle = (touch.gas ? 1 : 0) - (touch.brake ? 1 : 0);
-      if (buttonThrottle !== 0) throttle = buttonThrottle;
-      else { throttle = -touch.moveY; if (Math.abs(throttle) < 0.2) throttle = 0; }
-      steer = touch.moveX; if (Math.abs(steer) < 0.15) steer = 0;
+      const stickMag = Math.hypot(touch.moveX, touch.moveY);
+      const stickActive = stickMag > 0.12;
+
+      if (stickActive) {
+        // Convert screen joystick direction to world heading angle
+        const sv = this.fromScreen(touch.moveX, touch.moveY);
+        const targetAngle = Math.atan2(sv.y, sv.x);
+        const diff = wrapA(targetAngle - v.heading);
+        const absDiff = Math.abs(diff);
+
+        // Steering authority scales smoothly with joystick deflection
+        const steerMag = Phaser.Math.Clamp((stickMag - 0.12) / 0.65, 0, 1);
+
+        if (buttonThrottle !== 0) {
+          // Player is holding pedals: GAS accelerates forward, BRAKE decelerates / reverses
+          throttle = buttonThrottle;
+          if (v.speed < -5 || (touch.brake && v.speed <= 5)) {
+            // Reversing: rear of vehicle tracks targetAngle
+            const diffRev = wrapA(targetAngle - (v.heading + Math.PI));
+            steer = -Phaser.Math.Clamp(diffRev * 2.4, -1, 1) * steerMag;
+          } else {
+            // Forward driving: front of vehicle tracks targetAngle
+            steer = Phaser.Math.Clamp(diff * 2.4, -1, 1) * steerMag;
+          }
+        } else {
+          // Single-stick driving (joystick controls both steering and gas/brake)
+          if (absDiff < Math.PI * 0.68) {
+            // Target angle is in front of the vehicle: accelerate and steer toward it
+            throttle = Math.min(1, stickMag * 1.15);
+            steer = Phaser.Math.Clamp(diff * 2.4, -1, 1) * steerMag;
+          } else {
+            // Stick pulled backwards relative to current heading
+            if (v.speed > 30) {
+              // Moving forward at speed: stick pulled back acts as brake
+              throttle = -1;
+              steer = Phaser.Math.Clamp(diff * 2.4, -1, 1) * steerMag;
+            } else {
+              // Stopped or very slow: reverse backwards toward target angle
+              throttle = -0.75 * stickMag;
+              const diffRev = wrapA(targetAngle - (v.heading + Math.PI));
+              steer = -Phaser.Math.Clamp(diffRev * 2.4, -1, 1) * steerMag;
+            }
+          }
+        }
+      } else {
+        // Stick centered: wheels centered, throttle from buttons only
+        steer = 0;
+        throttle = buttonThrottle;
+      }
     }
     else { throttle = (k.W.isDown ? 1 : 0) - (k.S.isDown ? 1 : 0); steer = (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0); }
     v.cmd = { throttle, steer, handbrake: (tm ? touch.handbrake : false) || k.SPACE.isDown };

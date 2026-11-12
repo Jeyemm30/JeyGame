@@ -306,6 +306,7 @@ export default class UIScene extends Phaser.Scene {
     if (this.modalActive() || this.game_.over || this.p.dead) return;
     if (this.invOpen) this.toggleInventory();
     sfx.menu();
+    if (this.game_?.missionEvent) this.game_.missionEvent('tut:map');
     this.scene.pause('Game');
     this.scene.launch('Map');
   }
@@ -1022,15 +1023,17 @@ export default class UIScene extends Phaser.Scene {
     // Process sticks
     const m = this.sticks.move, a = this.sticks.aim;
     let dx = m.x - m.ox, dy = m.y - m.oy, len = Math.hypot(dx, dy);
-    if (m.id === -1 || len < 10) { touch.moveX = touch.moveY = 0; }
-    else { const k = Math.min(1, len / R); touch.moveX = (dx / len) * k; touch.moveY = (dy / len) * k; }
+    const deadzone = 8;
+    if (m.id === -1 || len < deadzone) { touch.moveX = touch.moveY = 0; }
+    else { const k = Math.min(1, (len - deadzone) / (R - deadzone)); touch.moveX = (dx / len) * k; touch.moveY = (dy / len) * k; }
 
     if (!inCar) {
       dx = a.x - a.ox; dy = a.y - a.oy; len = Math.hypot(dx, dy);
-      if (a.id !== -1 && len > 18) {
+      const aimDeadzone = 12;
+      if (a.id !== -1 && len > aimDeadzone) {
         touch.aiming = true;
         touch.aimAngle = Math.atan2(dy, dx);
-        touch.firing = len > 45;
+        touch.firing = len > 42;
       } else {
         touch.aiming = false;
         touch.firing = false;

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FONT, fs } from './widgets.js';
 import { sfx } from '../systems/Audio.js';
-import { T } from '../assets/textures.js';
+import { T, LAMP_OFFSET_X, LAMP_OFFSET_Y } from '../assets/textures.js';
 
 /* Shared look of the main menu and the pause menu: dark charcoal panels, orange / cyan accents, a logo-style title, keyboard + mouse
    menu lists with hover animation, confirm dialogs, and an animated city backdrop built from the game's own tiles, vehicles and lamps. */
@@ -575,8 +575,8 @@ export function cityBackdrop(scene) {
     glow.clear();
     lamps.forEach((l) => {
       const f = l.bad ? (Math.sin(time / 90 + l.ph) * Math.sin(time / 37) > -0.5 ? 1 : 0.25) : 0.85 + 0.15 * Math.sin(time / 300 + l.ph);
-      const bulbX = l.x - 18;
-      const bulbY = l.y + 6;
+      const bulbX = l.x + LAMP_OFFSET_X * 2.2;
+      const bulbY = GY + 56 + LAMP_OFFSET_Y * 2.2;
       const groundY = GY + 48;
 
       // Volumetric downward light cone from lantern head to ground

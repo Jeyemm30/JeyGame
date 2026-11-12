@@ -224,10 +224,73 @@ function drawExtraTiles(scene) {
   R(c, ox(T.pump) + 22, 12, 3, 14, '#222'); R(c, ox(T.pump) + 8, 26, 16, 2, '#555');
   // park bench
   clearTile(T.bench);
-  R(c, ox(T.bench) + 2, 25, 28, 4, 'rgba(0,0,0,0.25)');
-  R(c, ox(T.bench) + 2, 8, 28, 6, '#8a5a30'); R(c, ox(T.bench) + 2, 8, 28, 1, '#b07c48');
-  R(c, ox(T.bench) + 2, 15, 28, 6, '#a9743e'); R(c, ox(T.bench) + 2, 15, 28, 1, '#c99a62');
-  R(c, ox(T.bench) + 4, 21, 3, 7, '#333'); R(c, ox(T.bench) + 25, 21, 3, 7, '#333');
+  const bo = ox(T.bench);
+  // 1. Contact shadow under bench
+  R(c, bo + 2, 26, 28, 4, 'rgba(0,0,0,0.18)');
+  ellipse(c, bo + 5, 27, 4, 1.5, 'rgba(0,0,0,0.35)');
+  ellipse(c, bo + 26, 27, 4, 1.5, 'rgba(0,0,0,0.35)');
+
+  // 2. Cast iron legs & stretcher bar
+  R(c, bo + 5, 24, 22, 1, '#1b232e'); R(c, bo + 5, 24, 22, 1, '#2e3a4b');
+  // Left leg & foot pad
+  R(c, bo + 3, 26, 4, 2, '#17202b'); R(c, bo + 4, 26, 2, 1, '#475569');
+  R(c, bo + 4, 21, 2, 6, '#1e2837'); R(c, bo + 4, 21, 1, 5, '#475569');
+  // Right leg & foot pad
+  R(c, bo + 25, 26, 4, 2, '#17202b'); R(c, bo + 26, 26, 2, 1, '#475569');
+  R(c, bo + 26, 21, 2, 6, '#1e2837'); R(c, bo + 26, 21, 1, 5, '#475569');
+
+  // Backrest upright support brackets
+  R(c, bo + 4, 7, 2, 10, '#1a222e'); R(c, bo + 4, 7, 1, 10, '#475569');
+  R(c, bo + 26, 7, 2, 10, '#1a222e'); R(c, bo + 26, 7, 1, 10, '#475569');
+  R(c, bo + 15, 8, 2, 10, '#17202b'); R(c, bo + 15, 8, 1, 10, '#334155');
+
+  // 3. Backrest wood slats
+  // Upper back slat
+  R(c, bo + 3, 7, 26, 4, '#966032');
+  R(c, bo + 3, 7, 26, 1, '#c89255');
+  R(c, bo + 4, 8, 24, 1, '#b07942');
+  R(c, bo + 3, 10, 26, 1, '#66401e');
+  // Carriage bolts on upper slat
+  R(c, bo + 4, 8, 1, 2, '#1e2837'); R(c, bo + 4, 8, 1, 1, '#94a3b8');
+  R(c, bo + 15, 8, 1, 2, '#1e2837'); R(c, bo + 15, 8, 1, 1, '#94a3b8');
+  R(c, bo + 26, 8, 1, 2, '#1e2837'); R(c, bo + 26, 8, 1, 1, '#94a3b8');
+
+  // Lower back slat
+  R(c, bo + 3, 12, 26, 4, '#8c582c');
+  R(c, bo + 3, 12, 26, 1, '#ba844a');
+  R(c, bo + 3, 15, 26, 1, '#5e3818');
+  // Carriage bolts on lower slat
+  R(c, bo + 4, 13, 1, 2, '#1e2837'); R(c, bo + 4, 13, 1, 1, '#94a3b8');
+  R(c, bo + 15, 13, 1, 2, '#1e2837'); R(c, bo + 15, 13, 1, 1, '#94a3b8');
+  R(c, bo + 26, 13, 1, 2, '#1e2837'); R(c, bo + 26, 13, 1, 1, '#94a3b8');
+
+  // 4. Seat wood slats
+  // Rear seat slat
+  R(c, bo + 3, 17, 26, 3, '#a36c38');
+  R(c, bo + 3, 17, 26, 1, '#cca068');
+  R(c, bo + 3, 19, 26, 1, '#6b431e');
+  R(c, bo + 4, 18, 1, 1, '#2d3748'); R(c, bo + 15, 18, 1, 1, '#2d3748'); R(c, bo + 26, 18, 1, 1, '#2d3748');
+
+  // Front seat slat with rounded bullnose lip
+  R(c, bo + 3, 20, 26, 4, '#b57b42');
+  R(c, bo + 3, 20, 26, 1, '#deb078');
+  R(c, bo + 4, 21, 24, 1, '#c58b50');
+  R(c, bo + 3, 22, 26, 1, '#8e5b2b');
+  R(c, bo + 3, 23, 26, 1, '#563314');
+  // Front seat bolts
+  R(c, bo + 4, 21, 1, 2, '#1e2837'); R(c, bo + 4, 21, 1, 1, '#94a3b8');
+  R(c, bo + 15, 21, 1, 2, '#1e2837'); R(c, bo + 15, 21, 1, 1, '#94a3b8');
+  R(c, bo + 26, 21, 1, 2, '#1e2837'); R(c, bo + 26, 21, 1, 1, '#94a3b8');
+
+  // 5. Cast iron side armrests
+  // Left armrest
+  R(c, bo + 2, 14, 4, 2, '#1b232e'); R(c, bo + 2, 14, 4, 1, '#64748b');
+  R(c, bo + 2, 16, 2, 5, '#1e2837'); R(c, bo + 2, 16, 1, 5, '#475569');
+  R(c, bo + 1, 15, 2, 2, '#243042'); R(c, bo + 1, 15, 1, 1, '#64748b');
+  // Right armrest
+  R(c, bo + 26, 14, 4, 2, '#1b232e'); R(c, bo + 26, 14, 4, 1, '#64748b');
+  R(c, bo + 28, 16, 2, 5, '#1e2837'); R(c, bo + 28, 16, 1, 5, '#475569');
+  R(c, bo + 29, 15, 2, 2, '#243042'); R(c, bo + 29, 15, 1, 1, '#64748b');
   // shop shelf (goods)
   clearTile(T.shopShelf);
   R(c, ox(T.shopShelf) + 2, 27, 28, 4, 'rgba(0,0,0,0.25)');
@@ -381,7 +444,30 @@ function drawExtraTiles(scene) {
     R(c, o + 5, 6, 10, 5, '#d8c490'); R(c, o + 5, 6, 10, 1, '#efe0b0'); R(c, o + 20, 7, 7, 3, '#2a2d34'); R(c, o + 21, 8, 2, 1, '#ff3a3a');
   });
   fx(T.steelChair, (o) => {                                        // plain steel chair
-    R(c, o + 9, 4, 14, 11, '#8a929c'); R(c, o + 9, 4, 14, 1, '#c0c8d0'); R(c, o + 11, 6, 10, 7, '#6a727c'); R(c, o + 9, 15, 14, 5, '#9aa2ac'); R(c, o + 9, 15, 14, 1, '#d0d8e0'); R(c, o + 10, 20, 2, 8, '#3a4048'); R(c, o + 20, 20, 2, 8, '#3a4048'); R(c, o + 9, 26, 14, 1, '#2a3038');
+    // Soft contact ground shadow
+    R(c, o + 8, 26, 16, 4, 'rgba(0,0,0,0.22)');
+    ellipse(c, o + 10, 27, 3, 1.5, 'rgba(0,0,0,0.35)');
+    ellipse(c, o + 21, 27, 3, 1.5, 'rgba(0,0,0,0.35)');
+
+    // Tubular steel frame legs & crossbar
+    R(c, o + 9, 19, 2, 8, '#262d36'); R(c, o + 9, 19, 1, 8, '#64748b');
+    R(c, o + 20, 19, 2, 8, '#262d36'); R(c, o + 20, 19, 1, 8, '#64748b');
+    R(c, o + 10, 23, 11, 1, '#334155');
+
+    // Contoured vinyl padded seat
+    R(c, o + 8, 14, 15, 6, '#334155');
+    R(c, o + 8, 14, 15, 1, '#64748b');
+    R(c, o + 9, 15, 13, 4, '#1e293b');
+    R(c, o + 8, 19, 15, 1, '#0f172a');
+
+    // Tubular backrest frame & padded back cushion
+    R(c, o + 9, 4, 2, 11, '#262d36'); R(c, o + 9, 4, 1, 11, '#64748b');
+    R(c, o + 20, 4, 2, 11, '#262d36'); R(c, o + 20, 4, 1, 11, '#64748b');
+    R(c, o + 9, 4, 13, 2, '#475569'); R(c, o + 9, 4, 13, 1, '#94a3b8');
+    // Padded back cushion
+    R(c, o + 10, 6, 11, 7, '#334155');
+    R(c, o + 10, 6, 11, 1, '#64748b');
+    R(c, o + 11, 7, 9, 5, '#1e293b');
   });
   /* ---- military: olive facade and perimeter wall faces, gate and boom-barrier skins, bunks, weapon racks, ammunition, workbench, concrete barrier, radio console ---- */
   const baseMilFacade = (o) => { R(c, o, 0, 32, 32, '#7d8a66'); R(c, o, 0, 32, 3, '#9aa884'); for (let x = 0; x < 32; x += 16) R(c, o + x, 3, 1, 22, '#66724f'); R(c, o, 12, 32, 1, '#66724f'); R(c, o, 20, 32, 3, '#e8ecd8'); R(c, o, 23, 32, 1, '#b8c0a0'); R(c, o, 24, 32, 8, '#4f5a3c'); R(c, o, 29, 32, 3, 'rgba(0,0,0,0.25)'); };

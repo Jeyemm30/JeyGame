@@ -575,8 +575,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     const wv = sc.fromScreen(sx, sy);
     const dx = wv.x, dy = wv.y;
     const len = Math.hypot(dx, dy) || 1;
-    const mag = analog ? Math.min(1, len) : 1;
-    this.moving = analog ? len > 0.15 : (sx !== 0 || sy !== 0);
+    const stickMag = analog ? Math.hypot(sx, sy) : 1;
+    const mag = Math.min(1, stickMag);
+    this.moving = analog ? stickMag > 0.08 : (sx !== 0 || sy !== 0);
     if (this.usingItem) ctrl.sprint = false;
     this.sprinting = this.moving && ctrl.sprint && !this.winded && this.stamina > 0;
     if (this.sprinting) {
@@ -602,7 +603,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     }
     const gunMul = !this.isMelee && this.weapon.moveMul ? this.weapon.moveMul : 1;
     const speed = (this.usingItem ? 52 : this.sprinting ? 160 : this.reloading ? 78 : this.swing ? 71 : 100) * gunMul;      // on foot, ~25 % slower than before (was 215 / 72 / 105 / 95 / 135)
-    const k = this.moving ? (analog ? Math.max(0.55, mag) : 1) : 0;
+    const k = this.moving ? (analog ? Phaser.Math.Linear(0.4, 1.0, (mag - 0.08) / 0.92) : 1) : 0;
     if (time < this.knockUntil) this.setVelocity(this.kvx, this.kvy);
     else this.setVelocity((dx / len) * speed * k, (dy / len) * speed * k);
 

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { T } from '../assets/textures.js';
+import { T, LAMP_OFFSET_X, LAMP_OFFSET_Y } from '../assets/textures.js';
 import { gq } from './Settings.js';
 
 /* Day / night cycle, weather (clear, cloudy, rain, fog), streetlight glow and interior lighting.
@@ -174,9 +174,9 @@ export default class Atmosphere {
       for (const p of this.lamps) {
         if (p.down || p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;           // a knocked-down streetlight gives no light
         const a = night * flick;
-        const ho = this.scene.fromScreen(-6, -58);
+        const ho = this.scene.fromScreen(LAMP_OFFSET_X, LAMP_OFFSET_Y);
         const bulbX = p.x + ho.x, bulbY = p.y + ho.y;
-        const go = this.scene.fromScreen(-6, 0);
+        const go = this.scene.fromScreen(LAMP_OFFSET_X, 0);
         const groundX = p.x + go.x, groundY = p.y + go.y;
 
         // Natural smooth circular ground illumination (zero cone lines, zero oval distortion)
